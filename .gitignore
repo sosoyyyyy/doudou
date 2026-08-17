@@ -1,0 +1,16 @@
+node_modules/
+main.js
+.test-build/
+.env
+.env.*
+data.json
+*.log
+.DS_Store
+Thumbs.db
+.obsidian/
+.idea/
+.vscode/
+coverage/
+.tmp/
+test-vault/
+/兜兜/

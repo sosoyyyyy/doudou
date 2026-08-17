@@ -1,0 +1,13 @@
+import type { Category } from "./types";
+
+export const DOUDOU_VIEW_TYPE = "doudou-view";
+export const DOUDOU_DATA_FOLDER = "兜兜";
+export const CATEGORIES: readonly Category[] = ["生活", "工作", "副业"];
+export const RECENT_RECORD_LIMIT = 30;
+export const SEARCH_DEBOUNCE_MS = 160;
+export const VAULT_REFRESH_DEBOUNCE_MS = 240;
+export const DOUDOU_ASSETS_FOLDER = `${DOUDOU_DATA_FOLDER}/assets`;
+export const AI_TAG_LIMIT = 8;
+export const AI_TAG_MAX_LENGTH = 24;
+export const ASK_CANDIDATE_LIMIT = 12;
+export const DEEPSEEK_BASE_URL = "https://api.deepseek.com";

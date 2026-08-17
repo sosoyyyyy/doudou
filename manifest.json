@@ -1,0 +1,9 @@
+{
+  "id": "doudou",
+  "name": "兜兜",
+  "version": "0.3.0-beta.1",
+  "minAppVersion": "1.5.0",
+  "description": "支持图片、资料检索和可选 AI 增强的聊天式个人资料库。",
+  "author": "doudou",
+  "isDesktopOnly": false
+}

@@ -10,6 +10,7 @@
   --doudou-accent-soft: #e8f0ea;
   --doudou-user-bubble: #dfeee3;
   --doudou-system-bubble: var(--background-secondary);
+  --doudou-mobile-toolbar-offset: 0px;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -248,7 +249,11 @@
 
 .doudou-composer {
   flex: 0 0 auto;
-  padding: 8px clamp(10px, 3vw, 24px) max(9px, env(safe-area-inset-bottom));
+  padding: 8px clamp(10px, 3vw, 24px) max(
+    9px,
+    env(safe-area-inset-bottom),
+    var(--doudou-mobile-toolbar-offset)
+  );
   border-top: 1px solid var(--background-modifier-border);
   background: color-mix(in srgb, var(--background-primary) 96%, transparent);
 }

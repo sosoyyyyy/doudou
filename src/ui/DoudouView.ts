@@ -1,4 +1,4 @@
-import { ItemView, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import {
   DOUDOU_VIEW_TYPE,
   VAULT_REFRESH_DEBOUNCE_MS
@@ -11,6 +11,11 @@ import { RecordDetailModal } from "./RecordDetailModal";
 export interface DoudouViewDependencies
   extends Omit<ChatPageDependencies, "openRecord">, LibraryPageDependencies {}
 
+const KEYBOARD_OPEN_THRESHOLD_PX = 120;
+const MOBILE_TOOLBAR_FALLBACK_PX = 72;
+const MOBILE_TOOLBAR_GAP_PX = 8;
+const MOBILE_TOOLBAR_SELECTORS = ".mobile-toolbar, .mobile-navbar";
+
 export class DoudouView extends ItemView {
   private rootEl!: HTMLElement;
   private chatContainerEl!: HTMLElement;
@@ -21,6 +26,8 @@ export class DoudouView extends ItemView {
   private libraryPage!: LibraryPage;
   private activePage: DoudouPage = "chat";
   private vaultRefreshTimer: number | null = null;
+  private viewportBaselineHeight = 0;
+  private viewportBaselineWidth = 0;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -200,12 +207,37 @@ export class DoudouView extends ItemView {
     if (!viewport) return;
 
     const syncViewport = (): void => {
+      if (
+        this.viewportBaselineWidth === 0 ||
+        Math.abs(viewport.width - this.viewportBaselineWidth) > 48
+      ) {
+        this.viewportBaselineWidth = viewport.width;
+        this.viewportBaselineHeight = Math.max(window.innerHeight, viewport.height);
+      } else {
+        this.viewportBaselineHeight = Math.max(
+          this.viewportBaselineHeight,
+          window.innerHeight,
+          viewport.height
+        );
+      }
+
       const rootTop = this.rootEl.getBoundingClientRect().top;
       const visibleBottom = viewport.offsetTop + viewport.height;
       const availableHeight = Math.max(0, visibleBottom - rootTop);
+      const keyboardInset = Math.max(
+        0,
+        this.viewportBaselineHeight - visibleBottom
+      );
+      const keyboardOpen = Platform.isMobileApp &&
+        keyboardInset >= KEYBOARD_OPEN_THRESHOLD_PX;
       this.rootEl.style.setProperty(
         "--doudou-visual-viewport-height",
         `${availableHeight}px`
+      );
+      this.rootEl.toggleClass("doudou-keyboard-open", keyboardOpen);
+      this.rootEl.style.setProperty(
+        "--doudou-mobile-toolbar-offset",
+        keyboardOpen ? "0px" : this.mobileToolbarOffset(viewport)
       );
       if (this.activePage === "chat") this.chatPage.handleViewportChange();
     };
@@ -217,5 +249,44 @@ export class DoudouView extends ItemView {
       viewport.removeEventListener("scroll", syncViewport);
     });
     syncViewport();
+    const settledSyncTimer = window.setTimeout(syncViewport, 120);
+    this.register(() => window.clearTimeout(settledSyncTimer));
+  }
+
+  private mobileToolbarOffset(viewport: VisualViewport): string {
+    if (!Platform.isMobileApp) return "0px";
+
+    const viewportBottom = viewport.offsetTop + viewport.height;
+    let measuredOffset = 0;
+    const toolbars = Array.from(document.querySelectorAll<HTMLElement>(
+      MOBILE_TOOLBAR_SELECTORS
+    ));
+    for (const toolbar of toolbars) {
+      if (this.rootEl.contains(toolbar)) continue;
+      const style = window.getComputedStyle(toolbar);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      const rect = toolbar.getBoundingClientRect();
+      const isNearViewportBottom = rect.height > 0 &&
+        rect.top < viewportBottom &&
+        rect.bottom >= viewportBottom - 120;
+      if (!isNearViewportBottom) continue;
+      measuredOffset = Math.max(
+        measuredOffset,
+        Math.ceil(viewportBottom - rect.top + MOBILE_TOOLBAR_GAP_PX)
+      );
+    }
+    if (measuredOffset > 0) return `${Math.min(measuredOffset, 120)}px`;
+
+    if (!Platform.isIosApp) return "0px";
+    const obsidianToolbarHeight = Number.parseFloat(
+      window.getComputedStyle(document.body)
+        .getPropertyValue("--mobile-toolbar-height")
+    );
+    if (Number.isFinite(obsidianToolbarHeight) && obsidianToolbarHeight > 0) {
+      return `calc(env(safe-area-inset-bottom) + ${
+        Math.ceil(obsidianToolbarHeight) + MOBILE_TOOLBAR_GAP_PX
+      }px)`;
+    }
+    return `${MOBILE_TOOLBAR_FALLBACK_PX}px`;
   }
 }

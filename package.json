@@ -1,6 +1,6 @@
 {
   "name": "doudou",
-  "version": "0.3.0-beta.3",
+  "version": "0.3.0-beta.4",
   "description": "兜兜：聊天式个人资料库 Obsidian 插件",
   "main": "main.js",
   "scripts": {

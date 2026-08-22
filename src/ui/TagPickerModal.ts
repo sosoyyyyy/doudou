@@ -145,17 +145,30 @@ export class TagPickerModal extends Modal {
         this.viewportBaselineHeight - visibleBottom
       );
       const keyboardOpen = keyboardOffset >= TAG_PICKER_KEYBOARD_THRESHOLD_PX;
-      this.modalEl.style.setProperty(
-        "--doudou-tag-picker-viewport-height",
-        `${Math.max(240, viewport.height)}px`
-      );
-      this.modalEl.style.setProperty(
-        "--doudou-tag-picker-keyboard-offset",
-        `${keyboardOpen ? keyboardOffset : 0}px`
-      );
-      this.modalEl.toggleClass("doudou-tag-picker-keyboard-open", keyboardOpen);
-      if (keyboardOpen && document.activeElement === this.newTagInputEl) {
-        this.keepNewTagInputVisible();
+      if (keyboardOpen) {
+        this.containerEl.addClass("doudou-tag-picker-viewport-container");
+        this.containerEl.style.setProperty(
+          "--doudou-tag-picker-viewport-top",
+          `${viewport.offsetTop}px`
+        );
+        this.containerEl.style.setProperty(
+          "--doudou-tag-picker-viewport-left",
+          `${viewport.offsetLeft}px`
+        );
+        this.containerEl.style.setProperty(
+          "--doudou-tag-picker-viewport-width",
+          `${viewport.width}px`
+        );
+        this.containerEl.style.setProperty(
+          "--doudou-tag-picker-viewport-height",
+          `${viewport.height}px`
+        );
+        this.modalEl.addClass("doudou-tag-picker-keyboard-open");
+        if (document.activeElement === this.newTagInputEl) {
+          this.keepNewTagInputVisible();
+        }
+      } else {
+        this.restoreMobileViewportPosition();
       }
     };
 
@@ -178,9 +191,16 @@ export class TagPickerModal extends Modal {
     this.syncViewportHandler = null;
     this.viewportBaselineHeight = 0;
     this.viewportBaselineWidth = 0;
+    this.restoreMobileViewportPosition();
+  }
+
+  private restoreMobileViewportPosition(): void {
+    this.containerEl.removeClass("doudou-tag-picker-viewport-container");
+    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-top");
+    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-left");
+    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-width");
+    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-height");
     this.modalEl.removeClass("doudou-tag-picker-keyboard-open");
-    this.modalEl.style.removeProperty("--doudou-tag-picker-viewport-height");
-    this.modalEl.style.removeProperty("--doudou-tag-picker-keyboard-offset");
   }
 
   private keepNewTagInputVisible(): void {

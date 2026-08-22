@@ -1,4 +1,4 @@
-import { App, Component, setIcon } from "obsidian";
+import { App, Component, Platform, setIcon } from "obsidian";
 import type { AiTagService } from "../ai/AiTagService";
 import type { AskDoudouService } from "../ai/AskDoudouService";
 import { deepSeekErrorMessage } from "../ai/DeepSeekClient";
@@ -19,6 +19,7 @@ import {
   releasePendingImages,
   type PendingImage
 } from "./imageDraft";
+import { MobileTagPicker } from "./MobileTagPicker";
 import { TagPickerModal } from "./TagPickerModal";
 import { metaText } from "./uiHelpers";
 
@@ -73,11 +74,14 @@ export class ChatPage extends Component {
   private askSessions = new Map<string, AskSession>();
   private totalRecords = 0;
   private refreshVersion = 0;
+  private tagPickerRequestVersion = 0;
+  private mobileTagPicker: MobileTagPicker | null = null;
   private nearBottom = true;
 
   constructor(
     private readonly app: App,
     private readonly containerEl: HTMLElement,
+    private readonly overlayHostEl: HTMLElement,
     private readonly dependencies: ChatPageDependencies,
     private readonly openLibrary: () => void
   ) {
@@ -89,11 +93,18 @@ export class ChatPage extends Component {
   }
 
   override onunload(): void {
+    this.closeTagPicker();
     releasePendingImages(this.pendingImages);
     for (const status of this.sessionStatuses.values()) {
       releasePendingImages(status.pendingImages);
     }
     this.containerEl.empty();
+  }
+
+  closeTagPicker(): void {
+    this.tagPickerRequestVersion++;
+    this.mobileTagPicker?.close();
+    this.mobileTagPicker = null;
   }
 
   async refresh(scrollAfter = false): Promise<void> {
@@ -577,8 +588,28 @@ export class ChatPage extends Component {
   }
 
   private async openTagPicker(): Promise<void> {
+    const requestVersion = ++this.tagPickerRequestVersion;
     try {
       const options = collectTagOptions(await this.dependencies.repository.loadAll());
+      if (requestVersion !== this.tagPickerRequestVersion) return;
+      if (Platform.isMobileApp) {
+        this.mobileTagPicker?.close();
+        const picker = new MobileTagPicker(
+          this.overlayHostEl,
+          options,
+          this.selectedTags,
+          (tags) => {
+            this.selectedTags = tags;
+            this.renderSelectedTags();
+          },
+          () => {
+            if (this.mobileTagPicker === picker) this.mobileTagPicker = null;
+          }
+        );
+        this.mobileTagPicker = picker;
+        picker.open();
+        return;
+      }
       new TagPickerModal(this.app, options, this.selectedTags, (tags) => {
         this.selectedTags = tags;
         this.renderSelectedTags();

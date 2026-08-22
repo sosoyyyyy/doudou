@@ -14,6 +14,7 @@
   --doudou-surface-soft: #f3f8fe;
   --doudou-border: #d9e7f5;
   --doudou-mobile-toolbar-offset: 0px;
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -791,40 +792,91 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--doudou-accent) 14%, transparent);
 }
 
-.doudou-tag-picker-modal.doudou-tag-picker-mobile.doudou-new-tag-editing {
-  align-self: flex-start !important;
-  width: calc(100% - 24px);
-  max-width: calc(100% - 24px);
-  max-height: min(40vh, 380px) !important;
-  margin: max(calc(env(safe-area-inset-top) + 56px), 76px) 12px 0 !important;
-  border-radius: 18px !important;
+.doudou-tag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 0;
+  isolation: isolate;
+  overscroll-behavior: contain;
 }
 
-.doudou-tag-picker-modal.doudou-tag-picker-mobile.doudou-new-tag-editing
-  .doudou-modal-content {
-  max-height: min(40vh, 380px) !important;
-  padding-bottom: 12px;
-  scroll-padding-block: 0 16px;
+.doudou-tag-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(20 38 60 / 38%);
+  touch-action: none;
 }
 
-.doudou-tag-picker-modal.doudou-tag-picker-mobile.doudou-new-tag-editing
-  .doudou-modal-title {
-  margin-bottom: 6px;
-}
-
-.doudou-tag-picker-modal.doudou-tag-picker-mobile.doudou-new-tag-editing
-  .doudou-new-tag-row {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  margin: 0 0 8px;
-  padding: 6px 0 10px;
+.doudou-tag-sheet {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100% - 12px);
+  margin-top: auto;
+  overflow: hidden;
+  border: 1px solid var(--doudou-border);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  color: var(--text-normal);
   background: var(--doudou-surface);
+  box-shadow: 0 -16px 42px rgb(38 85 139 / 18%);
 }
 
-.doudou-tag-picker-modal.doudou-tag-picker-mobile.doudou-new-tag-editing
-  .doudou-new-tag-toggle {
-  display: none;
+.doudou-tag-sheet-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 16px max(
+    16px,
+    env(safe-area-inset-bottom),
+    var(--doudou-mobile-toolbar-offset)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.doudou-tag-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doudou-tag-sheet-header .doudou-modal-title {
+  margin-bottom: 14px;
+}
+
+.doudou-tag-sheet-close {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  margin: -7px -7px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 25px;
+  line-height: 1;
+  background: transparent;
+  box-shadow: none;
+  touch-action: manipulation;
+}
+
+.doudou-tag-sheet-close:hover,
+.doudou-tag-sheet-close:focus-visible {
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-accent-soft);
+}
+
+.doudou-tag-sheet .doudou-new-tag-row {
+  scroll-margin-bottom: 88px;
 }
 
 .doudou-detail-meta {

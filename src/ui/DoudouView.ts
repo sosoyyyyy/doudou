@@ -58,6 +58,7 @@ export class DoudouView extends ItemView {
   }
 
   override async onClose(): Promise<void> {
+    this.chatPage?.closeTagPicker();
     if (this.vaultRefreshTimer !== null) {
       window.clearTimeout(this.vaultRefreshTimer);
       this.vaultRefreshTimer = null;
@@ -115,6 +116,7 @@ export class DoudouView extends ItemView {
     this.chatPage = this.addChild(new ChatPage(
       this.app,
       this.chatContainerEl,
+      this.rootEl,
       {
         ...this.dependencies,
         openRecord: (record) => this.openRecord(record)
@@ -131,6 +133,7 @@ export class DoudouView extends ItemView {
   private async switchPage(page: DoudouPage): Promise<void> {
     this.activePage = page;
     const isChat = page === "chat";
+    if (!isChat) this.chatPage.closeTagPicker();
     this.chatContainerEl.toggleClass("doudou-is-hidden", !isChat);
     this.libraryContainerEl.toggleClass("doudou-is-hidden", isChat);
     this.chatTabEl.toggleClass("doudou-is-selected", isChat);

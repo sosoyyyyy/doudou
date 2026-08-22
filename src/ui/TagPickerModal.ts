@@ -1,18 +1,14 @@
-import { App, Modal, Platform } from "obsidian";
+import { App, Modal } from "obsidian";
 import { cleanTagName } from "../data/recordCodec";
 import type { TagOption } from "../types";
 
 export class TagPickerModal extends Modal {
   private selected: string[];
   private options: TagOption[];
-  private headingEl!: HTMLElement;
   private optionListEl!: HTMLElement;
   private selectedEl!: HTMLElement;
-  private createButtonEl!: HTMLButtonElement;
   private newTagRowEl!: HTMLElement;
   private newTagInputEl!: HTMLInputElement;
-  private newTagEditing = false;
-  private blurExitTimer: number | null = null;
 
   constructor(
     app: App,
@@ -27,11 +23,8 @@ export class TagPickerModal extends Modal {
 
   override onOpen(): void {
     this.modalEl.addClass("doudou-modal", "doudou-tag-picker-modal");
-    if (Platform.isMobileApp) {
-      this.modalEl.addClass("doudou-tag-picker-mobile");
-    }
     this.contentEl.addClass("doudou-modal-content");
-    this.headingEl = this.contentEl.createEl("h2", {
+    this.contentEl.createEl("h2", {
       cls: "doudou-modal-title",
       text: "选择标签"
     });
@@ -45,14 +38,13 @@ export class TagPickerModal extends Modal {
     this.renderSelected();
     this.renderOptions();
 
-    this.createButtonEl = this.contentEl.createEl("button", {
+    const createButton = this.contentEl.createEl("button", {
       cls: "doudou-new-tag-toggle",
       text: "+ 新建标签",
       attr: { type: "button" }
     });
-    this.createButtonEl.addEventListener("click", () => {
+    createButton.addEventListener("click", () => {
       this.newTagRowEl.removeClass("doudou-is-hidden");
-      this.enterMobileNewTagEditing();
       this.newTagInputEl.focus({ preventScroll: true });
     });
 
@@ -82,10 +74,6 @@ export class TagPickerModal extends Modal {
       this.newTagInputEl.value = "";
       this.renderSelected();
       this.renderOptions();
-      if (Platform.isMobileApp) {
-        this.newTagInputEl.blur();
-        this.exitMobileNewTagEditing(true);
-      }
     };
     addButton.addEventListener("click", addNewTag);
     this.newTagInputEl.addEventListener("keydown", (event) => {
@@ -93,12 +81,6 @@ export class TagPickerModal extends Modal {
         event.preventDefault();
         addNewTag();
       }
-    });
-    this.newTagInputEl.addEventListener("focus", () => {
-      this.enterMobileNewTagEditing();
-    });
-    this.newTagInputEl.addEventListener("blur", () => {
-      this.scheduleMobileEditingExit();
     });
 
     const actions = this.contentEl.createDiv({ cls: "doudou-modal-actions" });
@@ -120,48 +102,7 @@ export class TagPickerModal extends Modal {
   }
 
   override onClose(): void {
-    this.clearBlurExitTimer();
-    this.exitMobileNewTagEditing(false);
-    this.modalEl.removeClass("doudou-tag-picker-mobile");
     this.contentEl.empty();
-  }
-
-  private enterMobileNewTagEditing(): void {
-    if (!Platform.isMobileApp) return;
-
-    this.clearBlurExitTimer();
-    this.newTagEditing = true;
-    this.modalEl.addClass("doudou-new-tag-editing");
-    this.headingEl.insertAdjacentElement("afterend", this.newTagRowEl);
-  }
-
-  private scheduleMobileEditingExit(): void {
-    if (!Platform.isMobileApp || !this.newTagEditing) return;
-
-    this.clearBlurExitTimer();
-    this.blurExitTimer = window.setTimeout(() => {
-      this.blurExitTimer = null;
-      if (this.newTagRowEl.contains(document.activeElement)) return;
-      this.exitMobileNewTagEditing(true);
-    }, 0);
-  }
-
-  private exitMobileNewTagEditing(hideEditor: boolean): void {
-    this.clearBlurExitTimer();
-    this.newTagEditing = false;
-    this.modalEl.removeClass("doudou-new-tag-editing");
-
-    if (this.createButtonEl && this.newTagRowEl) {
-      this.createButtonEl.insertAdjacentElement("afterend", this.newTagRowEl);
-      if (hideEditor) this.newTagRowEl.addClass("doudou-is-hidden");
-    }
-  }
-
-  private clearBlurExitTimer(): void {
-    if (this.blurExitTimer !== null) {
-      window.clearTimeout(this.blurExitTimer);
-      this.blurExitTimer = null;
-    }
   }
 
   private toggleTag(tag: string): void {

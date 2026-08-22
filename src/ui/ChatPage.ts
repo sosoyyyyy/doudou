@@ -148,7 +148,7 @@ export class ChatPage extends Component {
       attr: { "aria-live": "polite", "aria-label": "最近记录" }
     });
     this.messagesEl.createDiv({
-      cls: "doudou-chat-loading",
+      cls: "doudou-chat-loading doudou-loading-state",
       text: "兜兜努力翻找中..."
     });
     this.registerDomEvent(this.messagesEl, "scroll", () => {
@@ -294,8 +294,9 @@ export class ChatPage extends Component {
     }
     if (timeline.length === 0) {
       this.messagesEl.createDiv({
-        cls: "doudou-chat-empty",
-        text: "还没有东西，先往兜兜里放一条吧"
+        cls: "doudou-chat-empty doudou-empty-state",
+        text: "这里还空空的",
+        attr: { "data-subtitle": "去记下点什么吧" }
       });
       return;
     }

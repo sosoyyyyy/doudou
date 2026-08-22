@@ -70,7 +70,7 @@ export class LibraryPage extends Component {
     if (showLoading) {
       this.listEl.empty();
       this.listEl.createDiv({
-        cls: "doudou-library-empty",
+        cls: "doudou-library-empty doudou-loading-state",
         text: "兜兜努力翻找中..."
       });
     }
@@ -180,8 +180,9 @@ export class LibraryPage extends Component {
     this.listEl.empty();
     if (this.records.length === 0) {
       this.listEl.createDiv({
-        cls: "doudou-library-empty",
-        text: "兜兜现在还是空的"
+        cls: "doudou-library-empty doudou-empty-state",
+        text: "这里还空空的",
+        attr: { "data-subtitle": "去记下点什么吧" }
       });
       return;
     }

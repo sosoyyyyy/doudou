@@ -5,11 +5,14 @@
 }
 
 .doudou-view {
-  --doudou-accent: #64836f;
-  --doudou-accent-strong: #496755;
-  --doudou-accent-soft: #e8f0ea;
-  --doudou-user-bubble: #dfeee3;
-  --doudou-system-bubble: var(--background-secondary);
+  --doudou-accent: #6f9fd8;
+  --doudou-accent-strong: #477dbc;
+  --doudou-accent-soft: #edf5ff;
+  --doudou-user-bubble: #dfeeff;
+  --doudou-system-bubble: #f8fbff;
+  --doudou-surface: #fbfdff;
+  --doudou-surface-soft: #f3f8fe;
+  --doudou-border: #d9e7f5;
   --doudou-mobile-toolbar-offset: 0px;
   display: flex;
   flex-direction: column;
@@ -22,31 +25,46 @@
 
 .theme-dark .doudou-view,
 .theme-dark .doudou-modal {
-  --doudou-accent: #86a991;
-  --doudou-accent-strong: #a7c8b1;
-  --doudou-accent-soft: #2f4336;
-  --doudou-user-bubble: #334c3b;
+  --doudou-accent: #78a9e3;
+  --doudou-accent-strong: #a9cdf5;
+  --doudou-accent-soft: #20344d;
+  --doudou-user-bubble: #233c5b;
+  --doudou-system-bubble: #1c2735;
+  --doudou-surface: #182331;
+  --doudou-surface-soft: #1d2b3b;
+  --doudou-border: #30465e;
 }
 
 .doudou-header {
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) minmax(0, 280px) minmax(40px, 1fr);
   align-items: center;
-  justify-content: center;
   gap: 10px;
   min-height: 50px;
   padding: max(6px, env(safe-area-inset-top)) 12px 7px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+  border-bottom: 1px solid var(--doudou-border);
+  background: color-mix(in srgb, var(--doudou-accent) 5%, var(--background-primary));
+}
+
+.doudou-brand {
+  justify-self: start;
+  color: var(--doudou-accent-strong);
+  font-size: 16px;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .doudou-page-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: min(280px, calc(100% - 52px));
+  width: 100%;
+  max-width: 280px;
   padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--doudou-accent) 12%, transparent);
   border-radius: 12px;
-  background: var(--background-secondary);
+  background: var(--doudou-surface-soft);
 }
 
 .doudou-page-tab {
@@ -63,9 +81,9 @@
 }
 
 .doudou-page-tab.doudou-is-selected {
-  color: var(--text-normal);
-  background: var(--background-primary);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-surface);
+  box-shadow: 0 2px 7px rgb(49 102 161 / 11%);
 }
 
 .doudou-refresh-button {
@@ -87,8 +105,8 @@
 
 .doudou-refresh-button:hover,
 .doudou-refresh-button:focus-visible {
-  color: var(--text-normal);
-  background: var(--background-modifier-hover);
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-accent-soft);
 }
 
 .doudou-pages,
@@ -180,12 +198,13 @@
   width: 28px;
   height: 28px;
   margin-top: 2px;
-  border: 1px solid color-mix(in srgb, var(--doudou-accent) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--doudou-accent) 42%, transparent);
   border-radius: 50%;
   color: var(--doudou-accent-strong);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 720;
   background: var(--doudou-accent-soft);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--doudou-accent) 18%, transparent);
 }
 
 .doudou-system-stack {
@@ -198,11 +217,12 @@
 .doudou-bubble {
   max-width: 100%;
   padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--doudou-accent) 11%, transparent);
   border-radius: 17px;
   line-height: 1.52;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+  box-shadow: 0 2px 7px rgb(49 102 161 / 7%);
 }
 
 .doudou-user-bubble {
@@ -254,8 +274,8 @@
     env(safe-area-inset-bottom),
     var(--doudou-mobile-toolbar-offset)
   );
-  border-top: 1px solid var(--background-modifier-border);
-  background: color-mix(in srgb, var(--background-primary) 96%, transparent);
+  border-top: 1px solid var(--doudou-border);
+  background: color-mix(in srgb, var(--doudou-accent) 3%, var(--background-primary));
 }
 
 .doudou-composer-inner {
@@ -288,7 +308,8 @@
 .doudou-category-button:focus-visible,
 .doudou-filter-button:hover,
 .doudou-filter-button:focus-visible {
-  background: var(--background-modifier-hover);
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-accent-soft);
 }
 
 .doudou-category-button.doudou-is-selected,
@@ -333,15 +354,15 @@
   align-items: flex-end;
   gap: 4px;
   padding: 5px;
-  border: 1px solid var(--background-modifier-border);
+  border: 1px solid var(--doudou-border);
   border-radius: 18px;
-  background: var(--background-secondary);
+  background: var(--doudou-surface);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .doudou-input-shell:focus-within {
   border-color: var(--doudou-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--doudou-accent) 14%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--doudou-accent) 16%, transparent);
 }
 
 .doudou-textarea {
@@ -390,7 +411,8 @@
 
 .doudou-icon-button:hover,
 .doudou-icon-button:focus-visible {
-  background: var(--background-modifier-hover);
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-accent-soft);
 }
 
 .doudou-send-button {
@@ -432,7 +454,7 @@
 .doudou-library-controls {
   flex: 0 0 auto;
   padding: 14px clamp(12px, 3vw, 24px) 10px;
-  border-bottom: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--doudou-border);
 }
 
 .doudou-search-shell {
@@ -441,13 +463,14 @@
   gap: 7px;
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid var(--background-modifier-border);
+  border: 1px solid var(--doudou-border);
   border-radius: 14px;
-  background: var(--background-secondary);
+  background: var(--doudou-surface);
 }
 
 .doudou-search-shell:focus-within {
   border-color: var(--doudou-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--doudou-accent) 13%, transparent);
 }
 
 .doudou-search-icon {
@@ -543,7 +566,7 @@
 .doudou-date-rule {
   flex: 1 1 auto;
   height: 1px;
-  background: var(--background-modifier-border);
+  background: color-mix(in srgb, var(--doudou-accent) 22%, var(--doudou-border));
 }
 
 .doudou-library-item {
@@ -554,7 +577,7 @@
   min-height: 76px;
   margin: 0;
   padding: 0;
-  border-bottom: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--doudou-border);
   border-radius: 9px;
   background: transparent;
 }
@@ -579,7 +602,7 @@
 
 .doudou-library-item-body:hover,
 .doudou-library-item-body:focus-visible {
-  background: var(--background-modifier-hover);
+  background: var(--doudou-surface-soft);
 }
 
 .doudou-library-edit-button {
@@ -603,7 +626,7 @@
 .doudou-library-edit-button:hover,
 .doudou-library-edit-button:focus-visible {
   color: var(--doudou-accent-strong);
-  background: var(--background-modifier-hover);
+  background: var(--doudou-accent-soft);
 }
 
 .doudou-library-edit-button svg {
@@ -643,13 +666,19 @@
 }
 
 .doudou-modal {
-  --doudou-accent: #64836f;
-  --doudou-accent-strong: #496755;
-  --doudou-accent-soft: #e8f0ea;
+  --doudou-accent: #6f9fd8;
+  --doudou-accent-strong: #477dbc;
+  --doudou-accent-soft: #edf5ff;
+  --doudou-surface: #fbfdff;
+  --doudou-surface-soft: #f3f8fe;
+  --doudou-border: #d9e7f5;
   width: min(92vw, 620px);
   max-height: min(82dvh, 760px);
+  border: 1px solid var(--doudou-border);
   border-radius: 18px;
   overflow: hidden;
+  background: var(--doudou-surface);
+  box-shadow: 0 16px 42px rgb(38 85 139 / 16%);
 }
 
 .doudou-modal-content {
@@ -690,9 +719,15 @@
   background: var(--doudou-accent);
 }
 
+.doudou-primary-button:hover,
+.doudou-primary-button:focus-visible {
+  color: white;
+  background: var(--doudou-accent-strong);
+}
+
 .doudou-secondary-button {
   color: var(--text-normal);
-  background: var(--background-secondary);
+  background: var(--doudou-surface-soft);
 }
 
 .doudou-danger-button {
@@ -748,6 +783,12 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 42px;
+  border-color: var(--doudou-border);
+}
+
+.doudou-new-tag-input:focus {
+  border-color: var(--doudou-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--doudou-accent) 14%, transparent);
 }
 
 .doudou-detail-meta {
@@ -936,7 +977,7 @@
   color: white;
   font-size: 18px;
   line-height: 1;
-  background: rgb(20 24 21 / 72%);
+  background: rgb(24 32 44 / 72%);
   box-shadow: none;
   touch-action: manipulation;
 }
@@ -1042,7 +1083,7 @@
   color: white;
   font-size: 20px;
   font-weight: 650;
-  background: rgb(15 18 16 / 54%);
+  background: rgb(18 27 40 / 54%);
 }
 
 .doudou-image-missing {
@@ -1061,6 +1102,13 @@
 
 .doudou-bubble-text {
   white-space: pre-wrap;
+}
+
+.doudou-user-bubble .doudou-bubble-text {
+  cursor: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-touch-callout: default;
 }
 
 .doudou-library-image {
@@ -1087,7 +1135,7 @@
   border-radius: 999px;
   color: white;
   font-size: 9px;
-  background: rgb(15 18 16 / 68%);
+  background: rgb(18 27 40 / 68%);
 }
 
 .doudou-detail-images {
@@ -1139,7 +1187,7 @@
 .doudou-image-preview-modal {
   width: min(94vw, 1000px);
   max-height: 92dvh;
-  background: rgb(15 17 16 / 96%);
+  background: rgb(12 19 30 / 96%);
 }
 
 .doudou-image-preview-content {
@@ -1207,12 +1255,19 @@
 
 @media (max-width: 600px) {
   .doudou-header {
+    grid-template-columns: minmax(44px, 1fr) minmax(0, 250px) minmax(40px, 1fr);
+    gap: 6px;
     min-height: 48px;
     padding-inline: 9px;
   }
 
+  .doudou-brand {
+    font-size: 15px;
+  }
+
   .doudou-page-tabs {
-    width: min(250px, calc(100% - 48px));
+    width: 100%;
+    max-width: 250px;
   }
 
   .doudou-page-tab {
@@ -1297,8 +1352,58 @@
     max-height: 84dvh;
   }
 
+  .is-mobile .doudou-tag-picker-modal {
+    max-height: min(
+      88dvh,
+      calc(var(--doudou-tag-picker-viewport-height, 100dvh) - 12px),
+      760px
+    );
+    margin-bottom: var(--doudou-tag-picker-keyboard-offset, 0px);
+    transition: margin-bottom 120ms ease, max-height 120ms ease;
+  }
+
+  .is-mobile .doudou-tag-picker-modal .doudou-modal-content {
+    max-height: min(
+      84dvh,
+      calc(var(--doudou-tag-picker-viewport-height, 100dvh) - 24px)
+    );
+    scroll-padding-block: 24px 96px;
+  }
+
+  .is-mobile .doudou-tag-picker-modal .doudou-new-tag-row {
+    scroll-margin-block: 28px;
+  }
+
   .doudou-modal-actions > button {
     flex: 1 1 0;
+  }
+}
+
+@media (max-width: 350px) {
+  .doudou-header {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    gap: 4px;
+    padding-inline: 7px;
+  }
+
+  .doudou-brand {
+    font-size: 14px;
+    letter-spacing: 0;
+  }
+
+  .doudou-page-tabs {
+    padding: 2px;
+  }
+
+  .doudou-page-tab {
+    padding-inline: 5px;
+    font-size: 12px;
+  }
+
+  .doudou-refresh-button {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
   }
 }
 

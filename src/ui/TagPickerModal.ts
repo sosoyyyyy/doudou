@@ -1,6 +1,8 @@
-import { App, Modal } from "obsidian";
+import { App, Modal, Platform } from "obsidian";
 import { cleanTagName } from "../data/recordCodec";
 import type { TagOption } from "../types";
+
+const TAG_PICKER_KEYBOARD_THRESHOLD_PX = 120;
 
 export class TagPickerModal extends Modal {
   private selected: string[];
@@ -9,6 +11,11 @@ export class TagPickerModal extends Modal {
   private selectedEl!: HTMLElement;
   private newTagRowEl!: HTMLElement;
   private newTagInputEl!: HTMLInputElement;
+  private visualViewport: VisualViewport | null = null;
+  private syncViewportHandler: (() => void) | null = null;
+  private inputVisibilityFrame: number | null = null;
+  private viewportBaselineHeight = 0;
+  private viewportBaselineWidth = 0;
 
   constructor(
     app: App,
@@ -42,7 +49,9 @@ export class TagPickerModal extends Modal {
     });
     createButton.addEventListener("click", () => {
       this.newTagRowEl.removeClass("doudou-is-hidden");
-      this.newTagInputEl.focus();
+      this.newTagInputEl.focus({ preventScroll: true });
+      this.syncViewportHandler?.();
+      this.keepNewTagInputVisible();
     });
 
     this.newTagRowEl = this.contentEl.createDiv({
@@ -96,10 +105,96 @@ export class TagPickerModal extends Modal {
       this.onApply([...this.selected]);
       this.close();
     });
+
+    this.registerMobileViewportHandling();
   }
 
   override onClose(): void {
+    this.unregisterMobileViewportHandling();
     this.contentEl.empty();
+  }
+
+  private registerMobileViewportHandling(): void {
+    const viewport = window.visualViewport;
+    if (!Platform.isMobileApp || !viewport) return;
+
+    this.visualViewport = viewport;
+    const syncViewport = (): void => {
+      if (
+        this.viewportBaselineWidth === 0 ||
+        Math.abs(viewport.width - this.viewportBaselineWidth) > 48
+      ) {
+        this.viewportBaselineWidth = viewport.width;
+        this.viewportBaselineHeight = Math.max(
+          window.innerHeight,
+          document.documentElement.clientHeight,
+          viewport.height
+        );
+      } else {
+        this.viewportBaselineHeight = Math.max(
+          this.viewportBaselineHeight,
+          window.innerHeight,
+          document.documentElement.clientHeight,
+          viewport.height
+        );
+      }
+
+      const visibleBottom = viewport.offsetTop + viewport.height;
+      const keyboardOffset = Math.max(
+        0,
+        this.viewportBaselineHeight - visibleBottom
+      );
+      const keyboardOpen = keyboardOffset >= TAG_PICKER_KEYBOARD_THRESHOLD_PX;
+      this.modalEl.style.setProperty(
+        "--doudou-tag-picker-viewport-height",
+        `${Math.max(240, viewport.height)}px`
+      );
+      this.modalEl.style.setProperty(
+        "--doudou-tag-picker-keyboard-offset",
+        `${keyboardOpen ? keyboardOffset : 0}px`
+      );
+      this.modalEl.toggleClass("doudou-tag-picker-keyboard-open", keyboardOpen);
+      if (keyboardOpen && document.activeElement === this.newTagInputEl) {
+        this.keepNewTagInputVisible();
+      }
+    };
+
+    this.syncViewportHandler = syncViewport;
+    viewport.addEventListener("resize", syncViewport);
+    viewport.addEventListener("scroll", syncViewport);
+    syncViewport();
+  }
+
+  private unregisterMobileViewportHandling(): void {
+    if (this.visualViewport && this.syncViewportHandler) {
+      this.visualViewport.removeEventListener("resize", this.syncViewportHandler);
+      this.visualViewport.removeEventListener("scroll", this.syncViewportHandler);
+    }
+    if (this.inputVisibilityFrame !== null) {
+      window.cancelAnimationFrame(this.inputVisibilityFrame);
+      this.inputVisibilityFrame = null;
+    }
+    this.visualViewport = null;
+    this.syncViewportHandler = null;
+    this.viewportBaselineHeight = 0;
+    this.viewportBaselineWidth = 0;
+    this.modalEl.removeClass("doudou-tag-picker-keyboard-open");
+    this.modalEl.style.removeProperty("--doudou-tag-picker-viewport-height");
+    this.modalEl.style.removeProperty("--doudou-tag-picker-keyboard-offset");
+  }
+
+  private keepNewTagInputVisible(): void {
+    if (this.inputVisibilityFrame !== null) {
+      window.cancelAnimationFrame(this.inputVisibilityFrame);
+    }
+    this.inputVisibilityFrame = window.requestAnimationFrame(() => {
+      this.inputVisibilityFrame = null;
+      if (document.activeElement !== this.newTagInputEl) return;
+      this.newTagInputEl.scrollIntoView({
+        block: "center",
+        inline: "nearest"
+      });
+    });
   }
 
   private toggleTag(tag: string): void {

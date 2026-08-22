@@ -69,6 +69,7 @@ export class DoudouView extends ItemView {
   private buildShell(): void {
     this.rootEl = this.contentEl.createDiv({ cls: "doudou-view" });
     const header = this.rootEl.createEl("header", { cls: "doudou-header" });
+    header.createDiv({ cls: "doudou-brand", text: "兜兜" });
     const navigation = header.createDiv({
       cls: "doudou-page-tabs",
       attr: { role: "tablist", "aria-label": "兜兜页面" }

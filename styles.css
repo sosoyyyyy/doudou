@@ -1352,31 +1352,23 @@
     max-height: 84dvh;
   }
 
-  .is-mobile .doudou-tag-picker-viewport-container {
-    position: fixed !important;
-    top: var(--doudou-tag-picker-viewport-top) !important;
-    right: auto !important;
-    bottom: auto !important;
-    left: var(--doudou-tag-picker-viewport-left) !important;
-    width: var(--doudou-tag-picker-viewport-width) !important;
-    height: var(--doudou-tag-picker-viewport-height) !important;
-    max-height: var(--doudou-tag-picker-viewport-height) !important;
+  .doudou-tag-picker-viewport-container {
     overflow: hidden;
   }
 
-  .is-mobile .doudou-tag-picker-modal.doudou-tag-picker-keyboard-open {
+  .doudou-tag-picker-modal.doudou-tag-picker-keyboard-open {
     max-height: min(
       calc(var(--doudou-tag-picker-viewport-height, 100dvh) - 12px),
       760px
     );
   }
 
-  .is-mobile .doudou-tag-picker-modal.doudou-tag-picker-keyboard-open .doudou-modal-content {
+  .doudou-tag-picker-modal.doudou-tag-picker-keyboard-open .doudou-modal-content {
     max-height: calc(var(--doudou-tag-picker-viewport-height, 100dvh) - 24px);
     scroll-padding-block: 24px 96px;
   }
 
-  .is-mobile .doudou-tag-picker-modal .doudou-new-tag-row {
+  .doudou-tag-picker-modal .doudou-new-tag-row {
     scroll-margin-block: 28px;
   }
 

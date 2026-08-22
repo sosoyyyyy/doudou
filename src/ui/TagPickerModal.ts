@@ -2,7 +2,22 @@ import { App, Modal, Platform } from "obsidian";
 import { cleanTagName } from "../data/recordCodec";
 import type { TagOption } from "../types";
 
-const TAG_PICKER_KEYBOARD_THRESHOLD_PX = 120;
+const POSITION_STYLE_PROPERTIES = [
+  "position",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "width",
+  "height",
+  "max-height"
+] as const;
+
+interface InlineStyleSnapshot {
+  property: typeof POSITION_STYLE_PROPERTIES[number];
+  value: string;
+  priority: string;
+}
 
 export class TagPickerModal extends Modal {
   private selected: string[];
@@ -12,10 +27,18 @@ export class TagPickerModal extends Modal {
   private newTagRowEl!: HTMLElement;
   private newTagInputEl!: HTMLInputElement;
   private visualViewport: VisualViewport | null = null;
-  private syncViewportHandler: (() => void) | null = null;
+  private viewportResizeHandler: (() => void) | null = null;
+  private viewportScrollHandler: (() => void) | null = null;
   private inputVisibilityFrame: number | null = null;
-  private viewportBaselineHeight = 0;
-  private viewportBaselineWidth = 0;
+  private focusSyncFrame: number | null = null;
+  private focusSyncTimer: number | null = null;
+  private diagnosticTimer: number | null = null;
+  private pendingDiagnosticEvent = "";
+  private newTagFocusHandler: (() => void) | null = null;
+  private newTagBlurHandler: (() => void) | null = null;
+  private positioningEl: HTMLElement | null = null;
+  private originalPositionStyles: InlineStyleSnapshot[] | null = null;
+  private newTagEditing = false;
 
   constructor(
     app: App,
@@ -49,9 +72,8 @@ export class TagPickerModal extends Modal {
     });
     createButton.addEventListener("click", () => {
       this.newTagRowEl.removeClass("doudou-is-hidden");
+      this.beginNewTagEditing("toggle");
       this.newTagInputEl.focus({ preventScroll: true });
-      this.syncViewportHandler?.();
-      this.keepNewTagInputVisible();
     });
 
     this.newTagRowEl = this.contentEl.createDiv({
@@ -88,6 +110,15 @@ export class TagPickerModal extends Modal {
         addNewTag();
       }
     });
+    this.newTagFocusHandler = () => this.beginNewTagEditing("focus");
+    this.newTagBlurHandler = () => {
+      this.newTagEditing = false;
+      this.cancelFocusSync();
+      this.restoreMobileViewportPosition();
+      this.logViewportDiagnostics("blur", true);
+    };
+    this.newTagInputEl.addEventListener("focus", this.newTagFocusHandler);
+    this.newTagInputEl.addEventListener("blur", this.newTagBlurHandler);
 
     const actions = this.contentEl.createDiv({ cls: "doudou-modal-actions" });
     const cancel = actions.createEl("button", {
@@ -119,88 +150,178 @@ export class TagPickerModal extends Modal {
     if (!Platform.isMobileApp || !viewport) return;
 
     this.visualViewport = viewport;
-    const syncViewport = (): void => {
-      if (
-        this.viewportBaselineWidth === 0 ||
-        Math.abs(viewport.width - this.viewportBaselineWidth) > 48
-      ) {
-        this.viewportBaselineWidth = viewport.width;
-        this.viewportBaselineHeight = Math.max(
-          window.innerHeight,
-          document.documentElement.clientHeight,
-          viewport.height
-        );
-      } else {
-        this.viewportBaselineHeight = Math.max(
-          this.viewportBaselineHeight,
-          window.innerHeight,
-          document.documentElement.clientHeight,
-          viewport.height
-        );
-      }
-
-      const visibleBottom = viewport.offsetTop + viewport.height;
-      const keyboardOffset = Math.max(
-        0,
-        this.viewportBaselineHeight - visibleBottom
-      );
-      const keyboardOpen = keyboardOffset >= TAG_PICKER_KEYBOARD_THRESHOLD_PX;
-      if (keyboardOpen) {
-        this.containerEl.addClass("doudou-tag-picker-viewport-container");
-        this.containerEl.style.setProperty(
-          "--doudou-tag-picker-viewport-top",
-          `${viewport.offsetTop}px`
-        );
-        this.containerEl.style.setProperty(
-          "--doudou-tag-picker-viewport-left",
-          `${viewport.offsetLeft}px`
-        );
-        this.containerEl.style.setProperty(
-          "--doudou-tag-picker-viewport-width",
-          `${viewport.width}px`
-        );
-        this.containerEl.style.setProperty(
-          "--doudou-tag-picker-viewport-height",
-          `${viewport.height}px`
-        );
-        this.modalEl.addClass("doudou-tag-picker-keyboard-open");
-        if (document.activeElement === this.newTagInputEl) {
-          this.keepNewTagInputVisible();
-        }
-      } else {
-        this.restoreMobileViewportPosition();
-      }
+    this.positioningEl = this.modalEl.closest<HTMLElement>(".modal-container") ??
+      this.containerEl;
+    this.viewportResizeHandler = () => {
+      this.syncTagPickerToVisualViewport("resize");
     };
-
-    this.syncViewportHandler = syncViewport;
-    viewport.addEventListener("resize", syncViewport);
-    viewport.addEventListener("scroll", syncViewport);
-    syncViewport();
+    this.viewportScrollHandler = () => {
+      this.syncTagPickerToVisualViewport("scroll");
+    };
+    viewport.addEventListener("resize", this.viewportResizeHandler);
+    viewport.addEventListener("scroll", this.viewportScrollHandler);
   }
 
   private unregisterMobileViewportHandling(): void {
-    if (this.visualViewport && this.syncViewportHandler) {
-      this.visualViewport.removeEventListener("resize", this.syncViewportHandler);
-      this.visualViewport.removeEventListener("scroll", this.syncViewportHandler);
+    if (this.visualViewport && this.viewportResizeHandler) {
+      this.visualViewport.removeEventListener("resize", this.viewportResizeHandler);
+    }
+    if (this.visualViewport && this.viewportScrollHandler) {
+      this.visualViewport.removeEventListener("scroll", this.viewportScrollHandler);
+    }
+    if (this.newTagFocusHandler) {
+      this.newTagInputEl.removeEventListener("focus", this.newTagFocusHandler);
+    }
+    if (this.newTagBlurHandler) {
+      this.newTagInputEl.removeEventListener("blur", this.newTagBlurHandler);
     }
     if (this.inputVisibilityFrame !== null) {
       window.cancelAnimationFrame(this.inputVisibilityFrame);
       this.inputVisibilityFrame = null;
     }
-    this.visualViewport = null;
-    this.syncViewportHandler = null;
-    this.viewportBaselineHeight = 0;
-    this.viewportBaselineWidth = 0;
+    this.cancelFocusSync();
+    if (this.diagnosticTimer !== null) {
+      window.clearTimeout(this.diagnosticTimer);
+      this.diagnosticTimer = null;
+    }
+    this.newTagEditing = false;
     this.restoreMobileViewportPosition();
+    this.visualViewport = null;
+    this.viewportResizeHandler = null;
+    this.viewportScrollHandler = null;
+    this.newTagFocusHandler = null;
+    this.newTagBlurHandler = null;
+    this.positioningEl = null;
+    this.pendingDiagnosticEvent = "";
+  }
+
+  private beginNewTagEditing(event: string): void {
+    this.newTagEditing = true;
+    this.syncTagPickerToVisualViewport(event, true);
+    this.scheduleFocusedViewportSync();
+    this.keepNewTagInputVisible();
+  }
+
+  private syncTagPickerToVisualViewport(event: string, logImmediately = false): void {
+    const viewport = this.visualViewport;
+    if (!Platform.isMobileApp || !viewport || !this.newTagEditing) {
+      this.restoreMobileViewportPosition();
+      this.logViewportDiagnostics(event, logImmediately);
+      return;
+    }
+
+    const positioningEl = this.positioningEl ?? this.containerEl;
+    if (!this.originalPositionStyles) {
+      this.originalPositionStyles = POSITION_STYLE_PROPERTIES.map((property) => ({
+        property,
+        value: positioningEl.style.getPropertyValue(property),
+        priority: positioningEl.style.getPropertyPriority(property)
+      }));
+    }
+    positioningEl.addClass("doudou-tag-picker-viewport-container");
+    positioningEl.style.setProperty("position", "fixed", "important");
+    positioningEl.style.setProperty("top", `${viewport.offsetTop}px`, "important");
+    positioningEl.style.setProperty("right", "auto", "important");
+    positioningEl.style.setProperty("bottom", "auto", "important");
+    positioningEl.style.setProperty("left", `${viewport.offsetLeft}px`, "important");
+    positioningEl.style.setProperty("width", `${viewport.width}px`, "important");
+    positioningEl.style.setProperty("height", `${viewport.height}px`, "important");
+    positioningEl.style.setProperty("max-height", `${viewport.height}px`, "important");
+    positioningEl.style.setProperty(
+      "--doudou-tag-picker-viewport-height",
+      `${viewport.height}px`
+    );
+    this.modalEl.addClass("doudou-tag-picker-keyboard-open");
+    this.keepNewTagInputVisible();
+    this.logViewportDiagnostics(event, logImmediately);
   }
 
   private restoreMobileViewportPosition(): void {
-    this.containerEl.removeClass("doudou-tag-picker-viewport-container");
-    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-top");
-    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-left");
-    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-width");
-    this.containerEl.style.removeProperty("--doudou-tag-picker-viewport-height");
+    const positioningEl = this.positioningEl ?? this.containerEl;
+    if (this.originalPositionStyles) {
+      for (const snapshot of this.originalPositionStyles) {
+        if (snapshot.value) {
+          positioningEl.style.setProperty(
+            snapshot.property,
+            snapshot.value,
+            snapshot.priority
+          );
+        } else {
+          positioningEl.style.removeProperty(snapshot.property);
+        }
+      }
+      this.originalPositionStyles = null;
+    }
+    positioningEl.removeClass("doudou-tag-picker-viewport-container");
+    positioningEl.style.removeProperty("--doudou-tag-picker-viewport-height");
     this.modalEl.removeClass("doudou-tag-picker-keyboard-open");
+  }
+
+  private scheduleFocusedViewportSync(): void {
+    this.cancelFocusSync();
+    this.focusSyncFrame = window.requestAnimationFrame(() => {
+      this.focusSyncFrame = null;
+      this.syncTagPickerToVisualViewport("focus-frame");
+    });
+    this.focusSyncTimer = window.setTimeout(() => {
+      this.focusSyncTimer = null;
+      this.syncTagPickerToVisualViewport("focus-delay");
+    }, 180);
+  }
+
+  private cancelFocusSync(): void {
+    if (this.focusSyncFrame !== null) {
+      window.cancelAnimationFrame(this.focusSyncFrame);
+      this.focusSyncFrame = null;
+    }
+    if (this.focusSyncTimer !== null) {
+      window.clearTimeout(this.focusSyncTimer);
+      this.focusSyncTimer = null;
+    }
+  }
+
+  private logViewportDiagnostics(event: string, immediately = false): void {
+    this.pendingDiagnosticEvent = event;
+    if (immediately) {
+      if (this.diagnosticTimer !== null) {
+        window.clearTimeout(this.diagnosticTimer);
+        this.diagnosticTimer = null;
+      }
+      this.emitViewportDiagnostics(event);
+      return;
+    }
+    if (this.diagnosticTimer !== null) return;
+    this.diagnosticTimer = window.setTimeout(() => {
+      this.diagnosticTimer = null;
+      this.emitViewportDiagnostics(this.pendingDiagnosticEvent);
+    }, 120);
+  }
+
+  private emitViewportDiagnostics(event: string): void {
+    const viewport = this.visualViewport;
+    const positioningEl = this.positioningEl ?? this.containerEl;
+    const containerRect = positioningEl.getBoundingClientRect();
+    const modalRect = this.modalEl.getBoundingClientRect();
+    const contentRect = this.contentEl.getBoundingClientRect();
+    const number = (value: number | undefined): string =>
+      value === undefined ? "n/a" : value.toFixed(1);
+    console.debug(
+      `[doudou][tag-picker] event=${event}`,
+      `focused=${document.activeElement === this.newTagInputEl}`,
+      `editing=${this.newTagEditing}`,
+      `vv.height=${number(viewport?.height)}`,
+      `vv.offsetTop=${number(viewport?.offsetTop)}`,
+      `vv.bottom=${number(viewport ? viewport.offsetTop + viewport.height : undefined)}`,
+      `innerHeight=${number(window.innerHeight)}`,
+      `clientHeight=${number(document.documentElement.clientHeight)}`,
+      `container.class=${JSON.stringify(positioningEl.className)}`,
+      `container.top=${number(containerRect.top)}`,
+      `container.bottom=${number(containerRect.bottom)}`,
+      `modal.top=${number(modalRect.top)}`,
+      `modal.bottom=${number(modalRect.bottom)}`,
+      `content.top=${number(contentRect.top)}`,
+      `content.bottom=${number(contentRect.bottom)}`
+    );
   }
 
   private keepNewTagInputVisible(): void {

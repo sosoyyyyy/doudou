@@ -14,6 +14,11 @@ import { ImagePreviewModal } from "./ImagePreviewModal";
 import { showImageActionMenuAtEvent } from "./imageActions";
 import { recordPageGalleryPresentation } from "./imageGallery";
 import {
+  buildImageSavePlan,
+  moveImageItem,
+  type EditableImageItem
+} from "./imageReorder";
+import {
   createPendingImages,
   imageFilesFromClipboardItems,
   releasePendingImages,
@@ -62,7 +67,7 @@ export class RecordPage extends Component {
     if (record.content) article.createDiv({ cls: "doudou-record-content", text: record.content });
     if ((record.images ?? []).length > 0) {
       const presentation = recordPageGalleryPresentation(record.images ?? []);
-      const gallery = article.createDiv({ cls: `doudou-record-gallery doudou-gallery-layout-${presentation.mode}`, attr: { "data-count": String(record.images?.length ?? 0) } });
+      const gallery = article.createDiv({ cls: "doudou-record-gallery", attr: { "data-count": String(record.images?.length ?? 0) } });
       for (const [index, path] of presentation.paths.entries()) {
         const button = gallery.createEl("button", { cls: "doudou-gallery-item", attr: { type: "button", "aria-label": `查看第 ${index + 1} 张图片` } });
         const src = this.dependencies.imageService.resourcePath(path);
@@ -142,17 +147,157 @@ export class RecordPage extends Component {
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
     const content = form.createEl("textarea", { cls: "doudou-editor-content", attr: { placeholder: "记下此刻……\n\n直接输入 #标签", "aria-label": "正文", rows: "10" } }); content.value = record?.content ?? "";
     const imageInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
-    const images = form.createDiv({ cls: "doudou-editor-images" }); let retained = [...(record?.images ?? [])]; const removed = new Set<string>();
-    const paintImages = (): void => { images.empty();
-      for (const path of retained) { const tile = images.createDiv({ cls: "doudou-editor-image" }); const src = this.dependencies.imageService.resourcePath(path); if (src) tile.createEl("img", { attr: { src, alt: "已有图片" } }); const button = tile.createEl("button", { text: "×", attr: { type: "button", "aria-label": "移除图片" } }); button.addEventListener("click", () => { retained = retained.filter((item) => item !== path); removed.add(path); paintImages(); }); }
-      for (const pending of this.pending) { const tile = images.createDiv({ cls: "doudou-editor-image" }); tile.createEl("img", { attr: { src: pending.previewUrl, alt: pending.file.name } }); const button = tile.createEl("button", { text: "×", attr: { type: "button", "aria-label": "移除图片" } }); button.addEventListener("click", () => { URL.revokeObjectURL(pending.previewUrl); this.pending = this.pending.filter((item) => item.id !== pending.id); paintImages(); }); }
-    }; paintImages();
-    imageInput.addEventListener("change", () => { const files = Array.from(imageInput.files ?? []).filter((file) => imageExtension(file) !== null); imageInput.value = ""; this.pending.push(...createPendingImages(files)); paintImages(); });
+    const images = form.createDiv({ cls: "doudou-editor-images" });
+    let editableImages: EditableImageItem[] = (record?.images ?? []).map((path, index) => ({
+      kind: "stored",
+      id: `stored-${index}-${path}`,
+      path
+    }));
+    const removed = new Set<string>();
+    let activePointerCleanup: (() => void) | null = null;
+    const moveById = (sourceId: string, targetId: string): void => {
+      const from = editableImages.findIndex((item) => item.id === sourceId);
+      const to = editableImages.findIndex((item) => item.id === targetId);
+      if (from < 0 || to < 0 || from === to) return;
+      editableImages = moveImageItem(editableImages, from, to);
+      paintImages();
+    };
+    const startLongPress = (event: PointerEvent, tile: HTMLElement, sourceId: string): void => {
+      if (!Platform.isMobileApp || (event.target as Element | null)?.closest("button")) return;
+      activePointerCleanup?.();
+      const pointerId = event.pointerId;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      let active = false;
+      let targetId = sourceId;
+      const timer = window.setTimeout(() => {
+        active = true;
+        tile.addClass("doudou-is-dragging");
+        images.addClass("doudou-is-reordering");
+        tile.setPointerCapture?.(pointerId);
+      }, 380);
+      const clearTargets = (): void => {
+        images.querySelectorAll(".doudou-is-drop-target").forEach((item) => item.removeClass("doudou-is-drop-target"));
+      };
+      const cleanup = (): void => {
+        window.clearTimeout(timer);
+        clearTargets();
+        tile.removeClass("doudou-is-dragging");
+        images.removeClass("doudou-is-reordering");
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onEnd);
+        document.removeEventListener("pointercancel", onCancel);
+        if (activePointerCleanup === cleanup) activePointerCleanup = null;
+      };
+      const onMove = (pointerEvent: PointerEvent): void => {
+        if (pointerEvent.pointerId !== pointerId) return;
+        const distance = Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY);
+        if (!active) {
+          if (distance > 10) cleanup();
+          return;
+        }
+        pointerEvent.preventDefault();
+        const target = document.elementFromPoint(pointerEvent.clientX, pointerEvent.clientY)?.closest<HTMLElement>(".doudou-editor-image");
+        const nextTargetId = target?.dataset.imageId;
+        if (!nextTargetId || nextTargetId === targetId) return;
+        targetId = nextTargetId;
+        clearTargets();
+        if (targetId !== sourceId) target.addClass("doudou-is-drop-target");
+      };
+      const onEnd = (pointerEvent: PointerEvent): void => {
+        if (pointerEvent.pointerId !== pointerId) return;
+        if (active) {
+          pointerEvent.preventDefault();
+          const finalTargetId = targetId;
+          cleanup();
+          moveById(sourceId, finalTargetId);
+        } else cleanup();
+      };
+      const onCancel = (pointerEvent: PointerEvent): void => {
+        if (pointerEvent.pointerId === pointerId) cleanup();
+      };
+      document.addEventListener("pointermove", onMove, { passive: false });
+      document.addEventListener("pointerup", onEnd);
+      document.addEventListener("pointercancel", onCancel);
+      activePointerCleanup = cleanup;
+    };
+    const paintImages = (): void => {
+      activePointerCleanup?.();
+      images.empty();
+      for (const [index, item] of editableImages.entries()) {
+        let dragStartedFromControl = false;
+        const tile = images.createDiv({
+          cls: "doudou-editor-image",
+          attr: { "data-image-id": item.id, "aria-label": `图片 ${index + 1}` }
+        });
+        tile.draggable = Platform.isDesktopApp;
+        const pending = item.kind === "pending"
+          ? this.pending.find((candidate) => candidate.id === item.id)
+          : null;
+        const src = item.kind === "stored"
+          ? this.dependencies.imageService.resourcePath(item.path)
+          : pending?.previewUrl ?? null;
+        if (src) tile.createEl("img", { attr: { src, alt: item.kind === "stored" ? "已有图片" : pending?.file.name ?? "待上传图片", draggable: "false" } });
+        else tile.createDiv({ cls: "doudou-image-missing", text: "图片缺失" });
+        const orderControls = tile.createDiv({ cls: "doudou-editor-image-order" });
+        const backward = orderControls.createEl("button", { cls: "doudou-image-move-button", attr: { type: "button", "aria-label": "向前移动图片", title: "向前移动" } });
+        setIcon(backward, "chevron-left"); backward.disabled = index === 0;
+        backward.addEventListener("click", () => { editableImages = moveImageItem(editableImages, index, index - 1); paintImages(); });
+        const forward = orderControls.createEl("button", { cls: "doudou-image-move-button", attr: { type: "button", "aria-label": "向后移动图片", title: "向后移动" } });
+        setIcon(forward, "chevron-right"); forward.disabled = index === editableImages.length - 1;
+        forward.addEventListener("click", () => { editableImages = moveImageItem(editableImages, index, index + 1); paintImages(); });
+        const removeButton = tile.createEl("button", { cls: "doudou-editor-image-remove", text: "×", attr: { type: "button", "aria-label": "移除图片" } });
+        removeButton.addEventListener("click", () => {
+          if (item.kind === "stored") removed.add(item.path);
+          else if (pending) {
+            URL.revokeObjectURL(pending.previewUrl);
+            this.pending = this.pending.filter((candidate) => candidate.id !== pending.id);
+          }
+          editableImages = editableImages.filter((candidate) => candidate.id !== item.id);
+          paintImages();
+        });
+        tile.addEventListener("dragstart", (dragEvent) => {
+          if (!Platform.isDesktopApp || dragStartedFromControl) { dragEvent.preventDefault(); return; }
+          tile.addClass("doudou-is-dragging");
+          dragEvent.dataTransfer?.setData("text/plain", item.id);
+          if (dragEvent.dataTransfer) dragEvent.dataTransfer.effectAllowed = "move";
+        });
+        tile.addEventListener("dragend", () => {
+          dragStartedFromControl = false;
+          tile.removeClass("doudou-is-dragging");
+          images.querySelectorAll(".doudou-is-drop-target").forEach((target) => target.removeClass("doudou-is-drop-target"));
+        });
+        tile.addEventListener("dragover", (dragEvent) => { if (Platform.isDesktopApp) { dragEvent.preventDefault(); tile.addClass("doudou-is-drop-target"); } });
+        tile.addEventListener("dragleave", () => tile.removeClass("doudou-is-drop-target"));
+        tile.addEventListener("drop", (dragEvent) => {
+          dragEvent.preventDefault(); tile.removeClass("doudou-is-drop-target");
+          const sourceId = dragEvent.dataTransfer?.getData("text/plain");
+          if (sourceId) moveById(sourceId, item.id);
+        });
+        tile.addEventListener("pointerdown", (pointerEvent) => {
+          dragStartedFromControl = Boolean((pointerEvent.target as Element | null)?.closest("button"));
+          startLongPress(pointerEvent, tile, item.id);
+        });
+        tile.addEventListener("pointerup", () => { window.setTimeout(() => { dragStartedFromControl = false; }, 0); });
+        tile.addEventListener("pointercancel", () => { dragStartedFromControl = false; });
+      }
+    };
+    paintImages();
+    imageInput.addEventListener("change", () => {
+      const files = Array.from(imageInput.files ?? []).filter((file) => imageExtension(file) !== null);
+      imageInput.value = "";
+      const created = createPendingImages(files);
+      this.pending.push(...created);
+      editableImages.push(...created.map((item) => ({ kind: "pending" as const, id: item.id })));
+      paintImages();
+    });
     content.addEventListener("paste", (event) => {
       const files = imageFilesFromClipboardItems(event.clipboardData?.items)
         .filter((file) => imageExtension(file) !== null);
       if (files.length === 0) return;
-      this.pending.push(...createPendingImages(files));
+      const created = createPendingImages(files);
+      this.pending.push(...created);
+      editableImages.push(...created.map((item) => ({ kind: "pending" as const, id: item.id })));
       paintImages();
       if (!event.clipboardData?.getData("text/plain")) event.preventDefault();
     });
@@ -205,10 +350,14 @@ export class RecordPage extends Component {
     const status = form.createDiv({ cls: "doudou-editor-status", attr: { role: "status" } });
     cancel.addEventListener("click", () => { releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; if (record) this.renderRead(); else this.goBack(); });
     save.addEventListener("click", async () => {
-      if (!hasSavableRecordDraft(title.value, content.value, retained.length + this.pending.length, retainedFiles.length + this.pendingFiles.length)) { status.setText("标题、正文、图片和文件不能同时为空"); return; }
-      save.disabled = true; cancel.disabled = true; status.setText("正在保存..."); const snapshot = [...this.pending]; const fileSnapshot = [...this.pendingFiles];
+      if (!hasSavableRecordDraft(title.value, content.value, editableImages.length, retainedFiles.length + this.pendingFiles.length)) { status.setText("标题、正文、图片和文件不能同时为空"); return; }
+      const imagePlan = buildImageSavePlan(editableImages);
+      const pendingById = new Map(this.pending.map((item) => [item.id, item]));
+      const snapshot = imagePlan.pendingIds.map((id) => pendingById.get(id)).filter((item): item is PendingImage => Boolean(item));
+      if (snapshot.length !== imagePlan.pendingIds.length) { status.setText("图片暂时没有准备好，请重新添加"); return; }
+      save.disabled = true; cancel.disabled = true; status.setText("正在保存..."); const fileSnapshot = [...this.pendingFiles];
       try {
-        if (record) this.record = await this.dependencies.recordService.update(record, { title: title.value, content: content.value, folder: folder.value }, snapshot.map((item) => item.file), [...removed], fileSnapshot.map((item) => item.file), [...removedFiles]);
+        if (record) this.record = await this.dependencies.recordService.update(record, { title: title.value, content: content.value, folder: folder.value }, snapshot.map((item) => item.file), [...removed], fileSnapshot.map((item) => item.file), [...removedFiles], imagePlan.order);
         else { const draft = this.dependencies.repository.createRecord(content.value, folder.value, title.value); this.record = await this.dependencies.recordService.create(draft, snapshot.map((item) => item.file), fileSnapshot.map((item) => item.file)); }
         releasePendingImages(snapshot); this.pending = []; this.pendingFiles = []; await this.changed(); this.renderRead(); if (this.record) void this.dependencies.aiTagService.enrich(this.record);
       } catch (error) { console.error("[doudou] Failed to save record", error); status.setText("保存失败，请再试一次"); save.disabled = false; cancel.disabled = false; }

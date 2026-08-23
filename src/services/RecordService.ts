@@ -5,6 +5,7 @@ import type {
   RecordChanges
 } from "../data/DoudouRepository";
 import type { DoudouRecord, StoredDoudouRecord } from "../types";
+import { resolveImageOrder, type ImageOrderItem } from "../ui/imageReorder";
 
 export class RecordService {
   constructor(
@@ -44,7 +45,8 @@ export class RecordService {
     newImages: readonly ImageFileLike[],
     removedImagePaths: readonly string[],
     newFiles: readonly AttachmentFileLike[] = [],
-    removedFilePaths: readonly string[] = []
+    removedFilePaths: readonly string[] = [],
+    imageOrder?: readonly ImageOrderItem[]
   ): Promise<StoredDoudouRecord> {
     const removed = new Set(removedImagePaths);
     const retained = (record.images ?? []).filter((path) => !removed.has(path));
@@ -66,7 +68,9 @@ export class RecordService {
       );
       const updated = await this.repository.update(record, {
         ...changes,
-        images: [...retained, ...created],
+        images: imageOrder
+          ? resolveImageOrder(imageOrder, created)
+          : [...retained, ...created],
         files: [...retainedFiles, ...createdFiles]
       });
       await this.images.trashPaths(removedImagePaths);

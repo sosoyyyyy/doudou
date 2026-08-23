@@ -34,6 +34,12 @@ import {
   shouldCopyImageShortcut
 } from "../src/ui/imageActions";
 import { allPageGalleryPresentation, galleryMode, recordPageGalleryPresentation } from "../src/ui/imageGallery";
+import {
+  buildImageSavePlan,
+  moveImageItem,
+  resolveImageOrder,
+  type EditableImageItem
+} from "../src/ui/imageReorder";
 
 if (typeof globalThis.File === "undefined") {
   Object.defineProperty(globalThis, "File", { configurable: true, value: NodeFile });
@@ -264,7 +270,7 @@ test("gallery mode uses only none, single, double and uniform grid", () => {
 });
 
 test("all-page gallery previews at most nine images with the correct remainder", () => {
-  for (const count of [1, 2, 9]) {
+  for (const count of [1, 2, 3, 6, 9]) {
     const paths = Array.from({ length: count }, (_, index) => `image-${index + 1}`);
     const presentation = allPageGalleryPresentation(paths);
     assert.equal(presentation.paths.length, count);
@@ -281,13 +287,79 @@ test("all-page gallery previews at most nine images with the correct remainder",
 });
 
 test("record-page gallery renders every image in its original order", () => {
-  for (const count of [1, 2, 3, 9, 10, 21]) {
+  for (const count of [1, 2, 3, 6, 9, 10, 21]) {
     const paths = Array.from({ length: count }, (_, index) => `image-${index + 1}`);
     const presentation = recordPageGalleryPresentation(paths);
     assert.equal(presentation.paths.length, count);
     assert.equal(presentation.overflowCount, 0);
     assert.deepEqual(presentation.paths, paths);
   }
+});
+
+test("image reorder moves items without mutating the edit-session source", () => {
+  const source = ["stored-a", "pending-b", "stored-c"];
+  assert.deepEqual(moveImageItem(source, 0, 2), ["pending-b", "stored-c", "stored-a"]);
+  assert.deepEqual(moveImageItem([1, 2, 3], 2, 0), [3, 1, 2]);
+  assert.deepEqual(moveImageItem([1, 2, 3], 0, 2), [2, 3, 1]);
+  assert.deepEqual(moveImageItem(source, 1, 1), source);
+  assert.deepEqual(source, ["stored-a", "pending-b", "stored-c"]);
+  assert.deepEqual(moveImageItem(source, -1, 2), source);
+  assert.deepEqual(moveImageItem(source, 1, 30), source);
+  const twentyOne = Array.from({ length: 21 }, (_, index) => index + 1);
+  assert.deepEqual(moveImageItem(twentyOne, 20, 0), [21, ...twentyOne.slice(0, 20)]);
+});
+
+test("mixed stored and pending image order resolves to final Vault paths", () => {
+  const items: EditableImageItem[] = [
+    { kind: "stored", id: "old-a", path: "兜兜/assets/2026/08/old-a.jpg" },
+    { kind: "pending", id: "new-b" },
+    { kind: "stored", id: "old-c", path: "兜兜/assets/2026/08/old-c.jpg" },
+    { kind: "pending", id: "new-d" }
+  ];
+  const plan = buildImageSavePlan(items);
+  assert.deepEqual(plan.pendingIds, ["new-b", "new-d"]);
+  assert.deepEqual(resolveImageOrder(plan.order, [
+    "兜兜/assets/2026/08/new-b.jpg",
+    "兜兜/assets/2026/08/new-d.jpg"
+  ]), [
+    "兜兜/assets/2026/08/old-a.jpg",
+    "兜兜/assets/2026/08/new-b.jpg",
+    "兜兜/assets/2026/08/old-c.jpg",
+    "兜兜/assets/2026/08/new-d.jpg"
+  ]);
+});
+
+test("image order rejects a pending slot that was not saved", () => {
+  assert.throws(() => resolveImageOrder([{ kind: "pending", index: 0 }], []), /missing pending image/);
+});
+
+test("delete add and reorder keeps the intended mixed image sequence", () => {
+  let items: EditableImageItem[] = [
+    { kind: "stored", id: "stored-1", path: "old-1.jpg" },
+    { kind: "stored", id: "stored-2", path: "old-2.jpg" },
+    { kind: "stored", id: "stored-3", path: "old-3.jpg" }
+  ];
+  items = moveImageItem(items, 2, 0);
+  items = items.filter((item) => item.id !== "stored-1");
+  items.push({ kind: "pending", id: "picker-4" }, { kind: "pending", id: "paste-5" });
+  items = moveImageItem(items, 3, 0);
+  const plan = buildImageSavePlan(items);
+  assert.deepEqual(plan.pendingIds, ["paste-5", "picker-4"]);
+  assert.deepEqual(resolveImageOrder(plan.order, ["paste-5.jpg", "picker-4.jpg"]), [
+    "paste-5.jpg", "old-3.jpg", "old-2.jpg", "picker-4.jpg"
+  ]);
+});
+
+test("pasted pending image appends and can be moved before stored images", () => {
+  let items: EditableImageItem[] = [
+    { kind: "stored", id: "stored-1", path: "old-1.jpg" },
+    { kind: "stored", id: "stored-2", path: "old-2.jpg" }
+  ];
+  items.push({ kind: "pending", id: "paste-3" });
+  assert.equal(items.at(-1)?.id, "paste-3");
+  items = moveImageItem(items, 2, 0);
+  const plan = buildImageSavePlan(items);
+  assert.deepEqual(resolveImageOrder(plan.order, ["paste-3.jpg"]), ["paste-3.jpg", "old-1.jpg", "old-2.jpg"]);
 });
 
 test("image export reads the original Vault binary with a safe name and MIME", async () => {
@@ -349,6 +421,73 @@ test("image Ctrl+C only activates in an unambiguous viewer context", () => {
 
 test("editing removes old images only after Markdown update succeeds", async () => {
   const vault = new FakeVault(); const images = new ImageService(vault as unknown as Vault); const old = "兜兜/assets/2026/08/old.jpg"; await vault.createBinary(old, new ArrayBuffer(2)); let passed: string[] = []; const service = new RecordService({ update: async (record: StoredDoudouRecord, changes: { images?: string[] }) => { passed = changes.images ?? []; return { ...record, images: passed }; } } as never, images, new FileService(vault as unknown as Vault)); await service.update(stored({ images: [old] }), { content: "正文", folder: "生活" }, [], [old]); assert.deepEqual(passed, []); assert.equal(vault.files.has(old), false);
+});
+
+test("record update persists stored and pending images in the mixed editor order", async () => {
+  const vault = new FakeVault();
+  const oldA = "兜兜/assets/2026/08/old-a.jpg";
+  const oldB = "兜兜/assets/2026/08/old-b.jpg";
+  await vault.createBinary(oldA, new ArrayBuffer(2));
+  await vault.createBinary(oldB, new ArrayBuffer(2));
+  let savedOrder: string[] = [];
+  const service = new RecordService(
+    { update: async (record: StoredDoudouRecord, changes: { images?: string[] }) => {
+      savedOrder = changes.images ?? [];
+      return { ...record, images: savedOrder };
+    } } as never,
+    new ImageService(vault as unknown as Vault),
+    new FileService(vault as unknown as Vault)
+  );
+  const updated = await service.update(
+    stored({ images: [oldA, oldB] }),
+    { content: "正文", folder: "生活" },
+    [fakeImage("new-x.png", "image/png"), fakeImage("new-y.webp", "image/webp")],
+    [],
+    [],
+    [],
+    [
+      { kind: "stored", path: oldA },
+      { kind: "pending", index: 0 },
+      { kind: "stored", path: oldB },
+      { kind: "pending", index: 1 }
+    ]
+  );
+  assert.equal(savedOrder[0], oldA);
+  assert.match(savedOrder[1] ?? "", /id-1-03\.png$/);
+  assert.equal(savedOrder[2], oldB);
+  assert.match(savedOrder[3] ?? "", /id-1-04\.webp$/);
+  assert.deepEqual(updated.images, savedOrder);
+});
+
+test("failed mixed-order Markdown update keeps old image order and cleans new assets", async () => {
+  const vault = new FakeVault();
+  const oldA = "兜兜/assets/2026/08/old-a.jpg";
+  const oldB = "兜兜/assets/2026/08/old-b.jpg";
+  await vault.createBinary(oldA, new ArrayBuffer(2));
+  await vault.createBinary(oldB, new ArrayBuffer(2));
+  const original = stored({ images: [oldA, oldB] });
+  const service = new RecordService(
+    { update: async () => { throw new Error("Markdown failed"); } } as never,
+    new ImageService(vault as unknown as Vault),
+    new FileService(vault as unknown as Vault)
+  );
+  await assert.rejects(() => service.update(
+    original,
+    { content: "正文", folder: "生活" },
+    [fakeImage("new.png", "image/png")],
+    [],
+    [],
+    [],
+    [
+      { kind: "stored", path: oldB },
+      { kind: "pending", index: 0 },
+      { kind: "stored", path: oldA }
+    ]
+  ));
+  assert.deepEqual(original.images, [oldA, oldB]);
+  assert.equal(vault.files.has(oldA), true);
+  assert.equal(vault.files.has(oldB), true);
+  assert.equal([...vault.files.keys()].some((path) => path.endsWith("new.png")), false);
 });
 
 test("failed Markdown creation cleans newly saved images", async () => {

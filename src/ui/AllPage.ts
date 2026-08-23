@@ -54,7 +54,7 @@ export class AllPage extends Component {
     if (attachmentText && record.content.trim()) body.createDiv({ cls: "doudou-card-attachment-count", text: attachmentText });
     const presentation = allPageGalleryPresentation(record.images ?? []);
     if (presentation.paths.length > 0) {
-      const gallery = button.createDiv({ cls: `doudou-journal-gallery doudou-journal-gallery-${presentation.mode}` });
+      const gallery = button.createDiv({ cls: "doudou-journal-gallery" });
       for (const [index, path] of presentation.paths.entries()) {
         const item = gallery.createDiv({ cls: "doudou-journal-gallery-item" });
         const src = this.dependencies.imageService.resourcePath(path);

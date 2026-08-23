@@ -665,10 +665,10 @@
   gap: 7px;
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid var(--doudou-border);
+  border: 1px solid var(--doudou-control-border);
   border-radius: 14px;
-  background: var(--doudou-surface);
-  box-shadow: var(--doudou-shadow-small);
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
   transition: border-color var(--doudou-transition), box-shadow var(--doudou-transition);
 }
 
@@ -680,7 +680,7 @@
 .doudou-search-icon {
   display: inline-flex;
   flex: 0 0 auto;
-  color: var(--text-faint);
+  color: var(--doudou-text-secondary);
 }
 
 .doudou-search-icon svg {
@@ -770,8 +770,9 @@
 .doudou-date-rule {
   flex: 1 1 auto;
   height: 1px;
-  max-width: 72%;
-  background: color-mix(in srgb, var(--doudou-accent) 10%, var(--doudou-border));
+  max-width: 68%;
+  background: color-mix(in srgb, var(--doudou-border) 82%, transparent);
+  opacity: 0.72;
 }
 
 .doudou-library-item {
@@ -1649,6 +1650,111 @@
 .doudou-edit-textarea::placeholder {
   color: var(--doudou-text-secondary);
   opacity: 0.78;
+}
+
+/*
+ * Obsidian Mobile applies host-level styles to native buttons and inputs.
+ * Scope the reset to Doudou so those rules and iOS WebKit appearance cannot
+ * replace the plugin's control tokens while leaving the rest of Obsidian alone.
+ */
+.doudou-view button,
+.doudou-view input.doudou-search-input {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.doudou-view input.doudou-search-input {
+  border: 0;
+  color: var(--text-normal);
+  background: transparent;
+  box-shadow: none;
+}
+
+.doudou-view button:is(
+  .doudou-page-tab,
+  .doudou-refresh-button,
+  .doudou-category-button,
+  .doudou-filter-button,
+  .doudou-tag-chip,
+  .doudou-filter-tag,
+  .doudou-icon-button,
+  .doudou-library-edit-button,
+  .doudou-library-copy-button
+) {
+  border-color: var(--doudou-control-border);
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
+}
+
+.doudou-view button:is(
+  .doudou-page-tab,
+  .doudou-refresh-button,
+  .doudou-category-button,
+  .doudou-filter-button,
+  .doudou-icon-button,
+  .doudou-library-edit-button,
+  .doudou-library-copy-button
+) {
+  color: var(--doudou-text-secondary);
+}
+
+.doudou-view button:is(.doudou-tag-chip, .doudou-filter-tag) {
+  color: var(--text-normal);
+}
+
+.doudou-view button:is(
+  .doudou-page-tab,
+  .doudou-refresh-button,
+  .doudou-category-button,
+  .doudou-filter-button,
+  .doudou-tag-chip,
+  .doudou-filter-tag,
+  .doudou-icon-button,
+  .doudou-library-edit-button,
+  .doudou-library-copy-button
+):is(:hover, :focus-visible) {
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-control-hover);
+}
+
+.doudou-view button:is(
+  .doudou-page-tab,
+  .doudou-category-button,
+  .doudou-filter-button,
+  .doudou-tag-chip,
+  .doudou-filter-tag
+).doudou-is-selected {
+  border-color: var(--doudou-accent-border);
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-accent-soft);
+  box-shadow: none;
+}
+
+.doudou-view button.doudou-send-button {
+  color: white;
+  background: var(--doudou-accent);
+  box-shadow: 0 4px 10px rgb(77 142 247 / 25%);
+}
+
+.doudou-view button.doudou-send-button:hover,
+.doudou-view button.doudou-send-button:focus-visible {
+  color: white;
+  background: var(--doudou-accent-strong);
+}
+
+.doudou-view button:is(
+  .doudou-page-tab,
+  .doudou-refresh-button,
+  .doudou-category-button,
+  .doudou-filter-button,
+  .doudou-tag-chip,
+  .doudou-filter-tag,
+  .doudou-icon-button,
+  .doudou-library-edit-button,
+  .doudou-library-copy-button
+):disabled {
+  box-shadow: none;
+  opacity: 0.48;
 }
 
 @media (hover: hover) {

@@ -1,4 +1,4 @@
-import { ItemView, Platform, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, Platform, setIcon, WorkspaceLeaf, type App } from "obsidian";
 import {
   DOUDOU_VIEW_TYPE,
   VAULT_REFRESH_DEBOUNCE_MS
@@ -7,6 +7,10 @@ import type { DoudouPage, StoredDoudouRecord } from "../types";
 import { ChatPage, type ChatPageDependencies } from "./ChatPage";
 import { LibraryPage, type LibraryPageDependencies } from "./LibraryPage";
 import { RecordDetailModal } from "./RecordDetailModal";
+import {
+  findRemotelySaveStartSyncCommand,
+  type RegisteredCommand
+} from "./remotelySave";
 
 export interface DoudouViewDependencies
   extends Omit<ChatPageDependencies, "openRecord">, LibraryPageDependencies {}
@@ -15,6 +19,14 @@ const KEYBOARD_OPEN_THRESHOLD_PX = 120;
 const MOBILE_TOOLBAR_FALLBACK_PX = 72;
 const MOBILE_TOOLBAR_GAP_PX = 8;
 const MOBILE_TOOLBAR_SELECTORS = ".mobile-toolbar, .mobile-navbar";
+const SYNC_TRIGGER_COOLDOWN_MS = 700;
+
+interface CommandRegistry {
+  listCommands(): RegisteredCommand[];
+  executeCommandById(commandId: string): boolean | void;
+}
+
+type AppWithCommands = App & { commands?: Partial<CommandRegistry> };
 
 export class DoudouView extends ItemView {
   private rootEl!: HTMLElement;
@@ -24,6 +36,8 @@ export class DoudouView extends ItemView {
   private libraryTabEl!: HTMLButtonElement;
   private chatPage!: ChatPage;
   private libraryPage!: LibraryPage;
+  private syncButtonEl!: HTMLButtonElement;
+  private remotelySaveCommandId: string | null = null;
   private activePage: DoudouPage = "chat";
   private vaultRefreshTimer: number | null = null;
   private viewportBaselineHeight = 0;
@@ -96,12 +110,22 @@ export class DoudouView extends ItemView {
     this.registerDomEvent(this.chatTabEl, "click", () => void this.switchPage("chat"));
     this.registerDomEvent(this.libraryTabEl, "click", () => void this.switchPage("library"));
 
-    const refresh = header.createEl("button", {
-      cls: "doudou-refresh-button",
-      attr: { type: "button", "aria-label": "刷新兜兜资料", title: "刷新" }
+    this.syncButtonEl = header.createEl("button", {
+      cls: "doudou-refresh-button doudou-is-hidden",
+      attr: {
+        type: "button",
+        "aria-label": "使用 Remotely Save 同步",
+        title: "使用 Remotely Save 同步"
+      }
     });
-    setIcon(refresh, "refresh-cw");
-    this.registerDomEvent(refresh, "click", () => void this.refreshActivePage(true));
+    setIcon(this.syncButtonEl, "refresh-cw");
+    this.registerDomEvent(this.syncButtonEl, "click", () => this.triggerRemotelySave());
+    this.updateRemotelySaveCommand();
+    const commandRefreshTimer = window.setTimeout(
+      () => this.updateRemotelySaveCommand(),
+      1000
+    );
+    this.register(() => window.clearTimeout(commandRefreshTimer));
 
     const pages = this.rootEl.createDiv({ cls: "doudou-pages" });
     this.chatContainerEl = pages.createDiv({
@@ -166,6 +190,64 @@ export class DoudouView extends ItemView {
     } else {
       await this.libraryPage.activate();
     }
+  }
+
+  private commandRegistry(): CommandRegistry | null {
+    const commands = (this.app as AppWithCommands).commands;
+    if (
+      typeof commands?.listCommands !== "function" ||
+      typeof commands.executeCommandById !== "function"
+    ) {
+      return null;
+    }
+    return commands as CommandRegistry;
+  }
+
+  private updateRemotelySaveCommand(): void {
+    const registry = this.commandRegistry();
+    try {
+      this.remotelySaveCommandId = registry
+        ? findRemotelySaveStartSyncCommand(registry.listCommands())
+        : null;
+    } catch {
+      this.remotelySaveCommandId = null;
+    }
+    this.syncButtonEl.toggleClass(
+      "doudou-is-hidden",
+      this.remotelySaveCommandId === null
+    );
+  }
+
+  private triggerRemotelySave(): void {
+    const registry = this.commandRegistry();
+    if (!registry) {
+      this.remotelySaveCommandId = null;
+      this.syncButtonEl.addClass("doudou-is-hidden");
+      return;
+    }
+
+    try {
+      this.remotelySaveCommandId = findRemotelySaveStartSyncCommand(
+        registry.listCommands()
+      );
+      if (!this.remotelySaveCommandId) {
+        this.syncButtonEl.addClass("doudou-is-hidden");
+        return;
+      }
+
+      this.syncButtonEl.disabled = true;
+      this.syncButtonEl.addClass("doudou-is-sync-triggered");
+      const executed = registry.executeCommandById(this.remotelySaveCommandId);
+      if (executed === false) this.syncButtonEl.addClass("doudou-is-hidden");
+    } catch (error) {
+      console.error("[doudou] Failed to start Remotely Save sync", error);
+      this.syncButtonEl.addClass("doudou-is-hidden");
+    }
+    const cooldownTimer = window.setTimeout(() => {
+      this.syncButtonEl.disabled = false;
+      this.syncButtonEl.removeClass("doudou-is-sync-triggered");
+    }, SYNC_TRIGGER_COOLDOWN_MS);
+    this.register(() => window.clearTimeout(cooldownTimer));
   }
 
   private registerDataRefreshEvents(): void {

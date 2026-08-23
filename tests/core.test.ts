@@ -26,6 +26,7 @@ import {
 import { RecordService } from "../src/services/RecordService";
 import type { StoredDoudouRecord } from "../src/types";
 import { metaText, writeClipboardText } from "../src/ui/uiHelpers";
+import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
 
 class FakeVault {
   readonly files = new Map<string, { file: TFile; content: string }>();
@@ -412,6 +413,22 @@ test("clipboard copying preserves full record text exactly", async () => {
       delete (globalThis as { navigator?: Navigator }).navigator;
     }
   }
+});
+
+test("Remotely Save lookup selects only its start sync command", () => {
+  const commandId = findRemotelySaveStartSyncCommand([
+    { id: "other-sync:start-sync", name: "Other Sync: Start sync" },
+    { id: "remotely-save:sync-on-save", name: "Remotely Save: Sync on save" },
+    { id: "remotely-save:start-sync", name: "Remotely Save: Start sync" }
+  ]);
+  assert.equal(commandId, "remotely-save:start-sync");
+  assert.equal(findRemotelySaveStartSyncCommand([
+    { id: "remotely-save:manual", name: "Remotely Save：开始同步" }
+  ]), "remotely-save:manual");
+  assert.equal(findRemotelySaveStartSyncCommand([
+    { id: "other-sync:start-sync", name: "Other Sync: Start sync" },
+    { id: "remotely-save:sync-on-save", name: "Remotely Save: Sync on save" }
+  ]), null);
 });
 
 test("AI tag JSON validation cleans, deduplicates and limits tags", () => {

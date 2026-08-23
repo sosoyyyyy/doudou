@@ -23,7 +23,13 @@ const copyFeedbackTimers = new WeakMap<HTMLButtonElement, number>();
 
 export function metaText(record: DoudouRecord): string {
   const tagText = record.tags.map((tag) => `#${tag}`).join(" ");
-  return tagText ? `${record.category} · ${tagText}` : record.category;
+  return tagText ? `${record.folder} · ${tagText}` : record.folder;
+}
+
+export function recordTitle(record: DoudouRecord): string {
+  if (record.title?.trim()) return record.title.trim();
+  const firstLine = record.content.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  return firstLine || "图片记录";
 }
 
 export function formatDateTime(value: string): string {

@@ -1,298 +1,67 @@
-import { App, Component, setIcon } from "obsidian";
-import type { AiTagService } from "../ai/AiTagService";
+import { Component, setIcon } from "obsidian";
 import type { ImageService } from "../attachments/ImageService";
-import { CATEGORIES, SEARCH_DEBOUNCE_MS } from "../constants";
+import { ALL_RECORDS_FOLDER, SEARCH_DEBOUNCE_MS } from "../constants";
 import type { DoudouRepository } from "../data/DoudouRepository";
-import type { RecordService } from "../services/RecordService";
-import {
-  collectTagOptions,
-  filterRecords
-} from "../services/recordSearch";
-import type {
-  CategoryFilter,
-  StoredDoudouRecord,
-  TagOption
-} from "../types";
-import { RecordDetailModal } from "./RecordDetailModal";
-import {
-  bindCopyButton,
-  dateGroupLabel,
-  formatTime,
-  metaText,
-  previewText
-} from "./uiHelpers";
+import { filterRecords } from "../services/recordSearch";
+import type { FolderSummary, StoredDoudouRecord } from "../types";
+import { formatTime, previewText, recordTitle } from "./uiHelpers";
 
 export interface LibraryPageDependencies {
   repository: DoudouRepository;
-  recordService: RecordService;
   imageService: ImageService;
-  aiTagService: AiTagService;
+  openRecord: (record: StoredDoudouRecord) => void;
+  manageFolder: (folder?: string) => void;
 }
 
 export class LibraryPage extends Component {
-  private searchInputEl!: HTMLInputElement;
-  private categoryEl!: HTMLElement;
-  private tagsEl!: HTMLElement;
-  private listEl!: HTMLElement;
+  private bodyEl!: HTMLElement;
   private records: StoredDoudouRecord[] = [];
-  private tagOptions: TagOption[] = [];
+  private folders: FolderSummary[] = [];
+  private currentFolder: string | null = null;
   private query = "";
-  private category: CategoryFilter = "全部";
-  private selectedTags = new Set<string>();
   private searchTimer: number | null = null;
-  private refreshVersion = 0;
-  private loaded = false;
-
-  constructor(
-    private readonly app: App,
-    private readonly containerEl: HTMLElement,
-    private readonly dependencies: LibraryPageDependencies
-  ) {
-    super();
-  }
-
-  override onload(): void {
-    this.buildLayout();
-    this.register(() => {
-      if (this.searchTimer !== null) window.clearTimeout(this.searchTimer);
-    });
-  }
-
-  override onunload(): void {
-    this.containerEl.empty();
-  }
-
-  async activate(): Promise<void> {
-    await this.refresh(!this.loaded);
-  }
-
+  private version = 0;
+  constructor(private readonly containerEl: HTMLElement, private readonly dependencies: LibraryPageDependencies) { super(); }
+  override onload(): void { this.containerEl.addClass("doudou-library-page"); this.bodyEl = this.containerEl.createDiv({ cls: "doudou-library-body" }); this.register(() => { if (this.searchTimer !== null) window.clearTimeout(this.searchTimer); }); }
+  override onunload(): void { this.containerEl.empty(); }
+  async activate(): Promise<void> { await this.refresh(this.records.length === 0); }
   async refresh(showLoading = false): Promise<void> {
-    const version = ++this.refreshVersion;
-    if (showLoading) {
-      this.listEl.empty();
-      this.listEl.createDiv({
-        cls: "doudou-library-empty doudou-loading-state",
-        text: "兜兜努力翻找中..."
-      });
-    }
-
+    const version = ++this.version; if (showLoading) this.bodyEl.setText("兜兜努力翻找中...");
     try {
-      const records = await this.dependencies.repository.loadAll();
-      if (version !== this.refreshVersion) return;
-      this.records = records;
-      this.tagOptions = collectTagOptions(records);
-      const available = new Set(this.tagOptions.map((option) => option.name));
-      this.selectedTags = new Set(
-        [...this.selectedTags].filter((tag) => available.has(tag))
-      );
-      this.loaded = true;
-      this.renderCategoryFilters();
-      this.renderTagFilters();
-      this.renderList();
-    } catch (error) {
-      console.error("[doudou] Failed to load library", error);
-      this.listEl.empty();
-      this.listEl.createDiv({
-        cls: "doudou-library-empty",
-        text: "资料暂时没有加载出来"
-      });
-    }
+      const [records, folders] = await Promise.all([this.dependencies.repository.loadAll(), this.dependencies.repository.listFolders()]);
+      if (version !== this.version) return; this.records = records; this.folders = folders; this.render();
+    } catch (error) { console.error("[doudou] Failed to load library", error); this.bodyEl.setText("资料暂时没有加载出来"); }
   }
-
-  private buildLayout(): void {
-    this.containerEl.addClass("doudou-library-page");
-    const controls = this.containerEl.createDiv({ cls: "doudou-library-controls" });
-    const searchShell = controls.createDiv({ cls: "doudou-search-shell" });
-    const icon = searchShell.createSpan({ cls: "doudou-search-icon" });
-    setIcon(icon, "search");
-    this.searchInputEl = searchShell.createEl("input", {
-      cls: "doudou-search-input",
-      attr: {
-        type: "search",
-        placeholder: "搜索兜兜……",
-        "aria-label": "搜索兜兜"
-      }
-    });
-    this.registerDomEvent(this.searchInputEl, "input", () => {
-      if (this.searchTimer !== null) window.clearTimeout(this.searchTimer);
-      this.searchTimer = window.setTimeout(() => {
-        this.query = this.searchInputEl.value;
-        this.renderList();
-      }, SEARCH_DEBOUNCE_MS);
-    });
-
-    this.categoryEl = controls.createDiv({
-      cls: "doudou-library-categories",
-      attr: { "aria-label": "一级分类筛选" }
-    });
-    this.tagsEl = controls.createDiv({
-      cls: "doudou-library-tags",
-      attr: { "aria-label": "标签筛选" }
-    });
-    this.listEl = this.containerEl.createDiv({
-      cls: "doudou-library-list",
-      attr: { "aria-live": "polite" }
-    });
-    this.renderCategoryFilters();
-    this.renderTagFilters();
+  currentFolderName(): string | undefined { return this.currentFolder && this.currentFolder !== ALL_RECORDS_FOLDER ? this.currentFolder : undefined; }
+  private render(): void { this.bodyEl.empty(); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); }
+  private renderFolders(): void {
+    const header = this.bodyEl.createDiv({ cls: "doudou-library-heading" }); header.createEl("h2", { text: "资料" });
+    const search = header.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索全部资料" } }); setIcon(search, "search");
+    search.addEventListener("click", () => { this.currentFolder = ALL_RECORDS_FOLDER; this.render(); });
+    const list = this.bodyEl.createDiv({ cls: "doudou-folder-list" }); this.folderRow(list, ALL_RECORDS_FOLDER, this.records.length, false);
+    for (const folder of this.folders) this.folderRow(list, folder.name, folder.count, true);
+    const add = this.bodyEl.createEl("button", { cls: "doudou-new-folder", text: "+ 新建文件夹", attr: { type: "button" } }); add.addEventListener("click", () => this.dependencies.manageFolder());
   }
-
-  private renderCategoryFilters(): void {
-    this.categoryEl.empty();
-    const filters: readonly CategoryFilter[] = ["全部", ...CATEGORIES];
-    for (const category of filters) {
-      const selected = this.category === category;
-      const button = this.categoryEl.createEl("button", {
-        cls: `doudou-filter-button${selected ? " doudou-is-selected" : ""}`,
-        text: category,
-        attr: {
-          type: "button",
-          "aria-pressed": String(selected)
-        }
-      });
-      button.addEventListener("click", () => {
-        this.category = category;
-        this.renderCategoryFilters();
-        this.renderList();
-      });
-    }
+  private folderRow(container: HTMLElement, name: string, count: number, editable: boolean): void {
+    const row = container.createDiv({ cls: "doudou-folder-row" }); const open = row.createEl("button", { cls: "doudou-folder-open", attr: { type: "button" } });
+    const icon = open.createSpan({ cls: "doudou-folder-icon" }); setIcon(icon, "folder"); open.createSpan({ cls: "doudou-folder-name", text: name }); open.createSpan({ cls: "doudou-folder-count", text: String(count) }); open.createSpan({ cls: "doudou-folder-chevron", text: "›" });
+    open.addEventListener("click", () => { this.currentFolder = name; this.query = ""; this.render(); });
+    if (editable) { const more = row.createEl("button", { cls: "doudou-folder-more", text: "…", attr: { type: "button", "aria-label": `管理文件夹 ${name}` } }); more.addEventListener("click", () => this.dependencies.manageFolder(name)); }
   }
-
-  private renderTagFilters(): void {
-    this.tagsEl.empty();
-    this.tagsEl.toggleClass("doudou-is-hidden", this.tagOptions.length === 0);
-    for (const option of this.tagOptions) {
-      const selected = this.selectedTags.has(option.name);
-      const button = this.tagsEl.createEl("button", {
-        cls: `doudou-filter-tag${selected ? " doudou-is-selected" : ""}`,
-        text: `#${option.name}`,
-        attr: { type: "button", "aria-pressed": String(selected) }
-      });
-      button.addEventListener("click", () => {
-        if (this.selectedTags.has(option.name)) this.selectedTags.delete(option.name);
-        else this.selectedTags.add(option.name);
-        this.renderTagFilters();
-        this.renderList();
-      });
-    }
+  private renderFolder(): void {
+    const header = this.bodyEl.createDiv({ cls: "doudou-folder-header" }); const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 资料", attr: { type: "button" } }); back.addEventListener("click", () => { this.currentFolder = null; this.query = ""; this.render(); }); header.createEl("h2", { text: this.currentFolder ?? ALL_RECORDS_FOLDER });
+    const searchShell = this.bodyEl.createDiv({ cls: "doudou-search-shell" }); const icon = searchShell.createSpan(); setIcon(icon, "search"); const input = searchShell.createEl("input", { attr: { type: "search", placeholder: "搜索资料", "aria-label": "搜索资料" } }); input.value = this.query;
+    input.addEventListener("input", () => { if (this.searchTimer !== null) window.clearTimeout(this.searchTimer); this.searchTimer = window.setTimeout(() => { this.query = input.value; this.renderCards(); }, SEARCH_DEBOUNCE_MS); });
+    this.bodyEl.createDiv({ cls: "doudou-compact-list" }); this.renderCards();
   }
-
-  private renderList(): void {
-    this.listEl.empty();
-    if (this.records.length === 0) {
-      this.listEl.createDiv({
-        cls: "doudou-library-empty doudou-empty-state",
-        text: "这里还空空的",
-        attr: { "data-subtitle": "去记下点什么吧" }
-      });
-      return;
-    }
-
-    const records = filterRecords(this.records, {
-      query: this.query,
-      category: this.category,
-      tags: this.selectedTags
-    });
-    if (records.length === 0) {
-      this.listEl.createDiv({
-        cls: "doudou-library-empty",
-        text: "兜兜翻了一圈，没有找到诶"
-      });
-      return;
-    }
-
-    let currentGroup = "";
+  private renderCards(): void {
+    const list = this.bodyEl.querySelector<HTMLElement>(".doudou-compact-list"); if (!list) return; list.empty(); const folder = this.currentFolder === ALL_RECORDS_FOLDER ? undefined : this.currentFolder ?? undefined;
+    const records = filterRecords(this.records, { query: this.query, folder, tags: new Set() });
+    if (records.length === 0) { list.createDiv({ cls: "doudou-empty-state doudou-library-empty", text: "这里还空空的", attr: { "data-subtitle": "去记下点什么吧" } }); return; }
     for (const record of records) {
-      const group = dateGroupLabel(record.created);
-      if (group !== currentGroup) {
-        currentGroup = group;
-        const heading = this.listEl.createDiv({ cls: "doudou-date-heading" });
-        heading.createSpan({ text: group });
-        heading.createDiv({ cls: "doudou-date-rule" });
-      }
-      this.renderRecord(record);
+      const card = list.createEl("button", { cls: "doudou-compact-card", attr: { type: "button", "aria-label": `打开备忘录：${recordTitle(record)}` } }); const image = record.images?.[0];
+      if (image) { const src = this.dependencies.imageService.resourcePath(image); if (src) { const wrap = card.createDiv({ cls: "doudou-compact-image-wrap" }); wrap.createEl("img", { cls: "doudou-compact-image", attr: { src, alt: "" } }); if ((record.images?.length ?? 0) > 1) wrap.createSpan({ text: `${record.images?.length} 张` }); } }
+      const main = card.createDiv({ cls: "doudou-compact-main" }); main.createDiv({ cls: "doudou-compact-title", text: recordTitle(record) }); main.createDiv({ cls: "doudou-compact-preview", text: previewText(record.content) || "图片记录" }); main.createDiv({ cls: "doudou-compact-meta", text: `${formatTime(record.created)}${this.currentFolder === ALL_RECORDS_FOLDER ? ` · ${record.folder}` : ""}` }); card.addEventListener("click", () => this.dependencies.openRecord(record));
     }
-  }
-
-  private renderRecord(record: StoredDoudouRecord): void {
-    const preview = previewText(record.content) || "图片记录";
-    const item = this.listEl.createDiv({ cls: "doudou-library-item" });
-    const body = item.createEl("button", {
-      cls: "doudou-library-item-body",
-      attr: { type: "button", "aria-label": `查看记录：${preview}` }
-    });
-    const imagePaths = record.images ?? [];
-    if (imagePaths.length > 0) {
-      const imageWrap = body.createDiv({ cls: "doudou-library-image" });
-      const resource = this.dependencies.imageService.resourcePath(imagePaths[0]);
-      if (resource) {
-        const image = imageWrap.createEl("img", {
-          cls: "doudou-library-image-thumb",
-          attr: { src: resource, alt: "" }
-        });
-        image.addEventListener("error", () => {
-          image.remove();
-          imageWrap.createDiv({ cls: "doudou-image-missing", text: "图片" });
-        }, { once: true });
-      } else {
-        imageWrap.createDiv({ cls: "doudou-image-missing", text: "图片" });
-      }
-      if (imagePaths.length > 1) {
-        imageWrap.createDiv({
-          cls: "doudou-library-image-count",
-          text: `${imagePaths.length} 张`
-        });
-      }
-    }
-    const main = body.createDiv({ cls: "doudou-library-item-main" });
-    main.createDiv({ cls: "doudou-library-meta", text: metaText(record) });
-    main.createDiv({
-      cls: "doudou-library-preview",
-      text: record.content.trim() ? record.content : "图片记录"
-    });
-    body.createDiv({ cls: "doudou-library-time", text: formatTime(record.created) });
-    body.addEventListener("click", (event) => {
-      const selection = window.getSelection();
-      if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
-        const selectedNode = selection.getRangeAt(0).commonAncestorContainer;
-        const selectedEl = selectedNode instanceof Element
-          ? selectedNode
-          : selectedNode.parentElement;
-        if (selectedEl && body.contains(selectedEl)) {
-          event.preventDefault();
-          return;
-        }
-      }
-      new RecordDetailModal(
-        this.app,
-        this.dependencies,
-        record,
-        async () => this.refresh(false)
-      ).open();
-    });
-    const actions = item.createDiv({ cls: "doudou-library-item-actions" });
-    if (record.content.trim()) {
-      const copy = actions.createEl("button", {
-        cls: "doudou-copy-button doudou-library-copy-button",
-        attr: { type: "button", "aria-label": "复制全文", title: "复制全文" }
-      });
-      bindCopyButton(copy, record.content, setIcon);
-    }
-    const edit = actions.createEl("button", {
-      cls: "doudou-library-edit-button",
-      attr: { type: "button", "aria-label": `编辑记录：${preview}`, title: "编辑" }
-    });
-    setIcon(edit, "pencil");
-    edit.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      new RecordDetailModal(
-        this.app,
-        this.dependencies,
-        record,
-        async () => this.refresh(false),
-        "edit"
-      ).open();
-    });
   }
 }

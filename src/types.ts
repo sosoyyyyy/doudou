@@ -1,11 +1,10 @@
-export type Category = "生活" | "工作" | "副业";
-
 export interface DoudouRecord {
   id: string;
+  title?: string;
   content: string;
   created: string;
   updated?: string;
-  category: Category;
+  folder: string;
   tags: string[];
   aiTags?: string[];
   images?: string[];
@@ -15,14 +14,17 @@ export interface StoredDoudouRecord extends DoudouRecord {
   path: string;
 }
 
-export type DoudouPage = "chat" | "library";
-
-export type CategoryFilter = Category | "全部";
+export type DoudouPage = "all" | "library";
 
 export interface LibraryFilters {
   query: string;
-  category: CategoryFilter;
+  folder?: string;
   tags: ReadonlySet<string>;
+}
+
+export interface FolderSummary {
+  name: string;
+  count: number;
 }
 
 export interface TagOption {

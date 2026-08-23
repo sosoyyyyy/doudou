@@ -2,7 +2,7 @@ import { requestUrl } from "obsidian";
 import {
   AI_TAG_LIMIT,
   AI_TAG_MAX_LENGTH,
-  CATEGORIES,
+  LEGACY_DEFAULT_FOLDERS,
   DEEPSEEK_BASE_URL
 } from "../constants";
 import { cleanTagName } from "../data/recordCodec";
@@ -49,7 +49,7 @@ export function parseAiTags(raw: string, manualTags: readonly string[]): string[
   if (!parsed || typeof parsed !== "object") throw new DeepSeekError("invalid-response");
   const values = (parsed as { tags?: unknown }).tags;
   if (!Array.isArray(values)) throw new DeepSeekError("invalid-response");
-  const excluded = new Set([...manualTags, ...CATEGORIES]);
+  const excluded = new Set([...manualTags, ...LEGACY_DEFAULT_FOLDERS]);
   const result: string[] = [];
   for (const value of values) {
     if (typeof value !== "string") continue;
@@ -125,7 +125,8 @@ export class DeepSeekClient {
         role: "user",
         content: JSON.stringify({
           content: record.content,
-          category: record.category,
+          title: record.title,
+          folder: record.folder,
           tags: record.tags
         })
       }
@@ -156,7 +157,8 @@ export class DeepSeekClient {
     const sources = records.map((record) => ({
       id: record.id,
       created: record.created,
-      category: record.category,
+      title: record.title,
+      folder: record.folder,
       tags: record.tags,
       content: record.content
     }));

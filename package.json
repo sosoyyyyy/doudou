@@ -1,7 +1,7 @@
 {
   "name": "doudou",
-  "version": "0.3.5",
-  "description": "兜兜：聊天式个人资料库 Obsidian 插件",
+  "version": "0.4.0-beta.1",
+  "description": "兜兜：带 AI 检索能力的图文备忘录与私人资料库",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",

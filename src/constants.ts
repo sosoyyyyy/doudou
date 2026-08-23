@@ -1,9 +1,8 @@
-import type { Category } from "./types";
-
 export const DOUDOU_VIEW_TYPE = "doudou-view";
 export const DOUDOU_DATA_FOLDER = "兜兜";
-export const CATEGORIES: readonly Category[] = ["生活", "工作", "副业"];
-export const RECENT_RECORD_LIMIT = 30;
+export const LEGACY_DEFAULT_FOLDERS = ["生活", "工作", "副业"] as const;
+export const DEFAULT_FOLDER = "生活";
+export const ALL_RECORDS_FOLDER = "全部资料";
 export const SEARCH_DEBOUNCE_MS = 160;
 export const VAULT_REFRESH_DEBOUNCE_MS = 240;
 export const DOUDOU_ASSETS_FOLDER = `${DOUDOU_DATA_FOLDER}/assets`;

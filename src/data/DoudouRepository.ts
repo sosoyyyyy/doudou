@@ -1,15 +1,17 @@
 import { normalizePath, parseYaml, TFile, Vault } from "obsidian";
 import {
-  CATEGORIES,
+  ALL_RECORDS_FOLDER,
+  DEFAULT_FOLDER,
   DOUDOU_ASSETS_FOLDER,
   DOUDOU_DATA_FOLDER
 } from "../constants";
 import type {
-  Category,
   DoudouRecord,
+  FolderSummary,
   StoredDoudouRecord
 } from "../types";
 import {
+  extractManualTags,
   extractFrontmatter,
   normalizeImagePaths,
   normalizeTags,
@@ -18,25 +20,36 @@ import {
 } from "./recordCodec";
 
 export interface RecordChanges {
+  title?: string;
   content: string;
-  category: Category;
-  tags: string[];
+  folder: string;
   images?: string[];
 }
 
-export function buildRecordFolder(category: Category, created: string): string {
+export function normalizeFolderName(value: string): string {
+  const name = value.trim();
+  if (
+    !name || name === ALL_RECORDS_FOLDER || name.toLocaleLowerCase() === "assets" ||
+    /[\\/:*?"<>|]/.test(name) || name === "." || name === ".." ||
+    /^\d{4}$/.test(name)
+  ) throw new Error("Invalid folder name");
+  return name;
+}
+
+export function buildRecordFolder(folder: string, created: string): string {
+  const safeFolder = normalizeFolderName(folder);
   const date = new Date(created);
   const year = String(date.getFullYear());
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  return normalizePath(`${DOUDOU_DATA_FOLDER}/${category}/${year}/${month}`);
+  return normalizePath(`${DOUDOU_DATA_FOLDER}/${safeFolder}/${year}/${month}`);
 }
 
 export function buildRecordPath(
-  category: Category,
+  folder: string,
   created: string,
   fileName: string
 ): string {
-  return normalizePath(`${buildRecordFolder(category, created)}/${fileName}`);
+  return normalizePath(`${buildRecordFolder(folder, created)}/${fileName}`);
 }
 
 export function isDoudouRecordPath(path: string): boolean {
@@ -53,8 +66,8 @@ export function isDoudouRecordPath(path: string): boolean {
 
   const relativeParts = normalized.slice(rootPrefix.length).split("/");
   const topLevel = relativeParts[0];
-  if (CATEGORIES.includes(topLevel as Category)) return relativeParts.length >= 4;
-  return /^\d{4}$/.test(topLevel) && relativeParts.length >= 3;
+  if (/^\d{4}$/.test(topLevel)) return relativeParts.length >= 3;
+  return relativeParts.length >= 4;
 }
 
 export class DoudouRepository {
@@ -62,7 +75,7 @@ export class DoudouRepository {
 
   constructor(private readonly vault: Vault) {}
 
-  createRecord(content: string, category: Category, tags: string[]): DoudouRecord {
+  createRecord(content: string, folder = DEFAULT_FOLDER, title?: string): DoudouRecord {
     const created = new Date();
     const randomPart = globalThis.crypto?.randomUUID?.() ??
       Math.random().toString(36).slice(2, 12);
@@ -71,26 +84,32 @@ export class DoudouRepository {
       id: `${created.getTime().toString(36)}-${randomPart}`,
       content,
       created: created.toISOString(),
-      category,
-      tags: normalizeTags(tags)
+      ...(title?.trim() ? { title: title.trim() } : {}),
+      folder: normalizeFolderName(folder),
+      tags: extractManualTags(content)
     };
   }
 
   async save(record: DoudouRecord): Promise<StoredDoudouRecord> {
-    const folder = buildRecordFolder(record.category, record.created);
+    const normalizedRecord: DoudouRecord = {
+      ...record,
+      folder: normalizeFolderName(record.folder),
+      tags: extractManualTags(record.content)
+    };
+    const folder = buildRecordFolder(normalizedRecord.folder, normalizedRecord.created);
     await this.ensureFolder(folder);
 
-    const path = normalizePath(`${folder}/${this.fileNameFor(record)}`);
+    const path = normalizePath(`${folder}/${this.fileNameFor(normalizedRecord)}`);
     const existing = this.vault.getAbstractFileByPath(path);
     if (existing instanceof TFile) {
       const parsed = await this.readFile(existing);
       this.invalidateCache();
-      return parsed ?? { ...record, path };
+      return parsed ?? { ...normalizedRecord, path };
     }
 
-    await this.vault.create(path, serializeRecord(record));
+    await this.vault.create(path, serializeRecord(normalizedRecord));
     this.invalidateCache();
-    return { ...record, path };
+    return { ...normalizedRecord, path };
   }
 
   async update(
@@ -105,15 +124,16 @@ export class DoudouRepository {
     const originalPath = normalizePath(record.path);
     const fileName = originalPath.slice(originalPath.lastIndexOf("/") + 1);
     const targetPath = buildRecordPath(
-      changes.category,
+      changes.folder,
       current?.created ?? record.created,
       fileName
     );
     const updatedRecord: StoredDoudouRecord = {
       ...(current ?? record),
+      ...(changes.title?.trim() ? { title: changes.title.trim() } : { title: undefined }),
       content: changes.content,
-      category: changes.category,
-      tags: normalizeTags(changes.tags),
+      folder: normalizeFolderName(changes.folder),
+      tags: extractManualTags(changes.content),
       images: normalizeImagePaths(changes.images ?? current?.images ?? record.images ?? []),
       updated: new Date().toISOString(),
       path: targetPath
@@ -178,6 +198,69 @@ export class DoudouRepository {
   async loadAll(): Promise<StoredDoudouRecord[]> {
     if (!this.allRecordsCache) this.allRecordsCache = this.readAll();
     return this.allRecordsCache;
+  }
+
+  async listFolders(): Promise<FolderSummary[]> {
+    const records = await this.loadAll();
+    const counts = new Map<string, number>();
+    for (const record of records) counts.set(record.folder, (counts.get(record.folder) ?? 0) + 1);
+    const loadedFiles = (this.vault as Vault & { getAllLoadedFiles?: () => Array<{ path: string }> })
+      .getAllLoadedFiles?.() ?? [];
+    const rootPrefix = `${normalizePath(DOUDOU_DATA_FOLDER)}/`;
+    for (const item of loadedFiles) {
+      const normalized = normalizePath(item.path);
+      if (!normalized.startsWith(rootPrefix)) continue;
+      const relative = normalized.slice(rootPrefix.length);
+      if (!relative || relative.includes("/") || relative === "assets" || /^\d{4}$/.test(relative)) continue;
+      if (!counts.has(relative)) counts.set(relative, 0);
+    }
+    return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) =>
+      a.name.localeCompare(b.name, "zh-CN")
+    );
+  }
+
+  async createFolder(name: string): Promise<void> {
+    const folder = normalizeFolderName(name);
+    await this.ensureFolder(normalizePath(`${DOUDOU_DATA_FOLDER}/${folder}`));
+  }
+
+  async renameFolder(previousName: string, nextName: string): Promise<void> {
+    const previous = normalizeFolderName(previousName);
+    const next = normalizeFolderName(nextName);
+    if (previous === next) return;
+    const targetRoot = normalizePath(`${DOUDOU_DATA_FOLDER}/${next}`);
+    if (this.vault.getAbstractFileByPath(targetRoot)) throw new Error("Folder already exists");
+    const records = (await this.loadAll()).filter((record) => record.folder === previous);
+    if (records.length === 0) {
+      const source = this.vault.getAbstractFileByPath(normalizePath(`${DOUDOU_DATA_FOLDER}/${previous}`));
+      if (!source) throw new Error("Folder no longer exists");
+      await this.vault.rename(source, targetRoot);
+      this.invalidateCache();
+      return;
+    }
+    for (const record of records) {
+      await this.update(record, {
+        title: record.title,
+        content: record.content,
+        folder: next,
+        images: record.images
+      });
+    }
+    const oldRoot = this.vault.getAbstractFileByPath(
+      normalizePath(`${DOUDOU_DATA_FOLDER}/${previous}`)
+    );
+    if (oldRoot) await this.vault.trash(oldRoot, false);
+    this.invalidateCache();
+  }
+
+  async deleteFolder(name: string): Promise<void> {
+    const folder = normalizeFolderName(name);
+    if ((await this.loadAll()).some((record) => record.folder === folder)) {
+      throw new Error("Folder is not empty");
+    }
+    const item = this.vault.getAbstractFileByPath(normalizePath(`${DOUDOU_DATA_FOLDER}/${folder}`));
+    if (item) await this.vault.trash(item, false);
+    this.invalidateCache();
   }
 
   invalidateCache(): void {

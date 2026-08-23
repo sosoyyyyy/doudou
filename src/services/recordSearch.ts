@@ -38,13 +38,15 @@ export function rankRecordsForQuestion(
       const content = normalized(record.content);
       const manualTags = record.tags.map(normalized);
       const aiTags = (record.aiTags ?? []).map(normalized);
-      const category = normalized(record.category);
+      const title = normalized(record.title ?? "");
+      const folder = normalized(record.folder);
       let score = 0;
       for (const term of terms) {
         if (aiTags.some((tag) => tag.includes(term) || term.includes(tag))) score += 9;
         if (manualTags.some((tag) => tag.includes(term) || term.includes(tag))) score += 8;
         if (content.includes(term)) score += term.length >= 4 ? 7 : 3;
-        if (category.includes(term)) score += 2;
+        if (title.includes(term)) score += 10;
+        if (folder.includes(term)) score += 2;
       }
       return { record, score };
     })
@@ -59,7 +61,7 @@ export function filterRecords(
 ): StoredDoudouRecord[] {
   const query = normalized(filters.query);
   return records.filter((record) => {
-    if (filters.category !== "全部" && record.category !== filters.category) {
+    if (filters.folder && record.folder !== filters.folder) {
       return false;
     }
     if ([...filters.tags].some((tag) => !record.tags.includes(tag))) {
@@ -69,7 +71,7 @@ export function filterRecords(
 
     const manualTagText = record.tags.flatMap((tag) => [tag, `#${tag}`]).join(" ");
     const hiddenTagText = (record.aiTags ?? []).join(" ");
-    const haystack = `${record.content}\n${manualTagText}\n${hiddenTagText}`
+    const haystack = `${record.title ?? ""}\n${record.content}\n${record.folder}\n${manualTagText}\n${hiddenTagText}`
       .toLocaleLowerCase();
     return haystack.includes(query);
   });

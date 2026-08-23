@@ -1,11 +1,7 @@
-import { CATEGORIES } from "../constants";
-import type { Category, DoudouRecord, StoredDoudouRecord } from "../types";
+import { DEFAULT_FOLDER } from "../constants";
+import type { DoudouRecord, StoredDoudouRecord } from "../types";
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
-
-function isCategory(value: unknown): value is Category {
-  return typeof value === "string" && CATEGORIES.includes(value as Category);
-}
 
 function dateString(value: unknown): string | null {
   if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
@@ -26,6 +22,16 @@ export function normalizeTags(value: unknown): string[] {
   return [...new Set(tags)];
 }
 
+export function extractManualTags(content: string): string[] {
+  const matches: string[] = [];
+  const pattern = /(?:^|[\s，。！？、；：,.!?;:()（）\[\]【】{}“”‘’])#([\p{L}\p{N}_-]+)/gu;
+  for (const match of content.matchAll(pattern)) {
+    const tag = cleanTagName(match[1]);
+    if (tag && !matches.includes(tag)) matches.push(tag);
+  }
+  return matches;
+}
+
 function yamlString(value: string): string {
   return JSON.stringify(value);
 }
@@ -39,7 +45,8 @@ export function serializeRecord(record: DoudouRecord): string {
     `id: ${yamlString(record.id)}`,
     `created: ${yamlString(record.created)}`,
     ...(record.updated ? [`updated: ${yamlString(record.updated)}`] : []),
-    `category: ${yamlString(record.category)}`,
+    ...(record.title?.trim() ? [`title: ${yamlString(record.title.trim())}`] : []),
+    `folder: ${yamlString(record.folder)}`,
     `tags: [${tags}]`,
     `ai_tags: [${aiTags}]`,
     `images: [${images}]`,
@@ -73,11 +80,12 @@ export function recordFromFrontmatter(
     ? undefined
     : dateString(frontmatter.updated) ?? undefined;
 
-  if (
-    typeof frontmatter.id !== "string" ||
-    !created ||
-    !isCategory(frontmatter.category)
-  ) {
+  const folderValue = typeof frontmatter.folder === "string"
+    ? frontmatter.folder.trim()
+    : typeof frontmatter.category === "string"
+      ? frontmatter.category.trim()
+      : DEFAULT_FOLDER;
+  if (typeof frontmatter.id !== "string" || !created || !folderValue) {
     return null;
   }
 
@@ -85,7 +93,10 @@ export function recordFromFrontmatter(
     id: frontmatter.id,
     created,
     ...(updated ? { updated } : {}),
-    category: frontmatter.category,
+    ...(typeof frontmatter.title === "string" && frontmatter.title.trim()
+      ? { title: frontmatter.title.trim() }
+      : {}),
+    folder: folderValue,
     tags: normalizeTags(frontmatter.tags),
     aiTags: normalizeTags(frontmatter.ai_tags),
     images: normalizeImagePaths(frontmatter.images),

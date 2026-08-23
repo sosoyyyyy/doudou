@@ -13,7 +13,7 @@ import {
   type PendingImage
 } from "./imageDraft";
 import { TagPickerModal } from "./TagPickerModal";
-import { formatDateTime, metaText } from "./uiHelpers";
+import { bindCopyButton, formatDateTime, metaText } from "./uiHelpers";
 
 export interface RecordDetailDependencies {
   repository: DoudouRepository;
@@ -102,7 +102,17 @@ export class RecordDetailModal extends Modal {
   private renderDisplay(): void {
     this.releaseEditPreviews();
     this.contentEl.empty();
-    this.contentEl.createEl("h2", { cls: "doudou-modal-title", text: "记录详情" });
+    const header = this.contentEl.createDiv({ cls: "doudou-detail-header" });
+    header.createEl("h2", { cls: "doudou-modal-title", text: "记录详情" });
+    if (this.record.content.trim()) {
+      const copy = header.createEl("button", {
+        cls: "doudou-copy-button doudou-detail-copy-button",
+        attr: { type: "button", "aria-label": "复制全文", title: "复制全文" }
+      });
+      const icon = copy.createSpan({ cls: "doudou-detail-copy-icon" });
+      copy.createSpan({ text: "复制全文" });
+      bindCopyButton(copy, this.record.content, (_element, name) => setIcon(icon, name));
+    }
     this.contentEl.createDiv({ cls: "doudou-detail-meta", text: metaText(this.record) });
     this.contentEl.createDiv({
       cls: "doudou-detail-time",

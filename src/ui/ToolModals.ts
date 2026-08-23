@@ -3,6 +3,7 @@ import type { AskDoudouService } from "../ai/AskDoudouService";
 import { deepSeekErrorMessage } from "../ai/DeepSeekClient";
 import type { FolderService } from "../services/FolderService";
 import type { StoredDoudouRecord } from "../types";
+import { loadFolderOrderState } from "./folderOrderState";
 import { recordTitle } from "./uiHelpers";
 
 export class AskDoudouModal extends Modal {
@@ -51,14 +52,20 @@ export class FolderOrderModal extends Modal {
     const status = this.contentEl.createDiv({ cls: "doudou-modal-status", attr: { role: "status" } }); const actions = this.contentEl.createDiv({ cls: "doudou-modal-actions" });
     const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } }); const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } });
     cancel.addEventListener("click", () => this.close()); save.addEventListener("click", async () => { save.disabled = true; cancel.disabled = true; status.setText("正在保存..."); try { this.names = await this.folders.setOrder(this.names); await this.onChanged(); this.close(); } catch { status.setText("顺序暂时没有保存成功"); save.disabled = false; cancel.disabled = false; } });
-    void this.load(status, save);
+    void this.loadFolders(status, save);
   }
   override onClose(): void { this.activePointerCleanup?.(); this.contentEl.empty(); }
 
-  private async load(status: HTMLElement, save: HTMLButtonElement): Promise<void> {
-    save.disabled = true; status.setText("正在读取文件夹...");
-    try { this.names = await this.folders.folderNames(); this.paint(); status.setText(this.names.length === 0 ? "当前没有可排序的资料文件夹" : ""); save.disabled = this.names.length === 0; }
-    catch { status.setText("文件夹暂时没有加载出来"); }
+  private async loadFolders(status: HTMLElement, save: HTMLButtonElement): Promise<void> {
+    await loadFolderOrderState(() => this.folders.folderNames(), (state) => {
+      if (state.status === "loading") {
+        this.names = []; this.listEl.empty(); save.disabled = true; status.setText("正在读取文件夹...");
+      } else if (state.status === "loaded") {
+        this.names = state.names; this.paint(); save.disabled = state.names.length === 0; status.setText(state.names.length === 0 ? "暂无可排序的文件夹" : "");
+      } else {
+        console.error("[doudou] Failed to load folder order modal", state.error); save.disabled = true; status.setText("文件夹暂时没有加载出来");
+      }
+    });
   }
   private moveByName(source: string, target: string): void { const from = this.names.indexOf(source); const to = this.names.indexOf(target); if (from < 0 || to < 0 || from === to) return; this.names = moveFolderName(this.names, from, to); this.paint(); }
   private clearDropTargets(): void { this.listEl.querySelectorAll(".doudou-is-drop-target").forEach((item) => item.removeClass("doudou-is-drop-target")); }

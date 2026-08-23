@@ -15,7 +15,7 @@ import {
   sanitizeAttachmentName,
   type AttachmentFileLike
 } from "../src/attachments/FileService";
-import { ALL_RECORDS_FOLDER, DOUDOU_SHARED_CONFIG_PATH } from "../src/constants";
+import { ALL_RECORDS_FOLDER, DOUDOU_LEGACY_HIDDEN_CONFIG_PATH, DOUDOU_SHARED_CONFIG_PATH } from "../src/constants";
 import { buildRecordPath, DoudouRepository, isDoudouRecordPath, normalizeFolderName } from "../src/data/DoudouRepository";
 import { extractFrontmatter, extractManualTags, recordFromFrontmatter, serializeRecord } from "../src/data/recordCodec";
 import { collectTagOptions, filterRecords, rankRecordsForQuestion } from "../src/services/recordSearch";
@@ -26,6 +26,7 @@ import { normalizeSettings } from "../src/settings/settings";
 import type { StoredDoudouRecord } from "../src/types";
 import { libraryCardContent, metaText, recordTitle, writeClipboardText } from "../src/ui/uiHelpers";
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
+import { loadFolderOrderState, type FolderOrderLoadState } from "../src/ui/folderOrderState";
 import {
   imageFilesFromClipboardItems,
   type ClipboardItemLike
@@ -58,6 +59,10 @@ function cssDeclarations(selector: string): string {
 
 class FakeVault {
   readonly files = new Map<string, { file: TFile; content: string }>(); readonly binaries = new Map<string, ArrayBuffer>(); readonly folders = new Set<string>(); readonly writeCounts = new Map<string, number>(); failNextModify = false; failNextRename = false;
+  readonly adapter = {
+    exists: async (path: string): Promise<boolean> => this.files.has(path) || this.folders.has(path),
+    read: async (path: string): Promise<string> => { const entry = this.files.get(path); if (!entry) throw new Error("Missing fake file"); return entry.content; }
+  };
   getMarkdownFiles(): TFile[] { return [...this.files.values()].map((entry) => entry.file); }
   getAllLoadedFiles(): Array<TFile | { path: string }> { return [...this.files.values()].map((entry) => entry.file).concat([...this.folders].map((path) => ({ path })) as TFile[]); }
   getAbstractFileByPath(path: string): TFile | { path: string } | null { return this.files.get(path)?.file ?? (this.folders.has(path) ? { path } : null); }
@@ -66,6 +71,7 @@ class FakeVault {
   async createBinary(path: string, content: ArrayBuffer): Promise<TFile> { const file = await this.create(path, `binary:${content.byteLength}`); this.binaries.set(path, content.slice(0)); return file; }
   async readBinary(file: TFile): Promise<ArrayBuffer> { const content = this.binaries.get(file.path); if (!content) throw new Error("Missing fake binary"); return content.slice(0); }
   async cachedRead(file: TFile): Promise<string> { const entry = this.files.get(file.path); if (!entry) throw new Error("Missing fake file"); return entry.content; }
+  async read(file: TFile): Promise<string> { return this.cachedRead(file); }
   async modify(file: TFile, content: string): Promise<void> { if (this.failNextModify) { this.failNextModify = false; throw new Error("modify failed"); } this.files.set(file.path, { file, content }); this.writeCounts.set(file.path, (this.writeCounts.get(file.path) ?? 0) + 1); }
   async rename(item: TFile | { path: string }, path: string): Promise<void> {
     if (this.failNextRename) { this.failNextRename = false; throw new Error("rename failed"); }
@@ -113,6 +119,27 @@ test("shared app header keeps a normal-flow flex slot on every page", () => {
 test("library card previews use primary text while metadata stays muted", () => {
   assert.match(cssDeclarations(".doudou-compact-preview"), /color:\s*var\(--text-normal\)/);
   assert.match(cssDeclarations(".doudou-journal-meta, .doudou-compact-meta, .doudou-record-meta"), /color:\s*var\(--doudou-muted\)/);
+});
+
+test("folder order modal state loads normal folders through an async service", async () => {
+  const states: FolderOrderLoadState[] = [];
+  const result = await loadFolderOrderState(async () => ["日常杂乱", "小说", "摘抄"], (state) => states.push(state));
+  assert.deepEqual(states.map((state) => state.status), ["loading", "loaded"]);
+  assert.deepEqual(result, { status: "loaded", names: ["日常杂乱", "小说", "摘抄"] });
+});
+
+test("folder order modal remains loading until the async service resolves", async () => {
+  const states: FolderOrderLoadState[] = []; let resolve!: (names: string[]) => void;
+  const pending = loadFolderOrderState(() => new Promise<string[]>((done) => { resolve = done; }), (state) => states.push(state));
+  assert.deepEqual(states.map((state) => state.status), ["loading"]);
+  resolve(["小说", "日记"]); await pending;
+  assert.deepEqual(states.map((state) => state.status), ["loading", "loaded"]); assert.deepEqual(states[1]?.names, ["小说", "日记"]);
+});
+
+test("folder order modal reports empty only after loading completes", async () => {
+  const states: FolderOrderLoadState[] = [];
+  const result = await loadFolderOrderState(async () => [], (state) => states.push(state));
+  assert.deepEqual(states.map((state) => state.status), ["loading", "loaded"]); assert.deepEqual(result, { status: "loaded", names: [] });
 });
 
 test("clipboard text does not produce pending image files", () => {
@@ -248,6 +275,12 @@ test("folder service migrates the old local order into shared Vault config", asy
   assert.equal(cleared, true); assert.deepEqual(legacyOrder, []);
 });
 
+test("folder store migrates the v0.5.2 hidden config to the visible Vault path", async () => {
+  const vault = new FakeVault(); await vault.createFolder("兜兜"); await vault.create(DOUDOU_LEGACY_HIDDEN_CONFIG_PATH, JSON.stringify({ folderOrder: ["小说", "日记"] }));
+  const store = new VaultFolderOrderStore(vault as unknown as Vault);
+  assert.deepEqual(await store.read(), ["小说", "日记"]); assert.deepEqual(parseSharedDoudouConfig(vault.files.get(DOUDOU_SHARED_CONFIG_PATH)?.content ?? ""), { folderOrder: ["小说", "日记"] });
+});
+
 test("shared Vault order takes priority over stale local settings", async () => {
   const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); for (const name of ["副业", "小说"]) await repository.createFolder(name);
   const store = new VaultFolderOrderStore(vault as unknown as Vault); await store.write(["小说", "副业"]); let legacyOrder = ["副业", "小说"];
@@ -265,7 +298,8 @@ test("shared order removes deleted folders, excludes assets and appends new fold
 test("custom shared order persists across service instances", async () => {
   const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); for (const name of ["副业", "日记", "小说"]) await repository.createFolder(name); const store = new VaultFolderOrderStore(vault as unknown as Vault);
   await new FolderService(repository, store).setOrder(["小说", "日记", "副业"]);
-  assert.deepEqual(await new FolderService(repository, store).folderNames(), ["小说", "日记", "副业"]);
+  const reopened = new FolderService(repository, store); assert.deepEqual(await reopened.folderNames(), ["小说", "日记", "副业"]);
+  const modalState = await loadFolderOrderState(() => reopened.folderNames(), () => {}); assert.deepEqual(modalState, { status: "loaded", names: ["小说", "日记", "副业"] });
 });
 
 test("new, deleted and renamed folders update shared order without disturbing positions", async () => {

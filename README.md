@@ -1,4 +1,4 @@
-# 兜兜（doudou）0.5.2
+# 兜兜（doudou）0.5.3
 
 兜兜是一款带 AI 检索能力的图文备忘录 / 私人资料库 Obsidian 插件。Markdown 是唯一真实数据源；界面围绕“全部负责翻看、资料负责整理和查找、兜负责 AI 检索”组织。
 
@@ -22,7 +22,7 @@
 
 ```text
 兜兜/
-  .doudou.json                   跨设备共享的文件夹顺序
+  doudou.json                    跨设备共享的文件夹顺序
   <folder>/
     YYYY/
       MM/
@@ -92,7 +92,7 @@ git diff --check
 3. 输入 `https://github.com/sosoyyyyy/doudou`。
 4. 安装后在第三方插件列表中启用“兜兜”。
 
-Release 必须包含 `main.js`、`manifest.json`、`styles.css`。正式版 `0.5.2` 将文件夹顺序保存到 `兜兜/.doudou.json`，使 Windows、iOS、Android 共用同一排序并在同步后自动刷新。
+Release 必须包含 `main.js`、`manifest.json`、`styles.css`。正式版 `0.5.3` 将文件夹顺序保存在 Vault API 可稳定访问的 `兜兜/doudou.json`，修复“调整顺序”弹窗无法加载资料文件夹的问题。
 
 ## 隐私与 AI
 

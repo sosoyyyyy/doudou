@@ -1,5 +1,9 @@
 import { normalizePath, TFile, Vault } from "obsidian";
-import { DOUDOU_DATA_FOLDER, DOUDOU_SHARED_CONFIG_PATH } from "../constants";
+import {
+  DOUDOU_DATA_FOLDER,
+  DOUDOU_LEGACY_HIDDEN_CONFIG_PATH,
+  DOUDOU_SHARED_CONFIG_PATH
+} from "../constants";
 import type { FolderOrderStore } from "./FolderService";
 
 interface SharedDoudouConfig {
@@ -33,15 +37,20 @@ export class VaultFolderOrderStore implements FolderOrderStore {
 
   async read(): Promise<string[] | null> {
     const file = this.vault.getAbstractFileByPath(normalizePath(DOUDOU_SHARED_CONFIG_PATH));
-    if (!(file instanceof TFile)) return null;
-    return parseSharedDoudouConfig(await this.vault.cachedRead(file)).folderOrder;
+    if (file instanceof TFile) {
+      return parseSharedDoudouConfig(await this.vault.read(file)).folderOrder;
+    }
+    const legacyOrder = await this.readLegacyHiddenOrder();
+    if (legacyOrder === null) return null;
+    await this.write(legacyOrder);
+    return legacyOrder;
   }
 
   async write(folderOrder: readonly string[]): Promise<boolean> {
     const path = normalizePath(DOUDOU_SHARED_CONFIG_PATH);
     const existing = this.vault.getAbstractFileByPath(path);
     if (existing instanceof TFile) {
-      const current = parseSharedDoudouConfig(await this.vault.cachedRead(existing)).folderOrder;
+      const current = parseSharedDoudouConfig(await this.vault.read(existing)).folderOrder;
       if (sameOrder(current, folderOrder)) return false;
       await this.vault.modify(existing, serializeSharedDoudouConfig(folderOrder));
       return true;
@@ -59,10 +68,20 @@ export class VaultFolderOrderStore implements FolderOrderStore {
     } catch (error) {
       const raced = this.vault.getAbstractFileByPath(path);
       if (!(raced instanceof TFile)) throw error;
-      const current = parseSharedDoudouConfig(await this.vault.cachedRead(raced)).folderOrder;
+      const current = parseSharedDoudouConfig(await this.vault.read(raced)).folderOrder;
       if (sameOrder(current, folderOrder)) return false;
       await this.vault.modify(raced, serializeSharedDoudouConfig(folderOrder));
       return true;
+    }
+  }
+
+  private async readLegacyHiddenOrder(): Promise<string[] | null> {
+    const path = normalizePath(DOUDOU_LEGACY_HIDDEN_CONFIG_PATH);
+    try {
+      if (!await this.vault.adapter.exists(path)) return null;
+      return parseSharedDoudouConfig(await this.vault.adapter.read(path)).folderOrder;
+    } catch {
+      return null;
     }
   }
 }

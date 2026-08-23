@@ -10,15 +10,15 @@
   --doudou-accent-soft: #eaf3ff;
   --doudou-accent-soft-2: #f2f7ff;
   --doudou-accent-border: #b9d3ff;
-  --doudou-user-bubble: #eaf3ff;
+  --doudou-user-bubble: #eef5ff;
   --doudou-system-bubble: #ffffff;
   --doudou-page-bg: #f7faff;
   --doudou-surface: #ffffff;
   --doudou-surface-soft: #f4f7fb;
   --doudou-border: #e7edf6;
   --doudou-text-secondary: #7f8998;
-  --doudou-shadow: 0 6px 22px rgb(62 92 130 / 8%);
-  --doudou-shadow-small: 0 4px 14px rgb(63 111 181 / 8%);
+  --doudou-shadow: 0 4px 16px rgb(62 92 130 / 6%);
+  --doudou-shadow-small: 0 2px 9px rgb(63 111 181 / 6%);
   --doudou-focus-ring: 0 0 0 3px rgb(77 142 247 / 10%);
   --doudou-transition: 160ms ease;
   --doudou-mobile-toolbar-offset: 0px;
@@ -46,8 +46,8 @@
   --doudou-surface-soft: #203043;
   --doudou-border: #30465e;
   --doudou-text-secondary: #a8b4c3;
-  --doudou-shadow: 0 8px 24px rgb(0 0 0 / 22%);
-  --doudou-shadow-small: 0 4px 14px rgb(0 0 0 / 18%);
+  --doudou-shadow: 0 5px 18px rgb(0 0 0 / 18%);
+  --doudou-shadow-small: 0 2px 10px rgb(0 0 0 / 15%);
   --doudou-focus-ring: 0 0 0 3px rgb(114 167 251 / 16%);
 }
 
@@ -57,7 +57,7 @@
   grid-template-columns: minmax(64px, 1fr) minmax(0, 280px) minmax(40px, 1fr);
   align-items: center;
   gap: 10px;
-  min-height: 50px;
+  min-height: 48px;
   padding: max(6px, env(safe-area-inset-top)) 12px 7px;
   border-bottom: 1px solid var(--doudou-border);
   background: color-mix(in srgb, var(--doudou-accent) 3%, var(--doudou-page-bg));
@@ -84,7 +84,7 @@
 }
 
 .doudou-page-tab {
-  min-height: 38px;
+  min-height: 36px;
   margin: 0;
   padding: 5px 14px;
   border: 0;
@@ -251,7 +251,7 @@
 
 .doudou-message-row-system {
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
   padding-right: 17%;
 }
 
@@ -281,7 +281,7 @@
 
 .doudou-bubble {
   max-width: 100%;
-  padding: 9px 12px;
+  padding: 8px 11px;
   border: 1px solid color-mix(in srgb, var(--doudou-accent) 11%, transparent);
   border-radius: 17px;
   line-height: 1.52;
@@ -310,8 +310,9 @@
 }
 
 .doudou-system-bubble.doudou-is-success {
-  border-color: color-mix(in srgb, #31b85a 22%, var(--doudou-border));
-  background: color-mix(in srgb, #31b85a 7%, var(--doudou-surface));
+  border-color: var(--doudou-border);
+  color: var(--text-normal);
+  background: var(--doudou-system-bubble);
 }
 
 .doudou-message-meta,
@@ -320,6 +321,18 @@
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.35;
+}
+
+.doudou-message-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-height: 26px;
+}
+
+.doudou-message-meta-row .doudou-message-meta {
+  margin-top: 0;
 }
 
 .doudou-status-meta {
@@ -339,8 +352,8 @@
 
 .doudou-composer {
   flex: 0 0 auto;
-  padding: 8px clamp(10px, 3vw, 24px) max(
-    9px,
+  padding: 6px clamp(10px, 3vw, 24px) max(
+    7px,
     env(safe-area-inset-bottom),
     var(--doudou-mobile-toolbar-offset)
   );
@@ -351,9 +364,9 @@
 .doudou-composer-inner {
   width: min(100%, 780px);
   margin-inline: auto;
-  padding: 10px;
-  border: 1px solid var(--doudou-border);
-  border-radius: 20px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--doudou-border) 84%, transparent);
+  border-radius: 18px;
   background: var(--doudou-surface);
   box-shadow: var(--doudou-shadow);
 }
@@ -361,12 +374,12 @@
 .doudou-category-row {
   display: flex;
   gap: 6px;
-  margin: 0 0 7px 3px;
+  margin: 0 0 5px 2px;
 }
 
 .doudou-category-button,
 .doudou-filter-button {
-  min-height: 40px;
+  min-height: 38px;
   margin: 0;
   padding: 5px 14px;
   border: 1px solid var(--doudou-border);
@@ -400,7 +413,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin: 0 3px 7px;
+  margin: 0 2px 5px;
 }
 
 .doudou-tag-chip,
@@ -449,10 +462,10 @@
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 40px;
   max-height: 132px;
   margin: 0;
-  padding: 10px 7px 8px;
+  padding: 8px 7px 7px;
   border: 0;
   resize: none;
   overflow-y: auto;
@@ -469,12 +482,12 @@
 .doudou-icon-button,
 .doudou-send-button {
   display: inline-flex;
-  flex: 0 0 42px;
+  flex: 0 0 40px;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  min-height: 42px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -486,7 +499,8 @@
 }
 
 .doudou-icon-button {
-  color: var(--doudou-accent-strong);
+  border: 1px solid color-mix(in srgb, var(--doudou-border) 78%, transparent);
+  color: var(--doudou-text-secondary);
   font-size: 19px;
   background: var(--doudou-accent-soft);
 }
@@ -532,6 +546,73 @@
   transform: translateY(1px) scale(0.96);
 }
 
+.doudou-copy-button {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  color: var(--doudou-text-secondary);
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.68;
+  touch-action: manipulation;
+  user-select: none;
+  transition: color var(--doudou-transition), background var(--doudou-transition),
+    opacity var(--doudou-transition), transform 140ms ease;
+}
+
+.doudou-copy-button:hover,
+.doudou-copy-button:focus-visible,
+.doudou-copy-button.doudou-is-feedback-visible {
+  color: var(--doudou-accent-strong);
+  background: var(--doudou-accent-soft);
+  opacity: 1;
+}
+
+.doudou-copy-button:active {
+  transform: scale(0.96);
+}
+
+.doudou-copy-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.doudou-copy-button.doudou-is-feedback-visible::after {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 5px);
+  z-index: 5;
+  width: max-content;
+  padding: 3px 7px;
+  border: 1px solid var(--doudou-border);
+  border-radius: 7px;
+  color: var(--doudou-accent-strong);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.35;
+  content: attr(data-copy-feedback);
+  background: var(--doudou-surface);
+  box-shadow: var(--doudou-shadow-small);
+  pointer-events: none;
+}
+
+.doudou-chat-copy-button {
+  flex-basis: 26px;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  border-radius: 8px;
+}
+
 .doudou-hint {
   color: var(--text-muted);
   font-size: 12px;
@@ -554,7 +635,7 @@
 
 .doudou-library-controls {
   flex: 0 0 auto;
-  padding: 14px clamp(12px, 3vw, 24px) 10px;
+  padding: 12px clamp(12px, 3vw, 24px) 8px;
   border-bottom: 0;
   background: var(--doudou-page-bg);
 }
@@ -563,7 +644,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  min-height: 44px;
+  min-height: 42px;
   padding: 0 12px;
   border: 1px solid var(--doudou-border);
   border-radius: 14px;
@@ -591,7 +672,7 @@
 .doudou-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 42px;
+  height: 40px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -614,11 +695,11 @@
 }
 
 .doudou-library-categories {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .doudou-library-tags {
-  margin-top: 6px;
+  margin-top: 4px;
   padding-bottom: 1px;
 }
 
@@ -633,12 +714,12 @@
 }
 
 .doudou-filter-button {
-  min-height: 36px;
+  min-height: 34px;
   padding-inline: 12px;
 }
 
 .doudou-filter-tag {
-  min-height: 32px;
+  min-height: 29px;
   padding-inline: 9px;
 }
 
@@ -670,7 +751,8 @@
 .doudou-date-rule {
   flex: 1 1 auto;
   height: 1px;
-  background: color-mix(in srgb, var(--doudou-accent) 22%, var(--doudou-border));
+  max-width: 72%;
+  background: color-mix(in srgb, var(--doudou-accent) 10%, var(--doudou-border));
 }
 
 .doudou-library-item {
@@ -678,8 +760,8 @@
   align-items: center;
   gap: 3px;
   width: 100%;
-  min-height: 76px;
-  margin: 0 0 10px;
+  min-height: 70px;
+  margin: 0 0 8px;
   padding: 0;
   border: 1px solid var(--doudou-border);
   border-radius: 16px;
@@ -695,9 +777,9 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
-  min-height: 76px;
+  min-height: 70px;
   margin: 0;
-  padding: 10px 8px;
+  padding: 8px;
   border: 0;
   border-radius: 15px;
   color: var(--text-normal);
@@ -719,16 +801,16 @@
 
 .doudou-library-edit-button {
   display: inline-flex;
-  flex: 0 0 42px;
+  flex: 0 0 32px;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  min-height: 42px;
-  margin: 0 3px 0 0;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--text-muted);
   background: transparent;
   box-shadow: none;
@@ -744,8 +826,19 @@
 }
 
 .doudou-library-edit-button svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+}
+
+.doudou-library-item-actions {
+  display: flex;
+  flex: 0 0 36px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 36px;
+  padding-right: 3px;
 }
 
 .doudou-library-item-main {
@@ -767,6 +860,12 @@
   font-size: 14px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  cursor: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-touch-callout: default;
+  touch-action: auto;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -775,8 +874,9 @@
   flex: 0 0 auto;
   align-self: flex-start;
   padding-top: 2px;
-  color: var(--text-faint);
+  color: color-mix(in srgb, var(--doudou-text-secondary) 72%, transparent);
   font-size: 11px;
+  font-weight: 400;
 }
 
 .doudou-modal {
@@ -1329,9 +1429,9 @@
 
 .doudou-library-image {
   position: relative;
-  flex: 0 0 64px;
-  width: 64px;
-  height: 64px;
+  flex: 0 0 60px;
+  width: 60px;
+  height: 60px;
   overflow: hidden;
   border: 1px solid var(--doudou-border);
   border-radius: 12px;
@@ -1478,6 +1578,16 @@
 }
 
 @media (hover: hover) {
+  .doudou-chat-copy-button {
+    opacity: 0;
+  }
+
+  .doudou-message-row-user:hover .doudou-chat-copy-button,
+  .doudou-chat-copy-button:focus-visible,
+  .doudou-chat-copy-button.doudou-is-feedback-visible {
+    opacity: 1;
+  }
+
   .doudou-library-item:hover {
     border-color: color-mix(in srgb, var(--doudou-accent) 34%, var(--doudou-border));
     box-shadow: var(--doudou-shadow);
@@ -1489,95 +1599,162 @@
   .doudou-header {
     grid-template-columns: minmax(44px, 1fr) minmax(0, 250px) minmax(40px, 1fr);
     gap: 6px;
-    min-height: 48px;
-    padding-inline: 9px;
+    min-height: 42px;
+    padding: max(4px, env(safe-area-inset-top)) 7px 4px;
   }
 
   .doudou-brand {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .doudou-page-tabs {
     width: 100%;
-    max-width: 250px;
+    max-width: 230px;
+    padding: 2px;
+    border-radius: 10px;
   }
 
   .doudou-page-tab {
-    min-height: 40px;
-    padding-inline: 9px;
+    min-height: 34px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .doudou-refresh-button {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 9px;
   }
 
   .doudou-messages {
-    padding: 14px 10px 8px;
+    padding: 12px 9px 6px;
   }
 
   .doudou-message-row-user {
-    padding-left: 12%;
+    padding-left: 9%;
   }
 
   .doudou-message-row-system {
-    padding-right: 12%;
+    gap: 5px;
+    padding-right: 9%;
   }
 
   .doudou-bubble {
+    padding: 7px 10px;
     font-size: 14px;
   }
 
+  .doudou-avatar {
+    flex-basis: 28px;
+    width: 28px;
+    height: 28px;
+  }
+
   .doudou-composer {
-    padding: 7px 7px max(
-      8px,
+    padding: 5px 6px max(
+      6px,
       env(safe-area-inset-bottom),
       var(--doudou-mobile-toolbar-offset)
     );
   }
 
   .doudou-composer-inner {
-    padding: 8px;
-    border-radius: 18px;
+    padding: 6px;
+    border-radius: 16px;
   }
 
   .doudou-category-button {
     flex: 1 1 0;
-    min-height: 40px;
-    padding-inline: 8px;
+    min-height: 34px;
+    padding: 3px 7px;
   }
 
   .doudou-icon-button,
   .doudou-send-button {
-    flex-basis: 40px;
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 11px;
   }
 
   .doudou-input-shell {
     gap: 2px;
-    padding-inline: 4px;
+    padding: 3px;
+    border-radius: 15px;
   }
 
   .doudou-textarea {
-    padding-inline: 5px;
+    min-height: 36px;
+    padding: 7px 5px 6px;
   }
 
   .doudou-library-controls {
-    padding: 10px 9px 8px;
+    padding: 8px 8px 6px;
   }
 
-  .doudou-library-list {
-    padding-inline: 9px;
+  .doudou-search-shell {
+    min-height: 38px;
+    padding-inline: 10px;
+    border-radius: 12px;
   }
 
-  .doudou-library-item-body {
-    min-height: 72px;
+  .doudou-search-input {
+    height: 36px;
+  }
+
+  .doudou-filter-button {
+    min-height: 32px;
+    padding-inline: 10px;
+  }
+
+  .doudou-filter-tag {
+    min-height: 28px;
     padding-inline: 8px;
   }
 
+  .doudou-library-list {
+    padding: 6px 8px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .doudou-library-item-body {
+    min-height: 64px;
+    gap: 9px;
+    padding: 7px;
+  }
+
   .doudou-library-edit-button {
-    flex-basis: 44px;
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-    margin-right: 0;
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .doudou-library-item-actions {
+    flex-basis: 38px;
+    width: 38px;
+  }
+
+  .doudou-library-copy-button {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .doudou-chat-copy-button {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .doudou-library-image {
+    flex-basis: 56px;
+    width: 56px;
+    height: 56px;
   }
 
   .doudou-modal {

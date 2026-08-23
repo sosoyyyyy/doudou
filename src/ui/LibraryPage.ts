@@ -15,6 +15,7 @@ import type {
 } from "../types";
 import { RecordDetailModal } from "./RecordDetailModal";
 import {
+  bindCopyButton,
   dateGroupLabel,
   formatTime,
   metaText,
@@ -247,10 +248,21 @@ export class LibraryPage extends Component {
     main.createDiv({ cls: "doudou-library-meta", text: metaText(record) });
     main.createDiv({
       cls: "doudou-library-preview",
-      text: preview
+      text: record.content.trim() ? record.content : "图片记录"
     });
     body.createDiv({ cls: "doudou-library-time", text: formatTime(record.created) });
-    body.addEventListener("click", () => {
+    body.addEventListener("click", (event) => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+        const selectedNode = selection.getRangeAt(0).commonAncestorContainer;
+        const selectedEl = selectedNode instanceof Element
+          ? selectedNode
+          : selectedNode.parentElement;
+        if (selectedEl && body.contains(selectedEl)) {
+          event.preventDefault();
+          return;
+        }
+      }
       new RecordDetailModal(
         this.app,
         this.dependencies,
@@ -258,7 +270,15 @@ export class LibraryPage extends Component {
         async () => this.refresh(false)
       ).open();
     });
-    const edit = item.createEl("button", {
+    const actions = item.createDiv({ cls: "doudou-library-item-actions" });
+    if (record.content.trim()) {
+      const copy = actions.createEl("button", {
+        cls: "doudou-copy-button doudou-library-copy-button",
+        attr: { type: "button", "aria-label": "复制全文", title: "复制全文" }
+      });
+      bindCopyButton(copy, record.content, setIcon);
+    }
+    const edit = actions.createEl("button", {
       cls: "doudou-library-edit-button",
       attr: { type: "button", "aria-label": `编辑记录：${preview}`, title: "编辑" }
     });

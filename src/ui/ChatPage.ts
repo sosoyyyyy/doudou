@@ -21,7 +21,7 @@ import {
 } from "./imageDraft";
 import { MobileTagPicker } from "./MobileTagPicker";
 import { TagPickerModal } from "./TagPickerModal";
-import { metaText } from "./uiHelpers";
+import { bindCopyButton, metaText } from "./uiHelpers";
 
 type SaveState = "saving" | "success" | "error";
 type AskState = "loading" | "success" | "error";
@@ -333,7 +333,15 @@ export class ChatPage extends Component {
       );
     }
     if (record.content) bubble.createDiv({ cls: "doudou-bubble-text", text: record.content });
-    row.createDiv({ cls: "doudou-message-meta", text: metaText(record) });
+    const meta = row.createDiv({ cls: "doudou-message-meta-row" });
+    meta.createDiv({ cls: "doudou-message-meta", text: metaText(record) });
+    if (record.content.trim()) {
+      const copy = meta.createEl("button", {
+        cls: "doudou-copy-button doudou-chat-copy-button",
+        attr: { type: "button", "aria-label": "复制全文", title: "复制全文" }
+      });
+      bindCopyButton(copy, record.content, setIcon);
+    }
   }
 
   private renderSaveStatus(container: HTMLElement, status: SessionStatus): void {

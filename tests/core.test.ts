@@ -25,7 +25,7 @@ import {
 } from "../src/services/recordSearch";
 import { RecordService } from "../src/services/RecordService";
 import type { StoredDoudouRecord } from "../src/types";
-import { metaText } from "../src/ui/uiHelpers";
+import { metaText, writeClipboardText } from "../src/ui/uiHelpers";
 
 class FakeVault {
   readonly files = new Map<string, { file: TFile; content: string }>();
@@ -388,6 +388,30 @@ test("search matches hidden AI tags without exposing them in UI metadata or tag 
   assert.equal(result.length, 1);
   assert.equal(metaText(record), "生活 · #日记");
   assert.deepEqual(collectTagOptions([record]).map((option) => option.name), ["日记"]);
+});
+
+test("clipboard copying preserves full record text exactly", async () => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const copied: string[] = [];
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      clipboard: {
+        writeText: async (text: string) => { copied.push(text); }
+      }
+    }
+  });
+  try {
+    const content = "第一段中文\n\nSecond paragraph 🙂 #原文标签";
+    await writeClipboardText(content);
+    assert.deepEqual(copied, [content]);
+  } finally {
+    if (originalNavigator) {
+      Object.defineProperty(globalThis, "navigator", originalNavigator);
+    } else {
+      delete (globalThis as { navigator?: Navigator }).navigator;
+    }
+  }
 });
 
 test("AI tag JSON validation cleans, deduplicates and limits tags", () => {

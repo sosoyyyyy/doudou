@@ -3,6 +3,7 @@ import { AiTagService } from "./src/ai/AiTagService";
 import { AskDoudouService } from "./src/ai/AskDoudouService";
 import { DeepSeekClient, DeepSeekError } from "./src/ai/DeepSeekClient";
 import { ImageService } from "./src/attachments/ImageService";
+import { FileService } from "./src/attachments/FileService";
 import { DOUDOU_VIEW_TYPE } from "./src/constants";
 import { DoudouRepository } from "./src/data/DoudouRepository";
 import { RecordService } from "./src/services/RecordService";
@@ -35,7 +36,8 @@ export default class DoudouPlugin extends Plugin {
     this.settings = normalizeSettings(await this.loadData());
     const repository = new DoudouRepository(this.app.vault);
     const imageService = new ImageService(this.app.vault);
-    const recordService = new RecordService(repository, imageService);
+    const fileService = new FileService(this.app.vault);
+    const recordService = new RecordService(repository, imageService, fileService);
     const clientProvider = (): DeepSeekClient | null => this.createDeepSeekClient();
     const aiTagService = new AiTagService(
       repository,
@@ -50,6 +52,7 @@ export default class DoudouPlugin extends Plugin {
         repository,
         recordService,
         imageService,
+        fileService,
         aiTagService,
         askService,
         openSettings: () => this.openSettings()

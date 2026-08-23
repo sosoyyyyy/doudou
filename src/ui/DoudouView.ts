@@ -2,6 +2,7 @@ import { ItemView, Platform, setIcon, WorkspaceLeaf, type App } from "obsidian";
 import type { AiTagService } from "../ai/AiTagService";
 import type { AskDoudouService } from "../ai/AskDoudouService";
 import type { ImageService } from "../attachments/ImageService";
+import type { FileService } from "../attachments/FileService";
 import { DOUDOU_VIEW_TYPE, VAULT_REFRESH_DEBOUNCE_MS } from "../constants";
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { RecordService } from "../services/RecordService";
@@ -16,6 +17,7 @@ export interface DoudouViewDependencies {
   repository: DoudouRepository;
   recordService: RecordService;
   imageService: ImageService;
+  fileService: FileService;
   aiTagService: AiTagService;
   askService: AskDoudouService;
   openSettings: () => void;

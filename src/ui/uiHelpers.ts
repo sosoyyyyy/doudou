@@ -29,7 +29,15 @@ export function metaText(record: DoudouRecord): string {
 export function recordTitle(record: DoudouRecord): string {
   if (record.title?.trim()) return record.title.trim();
   const firstLine = record.content.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
-  return firstLine || "图片记录";
+  if (firstLine) return firstLine;
+  if ((record.images?.length ?? 0) > 0) return "图片记录";
+  if ((record.files?.length ?? 0) > 0) return "附件记录";
+  return "空白记录";
+}
+
+export function attachmentCountText(record: DoudouRecord): string {
+  const count = record.files?.length ?? 0;
+  return count > 0 ? `📎 ${count}` : "";
 }
 
 export function formatDateTime(value: string): string {

@@ -13,6 +13,7 @@ import type {
 import {
   extractManualTags,
   extractFrontmatter,
+  normalizeAssetPaths,
   normalizeImagePaths,
   normalizeTags,
   recordFromFrontmatter,
@@ -24,6 +25,7 @@ export interface RecordChanges {
   content: string;
   folder: string;
   images?: string[];
+  files?: string[];
 }
 
 export function normalizeFolderName(value: string): string {
@@ -94,7 +96,9 @@ export class DoudouRepository {
     const normalizedRecord: DoudouRecord = {
       ...record,
       folder: normalizeFolderName(record.folder),
-      tags: extractManualTags(record.content)
+      tags: extractManualTags(record.content),
+      images: normalizeImagePaths(record.images ?? []),
+      files: normalizeAssetPaths(record.files ?? [])
     };
     const folder = buildRecordFolder(normalizedRecord.folder, normalizedRecord.created);
     await this.ensureFolder(folder);
@@ -135,6 +139,7 @@ export class DoudouRepository {
       folder: normalizeFolderName(changes.folder),
       tags: extractManualTags(changes.content),
       images: normalizeImagePaths(changes.images ?? current?.images ?? record.images ?? []),
+      files: normalizeAssetPaths(changes.files ?? current?.files ?? record.files ?? []),
       updated: new Date().toISOString(),
       path: targetPath
     };
@@ -243,7 +248,8 @@ export class DoudouRepository {
         title: record.title,
         content: record.content,
         folder: next,
-        images: record.images
+        images: record.images,
+        files: record.files
       });
     }
     const oldRoot = this.vault.getAbstractFileByPath(

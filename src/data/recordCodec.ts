@@ -1,4 +1,4 @@
-import { DEFAULT_FOLDER } from "../constants";
+import { DEFAULT_FOLDER, DOUDOU_ASSETS_FOLDER } from "../constants";
 import type { DoudouRecord, StoredDoudouRecord } from "../types";
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
@@ -40,6 +40,7 @@ export function serializeRecord(record: DoudouRecord): string {
   const tags = record.tags.map(yamlString).join(", ");
   const aiTags = (record.aiTags ?? []).map(yamlString).join(", ");
   const images = (record.images ?? []).map(yamlString).join(", ");
+  const files = (record.files ?? []).map(yamlString).join(", ");
   const frontmatter = [
     "---",
     `id: ${yamlString(record.id)}`,
@@ -50,6 +51,7 @@ export function serializeRecord(record: DoudouRecord): string {
     `tags: [${tags}]`,
     `ai_tags: [${aiTags}]`,
     `images: [${images}]`,
+    `files: [${files}]`,
     "---"
   ].join("\n");
   return `${frontmatter}\n\n${record.content}`;
@@ -100,18 +102,24 @@ export function recordFromFrontmatter(
     tags: normalizeTags(frontmatter.tags),
     aiTags: normalizeTags(frontmatter.ai_tags),
     images: normalizeImagePaths(frontmatter.images),
+    files: normalizeAssetPaths(frontmatter.files),
     content,
     path
   };
 }
 
 export function normalizeImagePaths(value: unknown): string[] {
+  return normalizeAssetPaths(value);
+}
+
+export function normalizeAssetPaths(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const paths = value
     .filter((path): path is string => typeof path === "string")
     .map((path) => path.trim().replace(/\\/g, "/"))
     .filter((path) =>
       path.length > 0 &&
+      path.startsWith(`${DOUDOU_ASSETS_FOLDER}/`) &&
       !path.startsWith("/") &&
       !/^[A-Za-z]:\//.test(path) &&
       !/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(path) &&

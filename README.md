@@ -1,4 +1,4 @@
-# 兜兜（doudou）0.4.0-beta.2
+# 兜兜（doudou）0.4.0-beta.3
 
 兜兜是一款带 AI 检索能力的图文备忘录 / 私人资料库 Obsidian 插件。Markdown 是唯一真实数据源；界面围绕“全部负责翻看、资料负责整理和查找、兜负责 AI 检索”组织。
 
@@ -8,6 +8,8 @@
 - “资料”以文件夹为首页；`全部资料`是虚拟系统文件夹，普通文件夹可自由新建、改名、删除。
 - 顶部 `＋` 新建备忘录，支持可选标题、正文、多图和所属文件夹。
 - 新建和编辑支持自定义“添加图片”按钮，也可在正文中直接粘贴剪贴板图片；图片统一进入保存前预览区。
+- 支持 PDF、Office、压缩包及其他普通文件附件；单文件上限 50 MB，与图片共用 `兜兜/assets/YYYY/MM/`，不解析或上传文件内容。
+- 完整备忘录按标题、信息、正文、图片、文件附件的顺序阅读；多图使用两列图库预览，点击查看完整原图。
 - 正文中的 `#标签` 会原样保留，并在保存时提取到 `tags`；中文、英文、数字和混合标签均受支持。
 - 点击任意卡片或 AI 来源进入同一套完整备忘录页面，默认阅读、图片完整显示，并可编辑、复制全文或删除。
 - 顶部“兜”打开临时 AI 检索工具，回答只基于真实记录，不持久化问答。
@@ -23,7 +25,7 @@
     YYYY/
       MM/
         <记录>.md
-  assets/
+  assets/                         图片和普通文件共用
     YYYY/
       MM/
         <图片>
@@ -41,6 +43,7 @@ folder: "喵布小铺"
 tags: ["淘宝", "定价"]
 ai_tags: ["商品定价", "亚克力周边"]
 images: ["兜兜/assets/2026/08/example-id-01.jpg"]
+files: ["兜兜/assets/2026/08/example-id-file-01-报价表.xlsx"]
 ---
 
 #淘宝 #定价
@@ -57,6 +60,7 @@ main.ts                         插件入口、View 注册与命令
 src/data/DoudouRepository.ts    记录与文件夹的新增、读取、移动、删除和缓存
 src/data/recordCodec.ts         新旧 Frontmatter 编解码与正文标签提取
 src/attachments/ImageService.ts Vault 图片写入、唯一路径和回收
+src/attachments/FileService.ts  Vault 普通文件写入、命名、大小限制和回收
 src/services/RecordService.ts   Markdown 与附件事务协调
 src/services/recordSearch.ts    title/content/folder/tags/ai_tags 搜索与 AI 候选评分
 src/ai/                         DeepSeek、hidden tags 与问兜兜

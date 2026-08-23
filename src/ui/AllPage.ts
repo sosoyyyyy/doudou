@@ -2,7 +2,7 @@ import { Component } from "obsidian";
 import type { ImageService } from "../attachments/ImageService";
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { StoredDoudouRecord } from "../types";
-import { previewText, recordTitle } from "./uiHelpers";
+import { attachmentCountText, previewText, recordTitle } from "./uiHelpers";
 
 export interface AllPageDependencies {
   repository: DoudouRepository;
@@ -49,8 +49,10 @@ export class AllPage extends Component {
     if (firstImage) { const resource = this.dependencies.imageService.resourcePath(firstImage); if (resource) button.createEl("img", { cls: "doudou-journal-image", attr: { src: resource, alt: "" } }); }
     const body = button.createDiv({ cls: "doudou-journal-body" });
     if (record.title?.trim()) body.createDiv({ cls: "doudou-journal-title", text: record.title });
-    body.createDiv({ cls: "doudou-journal-preview", text: previewText(record.content) || "图片记录" });
+    const attachmentText = attachmentCountText(record);
+    body.createDiv({ cls: "doudou-journal-preview", text: previewText(record.content) || ((record.images?.length ?? 0) > 0 ? "图片记录" : attachmentText ? `附件记录 · ${attachmentText} 个文件` : "空白记录") });
     body.createDiv({ cls: "doudou-journal-meta", text: `${time.format(new Date(record.created))} · ${record.folder}` });
+    if (attachmentText && record.content.trim()) body.createDiv({ cls: "doudou-card-attachment-count", text: attachmentText });
     button.addEventListener("click", () => this.dependencies.openRecord(record));
   }
 }

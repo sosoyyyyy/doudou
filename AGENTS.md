@@ -51,6 +51,13 @@
 3. 全部页可使用裁切大预览，文件夹页使用裁切小缩略图；完整备忘录默认按原始宽高比完整显示，不裁切。
 4. 编辑取消不删除原图；只有 Markdown 保存成功后才移除被删图片。删除记录时 Markdown 与绑定图片进入 Obsidian 回收站。
 
+## 普通文件附件
+
+1. 普通文件使用独立 `files` frontmatter 字段，与 `images` 分离，但物理存储继续共用 `兜兜/assets/YYYY/MM/`；不得自动拆分或迁移 assets 目录。
+2. 文件只通过 Obsidian Vault API 保存、打开和回收，不解析 PDF、Office、压缩包、音视频内容，也不将文件内容发送给 AI。
+3. 新选文件先停留在 UI pending 状态；取消不写 Vault，保存成功后才回收被移除的旧文件。删除记录必须处理 Markdown、images 和 files。
+4. 修改 folder 只移动 Markdown，不移动 images 或 files；文件名可参与本地检索，二进制内容不参与搜索。
+
 ## AI 与 API Key
 
 1. DeepSeek API 只能读取兜兜自己的插件设置；真实 API Key 不得进入源码、Markdown、README、日志、错误信息或 Git。

@@ -6,6 +6,13 @@ import { AiTagService } from "../src/ai/AiTagService";
 import { AskDoudouService } from "../src/ai/AskDoudouService";
 import { DeepSeekError, parseAiTags } from "../src/ai/DeepSeekClient";
 import { buildImagePath, ImageService, type ImageFileLike } from "../src/attachments/ImageService";
+import {
+  buildFilePath,
+  FileService,
+  MAX_ATTACHMENT_BYTES,
+  sanitizeAttachmentName,
+  type AttachmentFileLike
+} from "../src/attachments/FileService";
 import { ALL_RECORDS_FOLDER } from "../src/constants";
 import { buildRecordPath, DoudouRepository, isDoudouRecordPath, normalizeFolderName } from "../src/data/DoudouRepository";
 import { extractFrontmatter, extractManualTags, recordFromFrontmatter, serializeRecord } from "../src/data/recordCodec";
@@ -18,6 +25,7 @@ import {
   imageFilesFromClipboardItems,
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
+import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
 
 class FakeVault {
   readonly files = new Map<string, { file: TFile; content: string }>(); readonly folders = new Set<string>(); failNextModify = false; failNextRename = false;
@@ -38,8 +46,9 @@ class FakeVault {
   getResourcePath(file: TFile): string { return `app://vault/${file.path}`; }
 }
 
-function stored(overrides: Partial<StoredDoudouRecord> = {}): StoredDoudouRecord { return { id: "id-1", title: "猫咪日记", content: "今天记录一只猫 #日记", created: "2026-08-17T08:00:00.000Z", folder: "生活", tags: ["日记"], path: "兜兜/生活/2026/08/record.md", images: [], ...overrides }; }
+function stored(overrides: Partial<StoredDoudouRecord> = {}): StoredDoudouRecord { return { id: "id-1", title: "猫咪日记", content: "今天记录一只猫 #日记", created: "2026-08-17T08:00:00.000Z", folder: "生活", tags: ["日记"], path: "兜兜/生活/2026/08/record.md", images: [], files: [], ...overrides }; }
 function fakeImage(name: string, type: string, bytes = 4): ImageFileLike { return { name, type, arrayBuffer: async () => new ArrayBuffer(bytes) }; }
+function fakeAttachment(name: string, type: string, bytes = 12): AttachmentFileLike { return { name, type, size: bytes, arrayBuffer: async () => new ArrayBuffer(bytes) }; }
 function clipboardItem(
   kind: string,
   type: string,
@@ -102,6 +111,56 @@ test("new codec writes folder, title and extracted tags while keeping body hasht
   const markdown = serializeRecord(stored()); const extracted = extractFrontmatter(markdown); assert.ok(extracted); assert.equal(extracted.content, stored().content); assert.match(extracted.yaml, /title: "猫咪日记"/); assert.match(extracted.yaml, /folder: "生活"/); assert.doesNotMatch(extracted.yaml, /category:/);
 });
 
+test("file codec round-trips multiple files and deduplicates safe Vault paths", () => {
+  const record = stored({
+    files: [
+      "兜兜/assets/2026/08/id-file-01-报价表.xlsx",
+      "兜兜/assets/2026/08/id-file-02-说明.pdf"
+    ]
+  });
+  const markdown = serializeRecord(record);
+  const extracted = extractFrontmatter(markdown);
+  assert.ok(extracted);
+  assert.match(extracted.yaml, /files: \["兜兜\/assets\/2026\/08\/id-file-01-报价表.xlsx"/);
+  const parsed = recordFromFrontmatter({
+    id: record.id,
+    created: record.created,
+    folder: record.folder,
+    tags: [],
+    files: [
+      ...record.files!,
+      record.files![0],
+      "../outside.pdf",
+      "C:/absolute.pdf",
+      "其他目录/无关文件.pdf",
+      "https://example.com/file.pdf"
+    ]
+  }, record.content, record.path);
+  assert.deepEqual(parsed?.files, record.files);
+});
+
+test("old frontmatter without files parses files as an empty array", () => {
+  const parsed = recordFromFrontmatter({
+    id: "legacy-no-files",
+    created: "2026-08-17T08:00:00.000Z",
+    category: "生活",
+    images: []
+  }, "旧记录", "兜兜/2026/08/legacy.md");
+  assert.deepEqual(parsed?.files, []);
+});
+
+test("file paths keep a safe recognizable original name in the shared assets folder", () => {
+  assert.equal(sanitizeAttachmentName("../报:价*表?.xlsx"), "报-价-表-.xlsx");
+  assert.equal(
+    buildFilePath("record-id", "2026-08-17T08:00:00", 0, "报价表.xlsx"),
+    "兜兜/assets/2026/08/record-id-file-01-报价表.xlsx"
+  );
+  assert.doesNotMatch(
+    buildFilePath("../unsafe/id", "2026-08-17T08:00:00", 0, "../../secret.pdf"),
+    /\.\.|\\/
+  );
+});
+
 test("frontmatter prefers folder and falls back to old category", () => {
   const modern = recordFromFrontmatter({ id: "new", created: "2026-08-16T09:00:00.000Z", folder: "喵布小铺", category: "工作", title: "定价", tags: [] }, "正文", "兜兜/喵布小铺/2026/08/a.md"); assert.equal(modern?.folder, "喵布小铺"); assert.equal(modern?.title, "定价");
   const old = recordFromFrontmatter({ id: "old", created: "2026-08-16T09:00:00.000Z", category: "生活", tags: ["#待办"] }, "旧正文", "兜兜/2026/08/old.md"); assert.equal(old?.folder, "生活"); assert.deepEqual(old?.tags, ["待办"]);
@@ -123,8 +182,8 @@ test("repository creates, searches and lists custom folders", async () => {
   const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); await repository.createFolder("喵布小铺"); const record = repository.createRecord("7cm 立牌 #淘宝 #定价", "喵布小铺", "立牌价格"); const created = await repository.save(record); assert.match(created.path, /^兜兜\/喵布小铺\/\d{4}\/\d{2}\//); assert.deepEqual(created.tags, ["淘宝", "定价"]); assert.deepEqual(await repository.listFolders(), [{ name: "喵布小铺", count: 1 }]);
 });
 
-test("moving a record changes Markdown folder but never image paths", async () => {
-  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); const original = await repository.save({ ...repository.createRecord("正文", "生活"), images: ["兜兜/assets/2026/08/keep.jpg"] }); const name = original.path.split("/").at(-1)!; const moved = await repository.update(original, { title: "新标题", content: "修改 #标签", folder: "工作", images: original.images }); assert.equal(moved.path, buildRecordPath("工作", original.created, name)); assert.deepEqual(moved.images, original.images); assert.deepEqual(moved.tags, ["标签"]); assert.equal(vault.files.size, 1);
+test("moving a record changes Markdown folder but never attachment paths", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); const original = await repository.save({ ...repository.createRecord("正文", "生活"), images: ["兜兜/assets/2026/08/keep.jpg"], files: ["兜兜/assets/2026/08/keep.pdf"] }); const name = original.path.split("/").at(-1)!; const moved = await repository.update(original, { title: "新标题", content: "修改 #标签", folder: "工作", images: original.images, files: original.files }); assert.equal(moved.path, buildRecordPath("工作", original.created, name)); assert.deepEqual(moved.images, original.images); assert.deepEqual(moved.files, original.files); assert.deepEqual(moved.tags, ["标签"]); assert.equal(vault.files.size, 1);
 });
 
 test("editing legacy migrates only that Markdown without duplicates", async () => {
@@ -148,8 +207,9 @@ test("empty folders can be deleted while non-empty folders are protected", async
 });
 
 test("search covers title, content, tags, ai_tags and folder without exposing ai tags", () => {
-  const records = [stored({ title: "亚克力定价", content: "准备卖 13.9 #淘宝", folder: "喵布小铺", tags: ["淘宝"], aiTags: ["周边商品"] })];
-  for (const query of ["亚克力", "13.9", "#淘宝", "周边商品", "喵布小铺"]) assert.equal(filterRecords(records, { query, tags: new Set() }).length, 1);
+  const records = [stored({ title: "亚克力定价", content: "准备卖 13.9 #淘宝", folder: "喵布小铺", tags: ["淘宝"], aiTags: ["周边商品"], files: ["兜兜/assets/2026/08/id-file-01-2026报价表.xlsx"] })];
+  for (const query of ["亚克力", "13.9", "#淘宝", "周边商品", "喵布小铺", "报价表"]) assert.equal(filterRecords(records, { query, tags: new Set() }).length, 1);
+  assert.equal(filterRecords(records, { query: "assets", tags: new Set() }).length, 0);
   assert.equal(metaText(records[0]), "喵布小铺 · #淘宝"); assert.deepEqual(collectTagOptions(records).map((item) => item.name), ["淘宝"]);
 });
 
@@ -158,7 +218,7 @@ test("question ranking uses title, folder and hidden AI tags", () => {
 });
 
 test("record title falls back to first non-empty line then image record", () => {
-  assert.equal(recordTitle(stored()), "猫咪日记"); assert.equal(recordTitle(stored({ title: undefined, content: "\n第一行\n第二行" })), "第一行"); assert.equal(recordTitle(stored({ title: undefined, content: "" })), "图片记录");
+  assert.equal(recordTitle(stored()), "猫咪日记"); assert.equal(recordTitle(stored({ title: undefined, content: "\n第一行\n第二行" })), "第一行"); assert.equal(recordTitle(stored({ title: undefined, content: "", images: ["兜兜/assets/photo.png"] })), "图片记录"); assert.equal(recordTitle(stored({ title: undefined, content: "", files: ["兜兜/assets/file.pdf"] })), "附件记录");
 });
 
 test("AI tag validation keeps manual and hidden tags separate", () => {
@@ -178,15 +238,115 @@ test("image service preserves Vault-relative asset layout and unique paths", asy
 });
 
 test("editing removes old images only after Markdown update succeeds", async () => {
-  const vault = new FakeVault(); const images = new ImageService(vault as unknown as Vault); const old = "兜兜/assets/2026/08/old.jpg"; await vault.createBinary(old, new ArrayBuffer(2)); let passed: string[] = []; const service = new RecordService({ update: async (record: StoredDoudouRecord, changes: { images?: string[] }) => { passed = changes.images ?? []; return { ...record, images: passed }; } } as never, images); await service.update(stored({ images: [old] }), { content: "正文", folder: "生活" }, [], [old]); assert.deepEqual(passed, []); assert.equal(vault.files.has(old), false);
+  const vault = new FakeVault(); const images = new ImageService(vault as unknown as Vault); const old = "兜兜/assets/2026/08/old.jpg"; await vault.createBinary(old, new ArrayBuffer(2)); let passed: string[] = []; const service = new RecordService({ update: async (record: StoredDoudouRecord, changes: { images?: string[] }) => { passed = changes.images ?? []; return { ...record, images: passed }; } } as never, images, new FileService(vault as unknown as Vault)); await service.update(stored({ images: [old] }), { content: "正文", folder: "生活" }, [], [old]); assert.deepEqual(passed, []); assert.equal(vault.files.has(old), false);
 });
 
 test("failed Markdown creation cleans newly saved images", async () => {
-  const vault = new FakeVault(); const service = new RecordService({ save: async () => { throw new Error("failed"); } } as never, new ImageService(vault as unknown as Vault)); await assert.rejects(() => service.create(stored(), [fakeImage("a.png", "image/png")])); assert.equal(vault.files.size, 0);
+  const vault = new FakeVault(); const service = new RecordService({ save: async () => { throw new Error("failed"); } } as never, new ImageService(vault as unknown as Vault), new FileService(vault as unknown as Vault)); await assert.rejects(() => service.create(stored(), [fakeImage("a.png", "image/png")])); assert.equal(vault.files.size, 0);
 });
 
-test("deleting a record trashes its Markdown and bound images", async () => {
-  const vault = new FakeVault(); const path = "兜兜/assets/2026/08/a.png"; await vault.createBinary(path, new ArrayBuffer(2)); let deleted = false; const service = new RecordService({ delete: async () => { deleted = true; } } as never, new ImageService(vault as unknown as Vault)); await service.delete(stored({ images: [path] })); assert.equal(deleted, true); assert.equal(vault.files.has(path), false);
+test("deleting a record trashes its Markdown, images and ordinary files", async () => {
+  const vault = new FakeVault(); const imagePath = "兜兜/assets/2026/08/a.png"; const filePath = "兜兜/assets/2026/08/a-file-01-报价表.xlsx"; await vault.createBinary(imagePath, new ArrayBuffer(2)); await vault.createBinary(filePath, new ArrayBuffer(3)); let deleted = false; const service = new RecordService({ delete: async () => { deleted = true; } } as never, new ImageService(vault as unknown as Vault), new FileService(vault as unknown as Vault)); await service.delete(stored({ images: [imagePath], files: [filePath] })); assert.equal(deleted, true); assert.equal(vault.files.has(imagePath), false); assert.equal(vault.files.has(filePath), false);
+});
+
+test("record service creates a pure-file record without writing before save", async () => {
+  const vault = new FakeVault();
+  const repository = new DoudouRepository(vault as unknown as Vault);
+  const service = new RecordService(
+    repository,
+    new ImageService(vault as unknown as Vault),
+    new FileService(vault as unknown as Vault)
+  );
+  const draftFile = fakeAttachment("报价表.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  const pending = createPendingFiles([draftFile as File]);
+  assert.equal(vault.files.size, 0);
+  const created = await service.create(
+    repository.createRecord("", "工作"),
+    [],
+    pending.map((item) => item.file)
+  );
+  assert.equal(created.files?.length, 1);
+  assert.match(created.files?.[0] ?? "", /-file-01-报价表\.xlsx$/);
+});
+
+test("record service creates a record containing both image and ordinary file", async () => {
+  const vault = new FakeVault();
+  const repository = new DoudouRepository(vault as unknown as Vault);
+  const service = new RecordService(repository, new ImageService(vault as unknown as Vault), new FileService(vault as unknown as Vault));
+  const created = await service.create(
+    repository.createRecord("图文附件", "生活"),
+    [fakeImage("photo.png", "image/png")],
+    [fakeAttachment("说明.pdf", "application/pdf")]
+  );
+  assert.equal(created.images?.length, 1);
+  assert.equal(created.files?.length, 1);
+});
+
+test("record updates add and remove files only after Markdown succeeds", async () => {
+  const vault = new FakeVault();
+  const repository = new DoudouRepository(vault as unknown as Vault);
+  const service = new RecordService(repository, new ImageService(vault as unknown as Vault), new FileService(vault as unknown as Vault));
+  const original = await service.create(repository.createRecord("正文", "生活"), [], [fakeAttachment("旧文件.txt", "text/plain")]);
+  const oldPath = original.files?.[0] ?? "";
+  const updated = await service.update(original, { content: "正文", folder: "工作" }, [], [], [fakeAttachment("新文件.pdf", "application/pdf")], [oldPath]);
+  assert.equal(updated.files?.length, 1);
+  assert.match(updated.files?.[0] ?? "", /新文件\.pdf$/);
+  assert.equal(vault.files.has(oldPath), false);
+  assert.match(updated.path, /^兜兜\/工作\//);
+  assert.match(updated.files?.[0] ?? "", /^兜兜\/assets\//);
+});
+
+test("failed record update keeps old file and cleans only newly created file", async () => {
+  const vault = new FakeVault();
+  const oldPath = "兜兜/assets/2026/08/id-file-01-old.txt";
+  await vault.createBinary(oldPath, new ArrayBuffer(2));
+  const service = new RecordService(
+    { update: async () => { throw new Error("Markdown failed"); } } as never,
+    new ImageService(vault as unknown as Vault),
+    new FileService(vault as unknown as Vault)
+  );
+  await assert.rejects(() => service.update(
+    stored({ files: [oldPath] }),
+    { content: "正文", folder: "生活" },
+    [],
+    [],
+    [fakeAttachment("new.pdf", "application/pdf")],
+    [oldPath]
+  ));
+  assert.equal(vault.files.has(oldPath), true);
+  assert.equal([...vault.files.keys()].some((path) => path.endsWith("new.pdf")), false);
+});
+
+test("failed Markdown create cleans both new images and new files", async () => {
+  const vault = new FakeVault();
+  const service = new RecordService(
+    { save: async () => { throw new Error("Markdown failed"); } } as never,
+    new ImageService(vault as unknown as Vault),
+    new FileService(vault as unknown as Vault)
+  );
+  await assert.rejects(() => service.create(
+    stored(),
+    [fakeImage("photo.png", "image/png")],
+    [fakeAttachment("document.pdf", "application/pdf")]
+  ));
+  assert.equal(vault.files.size, 0);
+});
+
+test("file service rejects attachments larger than 50 MB without leaving files", async () => {
+  const vault = new FakeVault();
+  const files = new FileService(vault as unknown as Vault);
+  await assert.rejects(() => files.saveFiles("id", "2026-08-17T08:00:00", [
+    fakeAttachment("huge.zip", "application/zip", MAX_ATTACHMENT_BYTES + 1)
+  ]));
+  assert.equal(vault.files.size, 0);
+});
+
+test("savable draft accepts title, pure file, image plus file and text plus file", () => {
+  assert.equal(hasSavableRecordDraft("", "", 0, 1), true);
+  assert.equal(hasSavableRecordDraft("", "", 1, 1), true);
+  assert.equal(hasSavableRecordDraft("", "正文", 0, 1), true);
+  assert.equal(hasSavableRecordDraft("只有标题", "", 0, 0), true);
+  assert.equal(hasSavableRecordDraft("", "", 0, 0), false);
 });
 
 test("clipboard preserves full text exactly", async () => {

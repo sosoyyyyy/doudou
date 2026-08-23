@@ -8,6 +8,7 @@ export interface DoudouRecord {
   tags: string[];
   aiTags?: string[];
   images?: string[];
+  files?: string[];
 }
 
 export interface StoredDoudouRecord extends DoudouRecord {

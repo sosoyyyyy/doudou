@@ -61,8 +61,26 @@
 .doudou-record-menu button { margin: 0; border: 0; text-align: left; background: transparent; box-shadow: none; }
 .doudou-menu-danger { color: var(--text-error) !important; }
 .doudou-record-article h1 { margin: 10px 0 6px; font-size: 28px; }
-.doudou-record-full-image { display: block; width: 100%; height: auto; margin: 18px 0; border-radius: 14px; object-fit: contain; }
+.doudou-view .doudou-record-images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; margin-top: 20px; }
+.doudou-view .doudou-record-images-single { grid-template-columns: minmax(0, 1fr); }
+.doudou-view button.doudou-record-image-button { display: flex; align-items: center; justify-content: center; width: 100%; height: auto; min-height: 0; max-height: none; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 14px; line-height: normal; white-space: normal; background: var(--doudou-surface); box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view .doudou-record-full-image { display: block; width: 100%; height: auto; max-height: 350px; margin: 0; border-radius: 13px; object-fit: contain; }
+.doudou-view .doudou-record-images:not(.doudou-record-images-single) .doudou-record-full-image { height: min(240px, 30vw); min-height: 150px; object-fit: contain; }
 .doudou-record-content { margin-top: 18px; font-family: var(--font-text); font-size: 16px; line-height: 1.75; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+.doudou-view .doudou-record-files { margin-top: 24px; }
+.doudou-view .doudou-record-files h2 { margin: 0 0 10px; font-size: 16px; }
+.doudou-view .doudou-record-file-list, .doudou-view .doudou-editor-files { display: grid; gap: 8px; width: 100%; min-width: 0; }
+.doudou-view .doudou-editor-files { margin-top: 2px; }
+.doudou-view .doudou-file-card, .doudou-view button.doudou-file-card { display: flex; align-items: center; gap: 10px; width: 100%; height: auto; min-width: 0; min-height: 58px; max-height: none; margin: 0; padding: 9px 11px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 12px; color: var(--text-normal); line-height: normal; text-align: left; white-space: normal; background: var(--doudou-surface); box-shadow: none; appearance: none; }
+.doudou-view button.doudou-file-card-open { cursor: pointer; touch-action: manipulation; }
+.doudou-view .doudou-file-card-icon { display: inline-flex; flex: 0 0 34px; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; color: var(--doudou-blue-strong); background: var(--doudou-blue-soft); }
+.doudou-view .doudou-file-card-main { flex: 1 1 0%; min-width: 0; overflow: hidden; }
+.doudou-view .doudou-file-card-name { overflow: hidden; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; text-overflow: ellipsis; white-space: nowrap; }
+.doudou-view .doudou-file-card-meta { margin-top: 3px; color: var(--doudou-muted); font-size: 12px; line-height: 1.3; }
+.doudou-view .doudou-file-card-chevron { flex: 0 0 auto; color: var(--doudou-muted); font-size: 20px; }
+.doudou-view button.doudou-file-card-remove { display: inline-flex; flex: 0 0 36px; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 50%; color: var(--doudou-muted); font-size: 20px; line-height: 1; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view button.doudou-add-file-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; height: auto; min-height: 46px; max-height: none; margin: 0; padding: 8px 12px; overflow: visible; border: 1px dashed var(--doudou-blue); border-radius: 12px; color: var(--doudou-blue-strong); line-height: normal; white-space: normal; background: var(--doudou-blue-soft); box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view .doudou-card-attachment-count { margin-top: 7px; color: var(--doudou-muted); font-size: 12px; }
 .doudou-editor { display: grid; gap: 12px; }
 .doudou-view input.doudou-title-input, .doudou-view textarea.doudou-editor-content, .doudou-view .doudou-editor-folder select, .doudou-modal .doudou-modal-content input, .doudou-modal .doudou-modal-content textarea { display: block; width: 100%; height: auto; max-height: none; margin: 0; padding: 10px 12px; border: 1px solid var(--doudou-border); border-radius: 12px; line-height: 1.5; white-space: normal; background: var(--doudou-surface); appearance: none; }
 .doudou-view input.doudou-title-input { min-height: 46px; font-size: 19px; font-weight: 680; }
@@ -91,5 +109,8 @@
   .doudou-view button.doudou-header-tool { width: 34px; height: 34px; min-height: 34px; }
   .doudou-page-tab { padding-inline: 7px; }
   .doudou-brand { font-size: 15px; }
+  .doudou-view .doudou-record-full-image { max-height: 32vh; }
+  .doudou-view .doudou-record-images:not(.doudou-record-images-single) .doudou-record-full-image { height: 28vh; min-height: 120px; max-height: 220px; }
+  .doudou-view .doudou-file-card-name { white-space: normal; }
 }
 @media (hover: hover) { .doudou-journal-card:hover, .doudou-compact-card:hover, .doudou-folder-open:hover { border-color: color-mix(in srgb, var(--doudou-blue) 38%, var(--doudou-border)); background: color-mix(in srgb, var(--doudou-blue) 3%, var(--doudou-surface)); } }

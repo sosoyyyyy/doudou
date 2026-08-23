@@ -5,6 +5,10 @@ import type {
   TagOption
 } from "../types";
 
+function attachmentFileNames(record: StoredDoudouRecord): string[] {
+  return (record.files ?? []).map((path) => path.replace(/\\/g, "/").split("/").at(-1) ?? "");
+}
+
 function normalized(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
@@ -40,6 +44,7 @@ export function rankRecordsForQuestion(
       const aiTags = (record.aiTags ?? []).map(normalized);
       const title = normalized(record.title ?? "");
       const folder = normalized(record.folder);
+      const fileNames = attachmentFileNames(record).map(normalized);
       let score = 0;
       for (const term of terms) {
         if (aiTags.some((tag) => tag.includes(term) || term.includes(tag))) score += 9;
@@ -47,6 +52,7 @@ export function rankRecordsForQuestion(
         if (content.includes(term)) score += term.length >= 4 ? 7 : 3;
         if (title.includes(term)) score += 10;
         if (folder.includes(term)) score += 2;
+        if (fileNames.some((file) => file.includes(term))) score += 4;
       }
       return { record, score };
     })
@@ -71,7 +77,8 @@ export function filterRecords(
 
     const manualTagText = record.tags.flatMap((tag) => [tag, `#${tag}`]).join(" ");
     const hiddenTagText = (record.aiTags ?? []).join(" ");
-    const haystack = `${record.title ?? ""}\n${record.content}\n${record.folder}\n${manualTagText}\n${hiddenTagText}`
+    const fileNameText = attachmentFileNames(record).join("\n");
+    const haystack = `${record.title ?? ""}\n${record.content}\n${record.folder}\n${manualTagText}\n${hiddenTagText}\n${fileNameText}`
       .toLocaleLowerCase();
     return haystack.includes(query);
   });

@@ -6,6 +6,7 @@ export const ALL_RECORDS_FOLDER = "全部资料";
 export const SEARCH_DEBOUNCE_MS = 160;
 export const VAULT_REFRESH_DEBOUNCE_MS = 240;
 export const DOUDOU_ASSETS_FOLDER = `${DOUDOU_DATA_FOLDER}/assets`;
+export const DOUDOU_SHARED_CONFIG_PATH = `${DOUDOU_DATA_FOLDER}/.doudou.json`;
 export const AI_TAG_LIMIT = 8;
 export const AI_TAG_MAX_LENGTH = 24;
 export const ASK_CANDIDATE_LIMIT = 12;

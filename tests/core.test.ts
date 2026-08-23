@@ -15,12 +15,13 @@ import {
   sanitizeAttachmentName,
   type AttachmentFileLike
 } from "../src/attachments/FileService";
-import { ALL_RECORDS_FOLDER } from "../src/constants";
+import { ALL_RECORDS_FOLDER, DOUDOU_SHARED_CONFIG_PATH } from "../src/constants";
 import { buildRecordPath, DoudouRepository, isDoudouRecordPath, normalizeFolderName } from "../src/data/DoudouRepository";
 import { extractFrontmatter, extractManualTags, recordFromFrontmatter, serializeRecord } from "../src/data/recordCodec";
 import { collectTagOptions, filterRecords, rankRecordsForQuestion } from "../src/services/recordSearch";
 import { RecordService } from "../src/services/RecordService";
 import { FolderService, normalizeFolderOrder } from "../src/services/FolderService";
+import { parseSharedDoudouConfig, VaultFolderOrderStore } from "../src/services/VaultFolderOrderStore";
 import { normalizeSettings } from "../src/settings/settings";
 import type { StoredDoudouRecord } from "../src/types";
 import { libraryCardContent, metaText, recordTitle, writeClipboardText } from "../src/ui/uiHelpers";
@@ -56,16 +57,16 @@ function cssDeclarations(selector: string): string {
 }
 
 class FakeVault {
-  readonly files = new Map<string, { file: TFile; content: string }>(); readonly binaries = new Map<string, ArrayBuffer>(); readonly folders = new Set<string>(); failNextModify = false; failNextRename = false;
+  readonly files = new Map<string, { file: TFile; content: string }>(); readonly binaries = new Map<string, ArrayBuffer>(); readonly folders = new Set<string>(); readonly writeCounts = new Map<string, number>(); failNextModify = false; failNextRename = false;
   getMarkdownFiles(): TFile[] { return [...this.files.values()].map((entry) => entry.file); }
   getAllLoadedFiles(): Array<TFile | { path: string }> { return [...this.files.values()].map((entry) => entry.file).concat([...this.folders].map((path) => ({ path })) as TFile[]); }
   getAbstractFileByPath(path: string): TFile | { path: string } | null { return this.files.get(path)?.file ?? (this.folders.has(path) ? { path } : null); }
   async createFolder(path: string): Promise<void> { this.folders.add(path); }
-  async create(path: string, content: string): Promise<TFile> { const file = new TFile(path); this.files.set(path, { file, content }); return file; }
+  async create(path: string, content: string): Promise<TFile> { const file = new TFile(path); this.files.set(path, { file, content }); this.writeCounts.set(path, (this.writeCounts.get(path) ?? 0) + 1); return file; }
   async createBinary(path: string, content: ArrayBuffer): Promise<TFile> { const file = await this.create(path, `binary:${content.byteLength}`); this.binaries.set(path, content.slice(0)); return file; }
   async readBinary(file: TFile): Promise<ArrayBuffer> { const content = this.binaries.get(file.path); if (!content) throw new Error("Missing fake binary"); return content.slice(0); }
   async cachedRead(file: TFile): Promise<string> { const entry = this.files.get(file.path); if (!entry) throw new Error("Missing fake file"); return entry.content; }
-  async modify(file: TFile, content: string): Promise<void> { if (this.failNextModify) { this.failNextModify = false; throw new Error("modify failed"); } this.files.set(file.path, { file, content }); }
+  async modify(file: TFile, content: string): Promise<void> { if (this.failNextModify) { this.failNextModify = false; throw new Error("modify failed"); } this.files.set(file.path, { file, content }); this.writeCounts.set(file.path, (this.writeCounts.get(file.path) ?? 0) + 1); }
   async rename(item: TFile | { path: string }, path: string): Promise<void> {
     if (this.failNextRename) { this.failNextRename = false; throw new Error("rename failed"); }
     if (item instanceof TFile) { const oldPath = item.path; const entry = this.files.get(oldPath); if (!entry || this.files.has(path)) throw new Error("rename failed"); this.files.delete(oldPath); const binary = this.binaries.get(oldPath); this.binaries.delete(oldPath); item.path = path; this.files.set(path, entry); if (binary) this.binaries.set(path, binary); return; }
@@ -73,6 +74,7 @@ class FakeVault {
   }
   async trash(item: TFile | { path: string }): Promise<void> { if (item instanceof TFile) { this.files.delete(item.path); this.binaries.delete(item.path); } else this.folders.delete(item.path); }
   getResourcePath(file: TFile): string { return `app://vault/${file.path}`; }
+  writeCount(path: string): number { return this.writeCounts.get(path) ?? 0; }
 }
 
 function stored(overrides: Partial<StoredDoudouRecord> = {}): StoredDoudouRecord { return { id: "id-1", title: "猫咪日记", content: "今天记录一只猫 #日记", created: "2026-08-17T08:00:00.000Z", folder: "生活", tags: ["日记"], path: "兜兜/生活/2026/08/record.md", images: [], files: [], ...overrides }; }
@@ -235,33 +237,55 @@ test("old settings safely initialize an empty folder order", () => {
   assert.deepEqual(normalizeSettings({ folderOrder: [" 日记 ", "日记", 42] }).folderOrder, ["日记"]);
 });
 
-test("folder service uses only real Vault folders and excludes assets everywhere", async () => {
-  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault);
-  await repository.createFolder("副业"); await repository.createFolder("日记"); await vault.createFolder("兜兜/assets");
-  let folderOrder = ["生活", "副业", "日记", "assets"];
-  const service = new FolderService(repository, () => folderOrder, async (next) => { folderOrder = next; });
-  const library = (await service.listFolders()).map((folder) => folder.name);
-  const createSelector = await service.folderNames(); const editSelector = await service.folderNames();
-  assert.deepEqual(library, ["副业", "日记"]); assert.deepEqual(createSelector, library); assert.deepEqual(editSelector, library); assert.deepEqual(folderOrder, library);
-});
-
-test("custom folder order persists across service instances", async () => {
+test("folder service migrates the old local order into shared Vault config", async () => {
   const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault);
   for (const name of ["副业", "日记", "小说"]) await repository.createFolder(name);
-  let folderOrder: string[] = [];
-  const createService = () => new FolderService(repository, () => folderOrder, async (next) => { folderOrder = next; });
-  await createService().setOrder(["小说", "日记", "副业"]);
-  assert.deepEqual(await createService().folderNames(), ["小说", "日记", "副业"]);
+  let legacyOrder = ["小说", "日记", "副业"]; let cleared = false;
+  const service = new FolderService(repository, new VaultFolderOrderStore(vault as unknown as Vault), () => legacyOrder, async () => { legacyOrder = []; cleared = true; });
+  assert.deepEqual(await service.folderNames(), ["小说", "日记", "副业"]);
+  const config = vault.files.get(DOUDOU_SHARED_CONFIG_PATH)?.content ?? "";
+  assert.deepEqual(parseSharedDoudouConfig(config), { folderOrder: ["小说", "日记", "副业"] });
+  assert.equal(cleared, true); assert.deepEqual(legacyOrder, []);
 });
 
-test("new, deleted and renamed folders reconcile without disturbing existing order", async () => {
-  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault);
-  for (const name of ["副业", "日记"]) await repository.createFolder(name);
-  let folderOrder = ["日记", "副业"];
-  const service = new FolderService(repository, () => folderOrder, async (next) => { folderOrder = next; });
-  await service.createFolder("小说"); assert.deepEqual(folderOrder, ["日记", "副业", "小说"]);
-  await service.renameFolder("副业", "摘抄"); assert.deepEqual(folderOrder, ["日记", "摘抄", "小说"]);
-  await service.deleteFolder("日记"); assert.deepEqual(folderOrder, ["摘抄", "小说"]); assert.deepEqual(await service.folderNames(), folderOrder);
+test("shared Vault order takes priority over stale local settings", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); for (const name of ["副业", "小说"]) await repository.createFolder(name);
+  const store = new VaultFolderOrderStore(vault as unknown as Vault); await store.write(["小说", "副业"]); let legacyOrder = ["副业", "小说"];
+  const service = new FolderService(repository, store, () => legacyOrder, async () => { legacyOrder = []; });
+  assert.deepEqual(await service.folderNames(), ["小说", "副业"]); assert.deepEqual(legacyOrder, []);
+});
+
+test("shared order removes deleted folders, excludes assets and appends new folders", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); for (const name of ["日常杂乱", "小说", "摘抄"]) await repository.createFolder(name); await vault.createFolder("兜兜/assets");
+  const store = new VaultFolderOrderStore(vault as unknown as Vault); await store.write(["日常杂乱", "日记", "小说", "assets"]); const service = new FolderService(repository, store);
+  const library = (await service.listFolders()).map((folder) => folder.name); const createSelector = await service.folderNames(); const editSelector = await service.folderNames();
+  assert.deepEqual(library, ["日常杂乱", "小说", "摘抄"]); assert.deepEqual(createSelector, library); assert.deepEqual(editSelector, library); assert.deepEqual(await store.read(), library);
+});
+
+test("custom shared order persists across service instances", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); for (const name of ["副业", "日记", "小说"]) await repository.createFolder(name); const store = new VaultFolderOrderStore(vault as unknown as Vault);
+  await new FolderService(repository, store).setOrder(["小说", "日记", "副业"]);
+  assert.deepEqual(await new FolderService(repository, store).folderNames(), ["小说", "日记", "副业"]);
+});
+
+test("new, deleted and renamed folders update shared order without disturbing positions", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); for (const name of ["副业", "日记"]) await repository.createFolder(name); const store = new VaultFolderOrderStore(vault as unknown as Vault); await store.write(["日记", "副业"]); const service = new FolderService(repository, store);
+  await service.createFolder("小说"); assert.deepEqual(await store.read(), ["日记", "副业", "小说"]);
+  await service.renameFolder("副业", "摘抄"); assert.deepEqual(await store.read(), ["日记", "摘抄", "小说"]);
+  await service.deleteFolder("日记"); assert.deepEqual(await store.read(), ["摘抄", "小说"]); assert.deepEqual(await service.folderNames(), ["摘抄", "小说"]);
+});
+
+test("externally modified shared order is read on refresh without a write loop", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); for (const name of ["日记", "摘抄", "小说"]) await repository.createFolder(name); const store = new VaultFolderOrderStore(vault as unknown as Vault); await store.write(["小说", "日记", "摘抄"]); const service = new FolderService(repository, store);
+  const configFile = vault.getAbstractFileByPath(DOUDOU_SHARED_CONFIG_PATH); assert.ok(configFile instanceof TFile);
+  await vault.modify(configFile, JSON.stringify({ folderOrder: ["日记", "摘抄", "小说"] })); const writesAfterExternalSync = vault.writeCount(DOUDOU_SHARED_CONFIG_PATH);
+  assert.equal(repository.isDoudouPath(DOUDOU_SHARED_CONFIG_PATH), true); assert.deepEqual(await service.folderNames(), ["日记", "摘抄", "小说"]); assert.equal(vault.writeCount(DOUDOU_SHARED_CONFIG_PATH), writesAfterExternalSync);
+  await service.folderNames(); assert.equal(vault.writeCount(DOUDOU_SHARED_CONFIG_PATH), writesAfterExternalSync);
+});
+
+test("shared internal config never becomes a record, folder or search result", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); await repository.createFolder("小说"); const store = new VaultFolderOrderStore(vault as unknown as Vault); await store.write(["小说"]);
+  assert.equal(isDoudouRecordPath(DOUDOU_SHARED_CONFIG_PATH), false); assert.deepEqual(await repository.loadAll(), []); assert.deepEqual(await repository.listFolders(), [{ name: "小说", count: 0 }]); assert.deepEqual(filterRecords(await repository.loadAll(), { query: "folderOrder", tags: new Set() }), []);
 });
 
 test("moving a record changes Markdown folder but never attachment paths", async () => {

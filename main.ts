@@ -8,6 +8,7 @@ import { DOUDOU_VIEW_TYPE } from "./src/constants";
 import { DoudouRepository } from "./src/data/DoudouRepository";
 import { RecordService } from "./src/services/RecordService";
 import { FolderService } from "./src/services/FolderService";
+import { VaultFolderOrderStore } from "./src/services/VaultFolderOrderStore";
 import { DoudouSettingTab } from "./src/settings/DoudouSettingTab";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./src/settings/settings";
 import type { DoudouSettings } from "./src/types";
@@ -41,9 +42,11 @@ export default class DoudouPlugin extends Plugin {
     const recordService = new RecordService(repository, imageService, fileService);
     const folderService = new FolderService(
       repository,
+      new VaultFolderOrderStore(this.app.vault),
       () => this.settings.folderOrder,
-      async (folderOrder) => {
-        this.settings.folderOrder = folderOrder;
+      async () => {
+        if (this.settings.folderOrder.length === 0) return;
+        this.settings.folderOrder = [];
         await this.saveSettings();
       }
     );

@@ -1,6 +1,11 @@
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { FolderSummary } from "../types";
 
+export interface FolderOrderStore {
+  read(): Promise<string[] | null>;
+  write(folderOrder: readonly string[]): Promise<boolean>;
+}
+
 export function normalizeFolderOrder(
   actualFolders: readonly string[],
   savedOrder: readonly string[]
@@ -32,14 +37,22 @@ function sameOrder(left: readonly string[], right: readonly string[]): boolean {
 export class FolderService {
   constructor(
     private readonly repository: DoudouRepository,
-    private readonly readSavedOrder: () => readonly string[],
-    private readonly writeSavedOrder: (folderOrder: string[]) => Promise<void>
+    private readonly orderStore: FolderOrderStore,
+    private readonly readLegacyOrder: () => readonly string[] = () => [],
+    private readonly clearLegacyOrder: () => Promise<void> = async () => {}
   ) {}
 
   async listFolders(): Promise<FolderSummary[]> {
     const actual = await this.repository.listFolders();
-    const order = normalizeFolderOrder(actual.map((folder) => folder.name), this.readSavedOrder());
-    if (!sameOrder(order, this.readSavedOrder())) await this.writeSavedOrder(order);
+    const sharedOrder = await this.orderStore.read();
+    const order = normalizeFolderOrder(
+      actual.map((folder) => folder.name),
+      sharedOrder ?? this.readLegacyOrder()
+    );
+    if (sharedOrder === null || !sameOrder(order, sharedOrder)) {
+      await this.orderStore.write(order);
+    }
+    await this.clearLegacyOrder();
     const byName = new Map(actual.map((folder) => [folder.name, folder]));
     return order.map((name) => byName.get(name)).filter((folder): folder is FolderSummary => Boolean(folder));
   }
@@ -51,7 +64,8 @@ export class FolderService {
   async setOrder(requestedOrder: readonly string[]): Promise<string[]> {
     const actual = await this.repository.listFolders();
     const order = normalizeFolderOrder(actual.map((folder) => folder.name), requestedOrder);
-    await this.writeSavedOrder(order);
+    await this.orderStore.write(order);
+    await this.clearLegacyOrder();
     return order;
   }
 
@@ -61,16 +75,22 @@ export class FolderService {
   }
 
   async renameFolder(previousName: string, nextName: string): Promise<void> {
+    const sharedOrder = await this.orderStore.read();
     await this.repository.renameFolder(previousName, nextName);
-    const saved = this.readSavedOrder().map((name) => name === previousName ? nextName.trim() : name);
+    const saved = (sharedOrder ?? this.readLegacyOrder()).map((name) =>
+      name === previousName ? nextName.trim() : name
+    );
     const actual = await this.repository.listFolders();
-    await this.writeSavedOrder(normalizeFolderOrder(actual.map((folder) => folder.name), saved));
+    await this.orderStore.write(normalizeFolderOrder(actual.map((folder) => folder.name), saved));
+    await this.clearLegacyOrder();
   }
 
   async deleteFolder(name: string): Promise<void> {
+    const sharedOrder = await this.orderStore.read();
     await this.repository.deleteFolder(name);
     const actual = await this.repository.listFolders();
-    const saved = this.readSavedOrder().filter((folder) => folder !== name);
-    await this.writeSavedOrder(normalizeFolderOrder(actual.map((folder) => folder.name), saved));
+    const saved = (sharedOrder ?? this.readLegacyOrder()).filter((folder) => folder !== name);
+    await this.orderStore.write(normalizeFolderOrder(actual.map((folder) => folder.name), saved));
+    await this.clearLegacyOrder();
   }
 }

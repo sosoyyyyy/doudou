@@ -3,7 +3,7 @@ import type { AiTagService } from "../ai/AiTagService";
 import type { AskDoudouService } from "../ai/AskDoudouService";
 import type { ImageService } from "../attachments/ImageService";
 import type { FileService } from "../attachments/FileService";
-import { DOUDOU_VIEW_TYPE, VAULT_REFRESH_DEBOUNCE_MS } from "../constants";
+import { DOUDOU_VIEW_TYPE, RECENT_PAGE_LABEL, VAULT_REFRESH_DEBOUNCE_MS } from "../constants";
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { RecordService } from "../services/RecordService";
 import type { FolderService } from "../services/FolderService";
@@ -36,7 +36,7 @@ export class DoudouView extends ItemView {
   override async onClose(): Promise<void> { if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.contentEl.removeClass("doudou-host"); this.contentEl.empty(); }
   private build(): void {
     this.rootEl = this.contentEl.createDiv({ cls: "doudou-view" }); this.mainShellEl = this.rootEl.createDiv({ cls: "doudou-main-shell" }); const header = this.mainShellEl.createEl("header", { cls: "doudou-header" }); header.createDiv({ cls: "doudou-brand", text: "兜兜" });
-    const navigation = header.createDiv({ cls: "doudou-page-tabs", attr: { role: "tablist" } }); this.allTabEl = navigation.createEl("button", { cls: "doudou-page-tab doudou-is-selected", text: "全部", attr: { type: "button" } }); this.libraryTabEl = navigation.createEl("button", { cls: "doudou-page-tab", text: "资料", attr: { type: "button" } }); this.allTabEl.addEventListener("click", () => void this.switchPage("all")); this.libraryTabEl.addEventListener("click", () => void this.switchPage("library"));
+    const navigation = header.createDiv({ cls: "doudou-page-tabs", attr: { role: "tablist" } }); this.allTabEl = navigation.createEl("button", { cls: "doudou-page-tab doudou-is-selected", text: RECENT_PAGE_LABEL, attr: { type: "button" } }); this.libraryTabEl = navigation.createEl("button", { cls: "doudou-page-tab", text: "资料", attr: { type: "button" } }); this.allTabEl.addEventListener("click", () => void this.switchPage("all")); this.libraryTabEl.addEventListener("click", () => void this.switchPage("library"));
     const tools = header.createDiv({ cls: "doudou-header-tools" }); const add = tools.createEl("button", { cls: "doudou-header-tool", text: "+", attr: { type: "button", "aria-label": "新建备忘录" } }); add.addEventListener("click", () => void this.newRecord()); const ask = tools.createEl("button", { cls: "doudou-header-tool doudou-ai-tool", text: "兜", attr: { type: "button", "aria-label": "问兜兜" } }); ask.addEventListener("click", () => new AskDoudouModal(this.app, this.dependencies.askService, (record) => this.openRecord(record), this.dependencies.openSettings).open());
     const sync = tools.createEl("button", { cls: "doudou-header-tool", attr: { type: "button", "aria-label": "使用 Remotely Save 同步" } }); setIcon(sync, "refresh-cw"); sync.addEventListener("click", () => this.sync(sync));
     const pages = this.mainShellEl.createDiv({ cls: "doudou-pages" }); this.allContainerEl = pages.createDiv({ cls: "doudou-page" }); this.libraryContainerEl = pages.createDiv({ cls: "doudou-page doudou-is-hidden" }); this.recordContainerEl = this.rootEl.createDiv({ cls: "doudou-page doudou-is-hidden" });

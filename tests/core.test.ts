@@ -15,10 +15,16 @@ import {
   sanitizeAttachmentName,
   type AttachmentFileLike
 } from "../src/attachments/FileService";
-import { ALL_RECORDS_FOLDER, DOUDOU_LEGACY_HIDDEN_CONFIG_PATH, DOUDOU_SHARED_CONFIG_PATH } from "../src/constants";
+import {
+  ALL_RECORDS_FOLDER,
+  ALL_RECORDS_FOLDER_LABEL,
+  DOUDOU_LEGACY_HIDDEN_CONFIG_PATH,
+  DOUDOU_SHARED_CONFIG_PATH,
+  RECENT_PAGE_LABEL
+} from "../src/constants";
 import { buildRecordPath, DoudouRepository, isDoudouRecordPath, normalizeFolderName } from "../src/data/DoudouRepository";
 import { extractFrontmatter, extractManualTags, recordFromFrontmatter, serializeRecord } from "../src/data/recordCodec";
-import { collectTagOptions, filterRecords, rankRecordsForQuestion } from "../src/services/recordSearch";
+import { collectTagOptions, filterRecords, librarySearchFolder, rankRecordsForQuestion } from "../src/services/recordSearch";
 import {
   applyManualTagCompletion,
   collectConfirmedManualTagOptions,
@@ -58,6 +64,7 @@ if (typeof globalThis.File === "undefined") {
 }
 
 const pluginCss = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
 
 function cssDeclarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -170,6 +177,33 @@ test("folder and record navigation use sticky headers inside their real scroll c
   assert.match(cssDeclarations(".doudou-view .doudou-record-header"), /position:\s*sticky/);
   assert.match(cssDeclarations(".doudou-view .doudou-library-body.doudou-is-folder-view"), /padding:/);
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
+});
+
+test("navigation labels change without changing internal page or virtual-folder identity", () => {
+  assert.equal(RECENT_PAGE_LABEL, "最近");
+  assert.equal(ALL_RECORDS_FOLDER, "全部资料");
+  assert.equal(ALL_RECORDS_FOLDER_LABEL, "资料总览");
+});
+
+test("library home and overview search globally while a real folder stays scoped", () => {
+  assert.equal(librarySearchFolder(null), undefined);
+  assert.equal(librarySearchFolder(ALL_RECORDS_FOLDER), undefined);
+  assert.equal(librarySearchFolder("摘抄"), "摘抄");
+  const records = [
+    stored({ id: "life", folder: "日常杂乱", content: "无畏契约", tags: [] }),
+    stored({ id: "quote", folder: "摘抄", content: "小说摘抄", tags: [] })
+  ];
+  assert.deepEqual(filterRecords(records, { query: "无畏契约", folder: librarySearchFolder(null), tags: new Set() }).map((item) => item.id), ["life"]);
+  assert.deepEqual(filterRecords(records, { query: "无畏契约", folder: librarySearchFolder("摘抄"), tags: new Set() }), []);
+});
+
+test("library home search expands in place instead of navigating to overview", () => {
+  const start = libraryPageSource.indexOf("private renderFolders(): void");
+  const end = libraryPageSource.indexOf("private renderLibraryHomeContent(): void");
+  const renderFoldersSource = libraryPageSource.slice(start, end);
+  assert.match(renderFoldersSource, /this\.searchExpanded = true; this\.render\(\)/);
+  assert.doesNotMatch(renderFoldersSource, /this\.currentFolder\s*=/);
+  assert.match(libraryPageSource, /this\.renderCards\(results, undefined, true\)/);
 });
 
 test("folder order modal state loads normal folders through an async service", async () => {

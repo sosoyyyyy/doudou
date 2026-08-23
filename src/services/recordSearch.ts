@@ -4,7 +4,14 @@ import type {
   StoredDoudouRecord,
   TagOption
 } from "../types";
+import { ALL_RECORDS_FOLDER } from "../constants";
 import { collectConfirmedManualTagOptions } from "./manualTags";
+
+export function librarySearchFolder(currentFolder: string | null): string | undefined {
+  return currentFolder === null || currentFolder === ALL_RECORDS_FOLDER
+    ? undefined
+    : currentFolder;
+}
 
 function attachmentFileNames(record: StoredDoudouRecord): string[] {
   return (record.files ?? []).map((path) => path.replace(/\\/g, "/").split("/").at(-1) ?? "");

@@ -1,24 +1,30 @@
-export type GalleryLayout = "empty" | "single" | "double" | "hero" | "quad" | "nine";
+export type GalleryMode = "none" | "single" | "double" | "grid";
 
 export interface GalleryPresentation {
-  layout: GalleryLayout;
-  visiblePaths: string[];
+  mode: GalleryMode;
+  paths: string[];
   overflowCount: number;
 }
 
-export function galleryLayoutForCount(count: number): GalleryLayout {
-  if (count <= 0) return "empty";
+export function galleryMode(count: number): GalleryMode {
+  if (count <= 0) return "none";
   if (count === 1) return "single";
   if (count === 2) return "double";
-  if (count === 3) return "hero";
-  if (count === 4) return "quad";
-  return "nine";
+  return "grid";
 }
 
-export function galleryPresentation(paths: readonly string[]): GalleryPresentation {
+export function allPageGalleryPresentation(paths: readonly string[]): GalleryPresentation {
   return {
-    layout: galleryLayoutForCount(paths.length),
-    visiblePaths: paths.slice(0, 9),
+    mode: galleryMode(paths.length),
+    paths: paths.slice(0, 9),
     overflowCount: Math.max(0, paths.length - 9)
+  };
+}
+
+export function recordPageGalleryPresentation(paths: readonly string[]): GalleryPresentation {
+  return {
+    mode: galleryMode(paths.length),
+    paths: [...paths],
+    overflowCount: 0
   };
 }

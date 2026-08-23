@@ -12,7 +12,7 @@ import type { RecordService } from "../services/RecordService";
 import type { StoredDoudouRecord } from "../types";
 import { ImagePreviewModal } from "./ImagePreviewModal";
 import { showImageActionMenuAtEvent } from "./imageActions";
-import { galleryPresentation } from "./imageGallery";
+import { recordPageGalleryPresentation } from "./imageGallery";
 import {
   createPendingImages,
   imageFilesFromClipboardItems,
@@ -61,14 +61,13 @@ export class RecordPage extends Component {
     article.createDiv({ cls: "doudou-record-meta", text: `${record.folder} · 创建于 ${formatDateTime(record.created)}${record.updated ? ` · 更新于 ${formatDateTime(record.updated)}` : ""}` });
     if (record.content) article.createDiv({ cls: "doudou-record-content", text: record.content });
     if ((record.images ?? []).length > 0) {
-      const presentation = galleryPresentation(record.images ?? []);
-      const gallery = article.createDiv({ cls: `doudou-record-gallery doudou-gallery-layout-${presentation.layout}`, attr: { "data-count": String(record.images?.length ?? 0) } });
-      for (const [index, path] of presentation.visiblePaths.entries()) {
+      const presentation = recordPageGalleryPresentation(record.images ?? []);
+      const gallery = article.createDiv({ cls: `doudou-record-gallery doudou-gallery-layout-${presentation.mode}`, attr: { "data-count": String(record.images?.length ?? 0) } });
+      for (const [index, path] of presentation.paths.entries()) {
         const button = gallery.createEl("button", { cls: "doudou-gallery-item", attr: { type: "button", "aria-label": `查看第 ${index + 1} 张图片` } });
         const src = this.dependencies.imageService.resourcePath(path);
         if (src) button.createEl("img", { cls: "doudou-gallery-image", attr: { src, alt: `备忘录图片 ${index + 1}` } });
         else button.createDiv({ cls: "doudou-image-missing", text: "图片缺失" });
-        if (index === 8 && presentation.overflowCount > 0) button.createDiv({ cls: "doudou-gallery-more", text: `+${presentation.overflowCount}` });
         button.addEventListener("click", () => new ImagePreviewModal(this.app, this.dependencies.imageService, path).open());
         button.addEventListener("contextmenu", (event) => {
           if (!Platform.isDesktopApp) return;

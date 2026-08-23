@@ -2,6 +2,7 @@ import { Component } from "obsidian";
 import type { ImageService } from "../attachments/ImageService";
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { StoredDoudouRecord } from "../types";
+import { allPageGalleryPresentation } from "./imageGallery";
 import { attachmentCountText, previewText, recordTitle } from "./uiHelpers";
 
 export interface AllPageDependencies {
@@ -45,14 +46,23 @@ export class AllPage extends Component {
   }
   private renderCard(record: StoredDoudouRecord): void {
     const button = this.listEl.createEl("button", { cls: "doudou-journal-card", attr: { type: "button", "aria-label": `打开备忘录：${recordTitle(record)}` } });
-    const firstImage = record.images?.[0];
-    if (firstImage) { const resource = this.dependencies.imageService.resourcePath(firstImage); if (resource) button.createEl("img", { cls: "doudou-journal-image", attr: { src: resource, alt: "" } }); }
     const body = button.createDiv({ cls: "doudou-journal-body" });
     if (record.title?.trim()) body.createDiv({ cls: "doudou-journal-title", text: record.title });
     const attachmentText = attachmentCountText(record);
     body.createDiv({ cls: "doudou-journal-preview", text: previewText(record.content) || ((record.images?.length ?? 0) > 0 ? "图片记录" : attachmentText ? `附件记录 · ${attachmentText} 个文件` : "空白记录") });
     body.createDiv({ cls: "doudou-journal-meta", text: `${time.format(new Date(record.created))} · ${record.folder}` });
     if (attachmentText && record.content.trim()) body.createDiv({ cls: "doudou-card-attachment-count", text: attachmentText });
+    const presentation = allPageGalleryPresentation(record.images ?? []);
+    if (presentation.paths.length > 0) {
+      const gallery = button.createDiv({ cls: `doudou-journal-gallery doudou-journal-gallery-${presentation.mode}` });
+      for (const [index, path] of presentation.paths.entries()) {
+        const item = gallery.createDiv({ cls: "doudou-journal-gallery-item" });
+        const src = this.dependencies.imageService.resourcePath(path);
+        if (src) item.createEl("img", { cls: "doudou-journal-gallery-image", attr: { src, alt: "" } });
+        else item.createDiv({ cls: "doudou-image-missing", text: "图片缺失" });
+        if (index === 8 && presentation.overflowCount > 0) item.createDiv({ cls: "doudou-journal-gallery-more", text: `+${presentation.overflowCount}` });
+      }
+    }
     button.addEventListener("click", () => this.dependencies.openRecord(record));
   }
 }

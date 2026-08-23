@@ -40,6 +40,21 @@ export function attachmentCountText(record: DoudouRecord): string {
   return count > 0 ? `📎 ${count}` : "";
 }
 
+export interface LibraryCardContent {
+  title: string | null;
+  preview: string | null;
+}
+
+export function libraryCardContent(record: DoudouRecord): LibraryCardContent {
+  const title = record.title?.trim() || null;
+  const content = previewText(record.content);
+  if (content) return { title, preview: content };
+  if (title) return { title, preview: null };
+  if ((record.images?.length ?? 0) > 0) return { title: null, preview: "图片记录" };
+  if ((record.files?.length ?? 0) > 0) return { title: null, preview: "附件记录" };
+  return { title: null, preview: "空白记录" };
+}
+
 export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
 }

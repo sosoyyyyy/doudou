@@ -20,7 +20,7 @@ import { extractFrontmatter, extractManualTags, recordFromFrontmatter, serialize
 import { collectTagOptions, filterRecords, rankRecordsForQuestion } from "../src/services/recordSearch";
 import { RecordService } from "../src/services/RecordService";
 import type { StoredDoudouRecord } from "../src/types";
-import { metaText, recordTitle, writeClipboardText } from "../src/ui/uiHelpers";
+import { libraryCardContent, metaText, recordTitle, writeClipboardText } from "../src/ui/uiHelpers";
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
 import {
   imageFilesFromClipboardItems,
@@ -33,7 +33,7 @@ import {
   imageSharePayload,
   shouldCopyImageShortcut
 } from "../src/ui/imageActions";
-import { galleryLayoutForCount, galleryPresentation } from "../src/ui/imageGallery";
+import { allPageGalleryPresentation, galleryMode, recordPageGalleryPresentation } from "../src/ui/imageGallery";
 
 if (typeof globalThis.File === "undefined") {
   Object.defineProperty(globalThis, "File", { configurable: true, value: NodeFile });
@@ -234,6 +234,14 @@ test("record title falls back to first non-empty line then image record", () => 
   assert.equal(recordTitle(stored()), "猫咪日记"); assert.equal(recordTitle(stored({ title: undefined, content: "\n第一行\n第二行" })), "第一行"); assert.equal(recordTitle(stored({ title: undefined, content: "", images: ["兜兜/assets/photo.png"] })), "图片记录"); assert.equal(recordTitle(stored({ title: undefined, content: "", files: ["兜兜/assets/file.pdf"] })), "附件记录");
 });
 
+test("library cards render only explicit titles and never repeat fallback content", () => {
+  assert.deepEqual(libraryCardContent(stored({ title: "标题", content: "正文内容" })), { title: "标题", preview: "正文内容" });
+  assert.deepEqual(libraryCardContent(stored({ title: "", content: "测试 #测试" })), { title: null, preview: "测试 #测试" });
+  assert.deepEqual(libraryCardContent(stored({ title: undefined, content: "", images: ["兜兜/assets/photo.png"] })), { title: null, preview: "图片记录" });
+  assert.deepEqual(libraryCardContent(stored({ title: undefined, content: "", files: ["兜兜/assets/file.pdf"] })), { title: null, preview: "附件记录" });
+  assert.deepEqual(libraryCardContent(stored({ title: "只有标题", content: "" })), { title: "只有标题", preview: null });
+});
+
 test("AI tag validation keeps manual and hidden tags separate", () => {
   assert.deepEqual(parseAiTags('{"tags":["#注意力","注意力","手动","手机使用"]}', ["手动"]), ["注意力", "手机使用"]);
 });
@@ -250,21 +258,35 @@ test("image service preserves Vault-relative asset layout and unique paths", asy
   const vault = new FakeVault(); const images = new ImageService(vault as unknown as Vault); const created = "2026-08-17T12:00:00"; assert.equal(buildImagePath("record", created, 0, "jpg"), "兜兜/assets/2026/08/record-01.jpg"); const first = await images.saveImages("record", created, [fakeImage("a.jpg", "image/jpeg")]); const second = await images.saveImages("record", created, [fakeImage("b.jpg", "image/jpeg")]); assert.equal(first[0], "兜兜/assets/2026/08/record-01.jpg"); assert.equal(second[0], "兜兜/assets/2026/08/record-01-2.jpg");
 });
 
-test("gallery layout and visible image count follow the social-grid rules", () => {
-  const expectations = new Map<number, string>([[0, "empty"], [1, "single"], [2, "double"], [3, "hero"], [4, "quad"], [5, "nine"], [9, "nine"], [10, "nine"], [20, "nine"]]);
-  for (const [count, layout] of expectations) assert.equal(galleryLayoutForCount(count), layout);
-  for (const count of [0, 1, 2, 3, 4, 5, 9]) {
-    const paths = Array.from({ length: count }, (_, index) => `image-${index}`);
-    const presentation = galleryPresentation(paths);
-    assert.equal(presentation.visiblePaths.length, count);
+test("gallery mode uses only none, single, double and uniform grid", () => {
+  const expectations = new Map<number, string>([[0, "none"], [1, "single"], [2, "double"], [3, "grid"], [4, "grid"], [9, "grid"], [10, "grid"], [21, "grid"]]);
+  for (const [count, mode] of expectations) assert.equal(galleryMode(count), mode);
+});
+
+test("all-page gallery previews at most nine images with the correct remainder", () => {
+  for (const count of [1, 2, 9]) {
+    const paths = Array.from({ length: count }, (_, index) => `image-${index + 1}`);
+    const presentation = allPageGalleryPresentation(paths);
+    assert.equal(presentation.paths.length, count);
     assert.equal(presentation.overflowCount, 0);
+    assert.deepEqual(presentation.paths, paths);
   }
-  for (const [count, overflow] of [[10, 1], [13, 4], [20, 11]]) {
-    const paths = Array.from({ length: count }, (_, index) => `image-${index}`);
-    const presentation = galleryPresentation(paths);
-    assert.equal(presentation.visiblePaths.length, 9);
+  for (const [count, overflow] of [[10, 1], [21, 12]]) {
+    const paths = Array.from({ length: count }, (_, index) => `image-${index + 1}`);
+    const presentation = allPageGalleryPresentation(paths);
+    assert.equal(presentation.paths.length, 9);
     assert.equal(presentation.overflowCount, overflow);
-    assert.deepEqual(presentation.visiblePaths, paths.slice(0, 9));
+    assert.deepEqual(presentation.paths, paths.slice(0, 9));
+  }
+});
+
+test("record-page gallery renders every image in its original order", () => {
+  for (const count of [1, 2, 3, 9, 10, 21]) {
+    const paths = Array.from({ length: count }, (_, index) => `image-${index + 1}`);
+    const presentation = recordPageGalleryPresentation(paths);
+    assert.equal(presentation.paths.length, count);
+    assert.equal(presentation.overflowCount, 0);
+    assert.deepEqual(presentation.paths, paths);
   }
 });
 

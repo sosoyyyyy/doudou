@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { File as NodeFile } from "node:buffer";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Vault } from "obsidian";
 import { TFile } from "obsidian";
@@ -47,6 +48,13 @@ if (typeof globalThis.File === "undefined") {
   Object.defineProperty(globalThis, "File", { configurable: true, value: NodeFile });
 }
 
+const pluginCss = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+function cssDeclarations(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return pluginCss.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+}
+
 class FakeVault {
   readonly files = new Map<string, { file: TFile; content: string }>(); readonly binaries = new Map<string, ArrayBuffer>(); readonly folders = new Set<string>(); failNextModify = false; failNextRename = false;
   getMarkdownFiles(): TFile[] { return [...this.files.values()].map((entry) => entry.file); }
@@ -89,6 +97,20 @@ function clipboardItem(
 test("manual hashtags support Chinese, English, numbers, mixed text and deduplicate", () => {
   assert.deepEqual(extractManualTags("#摘抄\n测试 #淘宝 \n#淘宝 #定价\n#UI #v04 #测试123 #无畏契约"), ["摘抄", "淘宝", "定价", "UI", "v04", "测试123", "无畏契约"]);
   assert.deepEqual(extractManualTags("C#语言 # #正常"), ["正常"]);
+});
+
+test("shared app header keeps a normal-flow flex slot on every page", () => {
+  const declarations = cssDeclarations(".doudou-view > .doudou-main-shell > header.doudou-header");
+  assert.match(declarations, /position:\s*relative/);
+  assert.match(declarations, /inset:\s*auto/);
+  assert.match(declarations, /flex:\s*0 0 auto/);
+  assert.match(declarations, /height:\s*auto/);
+  assert.doesNotMatch(declarations, /position:\s*(?:fixed|absolute)/);
+});
+
+test("library card previews use primary text while metadata stays muted", () => {
+  assert.match(cssDeclarations(".doudou-compact-preview"), /color:\s*var\(--text-normal\)/);
+  assert.match(cssDeclarations(".doudou-journal-meta, .doudou-compact-meta, .doudou-record-meta"), /color:\s*var\(--doudou-muted\)/);
 });
 
 test("clipboard text does not produce pending image files", () => {

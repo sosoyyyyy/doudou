@@ -14,6 +14,10 @@ import { RecordService } from "../src/services/RecordService";
 import type { StoredDoudouRecord } from "../src/types";
 import { metaText, recordTitle, writeClipboardText } from "../src/ui/uiHelpers";
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
+import {
+  imageFilesFromClipboardItems,
+  type ClipboardItemLike
+} from "../src/ui/imageDraft";
 
 class FakeVault {
   readonly files = new Map<string, { file: TFile; content: string }>(); readonly folders = new Set<string>(); failNextModify = false; failNextRename = false;
@@ -36,10 +40,62 @@ class FakeVault {
 
 function stored(overrides: Partial<StoredDoudouRecord> = {}): StoredDoudouRecord { return { id: "id-1", title: "猫咪日记", content: "今天记录一只猫 #日记", created: "2026-08-17T08:00:00.000Z", folder: "生活", tags: ["日记"], path: "兜兜/生活/2026/08/record.md", images: [], ...overrides }; }
 function fakeImage(name: string, type: string, bytes = 4): ImageFileLike { return { name, type, arrayBuffer: async () => new ArrayBuffer(bytes) }; }
+function clipboardItem(
+  kind: string,
+  type: string,
+  file: File | null,
+  throws = false
+): ClipboardItemLike {
+  return {
+    kind,
+    type,
+    getAsFile: () => {
+      if (throws) throw new Error("clipboard denied");
+      return file;
+    }
+  };
+}
 
 test("manual hashtags support Chinese, English, numbers, mixed text and deduplicate", () => {
   assert.deepEqual(extractManualTags("#摘抄\n测试 #淘宝 \n#淘宝 #定价\n#UI #v04 #测试123 #无畏契约"), ["摘抄", "淘宝", "定价", "UI", "v04", "测试123", "无畏契约"]);
   assert.deepEqual(extractManualTags("C#语言 # #正常"), ["正常"]);
+});
+
+test("clipboard text does not produce pending image files", () => {
+  assert.deepEqual(imageFilesFromClipboardItems([
+    clipboardItem("string", "text/plain", null)
+  ]), []);
+});
+
+test("clipboard image/png produces one image file", () => {
+  const png = { name: "image.png", type: "image/png" } as File;
+  assert.deepEqual(imageFilesFromClipboardItems([
+    clipboardItem("file", "image/png", png)
+  ]), [png]);
+});
+
+test("clipboard supports multiple image files", () => {
+  const png = { name: "one.png", type: "image/png" } as File;
+  const jpeg = { name: "two.jpg", type: "image/jpeg" } as File;
+  assert.deepEqual(imageFilesFromClipboardItems([
+    clipboardItem("file", "image/png", png),
+    clipboardItem("file", "image/jpeg", jpeg)
+  ]), [png, jpeg]);
+});
+
+test("clipboard ignores non-image file items", () => {
+  const pdf = { name: "document.pdf", type: "application/pdf" } as File;
+  assert.deepEqual(imageFilesFromClipboardItems([
+    clipboardItem("file", "application/pdf", pdf)
+  ]), []);
+});
+
+test("clipboard ignores null and inaccessible image items without throwing", () => {
+  assert.deepEqual(imageFilesFromClipboardItems([
+    clipboardItem("file", "image/png", null),
+    clipboardItem("file", "image/webp", null, true)
+  ]), []);
+  assert.deepEqual(imageFilesFromClipboardItems(undefined), []);
 });
 
 test("new codec writes folder, title and extracted tags while keeping body hashtags", () => {

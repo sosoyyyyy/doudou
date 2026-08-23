@@ -6,7 +6,12 @@ import type { DoudouRepository } from "../data/DoudouRepository";
 import type { RecordService } from "../services/RecordService";
 import type { StoredDoudouRecord } from "../types";
 import { ImagePreviewModal } from "./ImagePreviewModal";
-import { createPendingImages, releasePendingImages, type PendingImage } from "./imageDraft";
+import {
+  createPendingImages,
+  imageFilesFromClipboardItems,
+  releasePendingImages,
+  type PendingImage
+} from "./imageDraft";
 import { formatDateTime, writeClipboardText } from "./uiHelpers";
 
 export interface RecordPageDependencies {
@@ -54,15 +59,27 @@ export class RecordPage extends Component {
     const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
     const content = form.createEl("textarea", { cls: "doudou-editor-content", attr: { placeholder: "记下此刻……\n\n直接输入 #标签", "aria-label": "正文", rows: "10" } }); content.value = record?.content ?? "";
-    const folderRow = form.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } });
-    const names = [...new Set([record?.folder ?? this.defaultFolder, ...folders.map((item) => item.name)])]; for (const name of names) folder.createEl("option", { text: name, value: name }); folder.value = record?.folder ?? this.defaultFolder;
     const fileInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
     const images = form.createDiv({ cls: "doudou-editor-images" }); let retained = [...(record?.images ?? [])]; const removed = new Set<string>();
     const paintImages = (): void => { images.empty();
       for (const path of retained) { const tile = images.createDiv({ cls: "doudou-editor-image" }); const src = this.dependencies.imageService.resourcePath(path); if (src) tile.createEl("img", { attr: { src, alt: "已有图片" } }); const button = tile.createEl("button", { text: "×", attr: { type: "button", "aria-label": "移除图片" } }); button.addEventListener("click", () => { retained = retained.filter((item) => item !== path); removed.add(path); paintImages(); }); }
       for (const pending of this.pending) { const tile = images.createDiv({ cls: "doudou-editor-image" }); tile.createEl("img", { attr: { src: pending.previewUrl, alt: pending.file.name } }); const button = tile.createEl("button", { text: "×", attr: { type: "button", "aria-label": "移除图片" } }); button.addEventListener("click", () => { URL.revokeObjectURL(pending.previewUrl); this.pending = this.pending.filter((item) => item.id !== pending.id); paintImages(); }); }
+      const addImage = images.createEl("button", { cls: "doudou-add-image-button", attr: { type: "button", "aria-label": "添加图片" } });
+      setIcon(addImage, "image-plus");
+      addImage.createSpan({ text: "添加图片" });
+      addImage.addEventListener("click", () => fileInput.click());
     }; paintImages();
     fileInput.addEventListener("change", () => { const files = Array.from(fileInput.files ?? []).filter((file) => imageExtension(file) !== null); fileInput.value = ""; this.pending.push(...createPendingImages(files)); paintImages(); });
+    content.addEventListener("paste", (event) => {
+      const files = imageFilesFromClipboardItems(event.clipboardData?.items)
+        .filter((file) => imageExtension(file) !== null);
+      if (files.length === 0) return;
+      this.pending.push(...createPendingImages(files));
+      paintImages();
+      if (!event.clipboardData?.getData("text/plain")) event.preventDefault();
+    });
+    const folderRow = form.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } });
+    const names = [...new Set([record?.folder ?? this.defaultFolder, ...folders.map((item) => item.name)])]; for (const name of names) folder.createEl("option", { text: name, value: name }); folder.value = record?.folder ?? this.defaultFolder;
     const status = form.createDiv({ cls: "doudou-editor-status", attr: { role: "status" } }); const actions = form.createDiv({ cls: "doudou-editor-actions" });
     const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } }); cancel.addEventListener("click", () => { releasePendingImages(this.pending); this.pending = []; if (record) this.renderRead(); else this.goBack(); });
     const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } }); save.addEventListener("click", async () => {

@@ -21,6 +21,13 @@
 3. Markdown 文件是真实数据源。“全部”和“资料”只渲染同一批记录，不建立聊天数据库、时间流缓存文件或第二份 UI 数据源。
 4. 默认功能克制、移动端优先，并将 UI、数据存储、服务与类型分离。
 
+## 三端 UI 与宿主样式
+
+1. 所有界面修改默认同时考虑 Windows、iOS、Android，以及 Obsidian Desktop / Mobile 的宿主样式差异。
+2. 兜兜自己的关键 `button`、`input`、`textarea`、`select`、卡片和滚动容器必须在 `.doudou-view` 作用域下使用足够明确的选择器，并显式约束宿主可能注入的尺寸、padding、line-height、overflow、white-space、appearance 与 display。
+3. 不使用无作用域的全局控件选择器，不依赖 hover，不强制隐藏 Obsidian Mobile 自带工具栏，不用 `wheel` 事件手动模拟滚动。
+4. 移动端必须保留 safe-area、Visual Viewport、触摸滚动、键盘适配、足够点击区域，并避免横向溢出。
+
 ## 文件夹与资料目录
 
 1. 用户可自由创建、改名和删除文件夹；`生活`、`工作`、`副业`只是旧默认文件夹，不再是固定分类。

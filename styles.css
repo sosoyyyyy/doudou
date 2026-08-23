@@ -5,27 +5,29 @@
   --doudou-muted: #7d8897; --doudou-shadow: 0 5px 18px rgb(54 94 150 / 8%);
 }
 .theme-dark .doudou-view, .theme-dark .doudou-modal { --doudou-blue: #72a7fb; --doudou-blue-strong: #a9cdfc; --doudou-blue-soft: #203958; --doudou-bg: #111a25; --doudou-surface: #192635; --doudou-border: #30465e; --doudou-muted: #a8b4c3; --doudou-shadow: 0 5px 18px rgb(0 0 0 / 20%); }
-.doudou-view { height: min(100%, var(--doudou-visual-viewport-height, 100dvh)); min-height: 0; color: var(--text-normal); background: var(--doudou-bg); }
+.doudou-view *, .doudou-view *::before, .doudou-view *::after { box-sizing: border-box; }
+.doudou-view { display: flex; flex-direction: column; width: 100%; height: min(100%, var(--doudou-visual-viewport-height, 100dvh)); min-height: 0; overflow: hidden; color: var(--text-normal); background: var(--doudou-bg); }
 .doudou-main-shell, .doudou-pages, .doudou-page, .doudou-all-page, .doudou-library-page, .doudou-record-page { display: flex; flex-direction: column; min-height: 0; }
-.doudou-main-shell, .doudou-pages, .doudou-page { flex: 1 1 auto; }
+.doudou-main-shell, .doudou-pages, .doudou-page, .doudou-record-page { flex: 1 1 auto; min-width: 0; }
+.doudou-main-shell, .doudou-pages, .doudou-page { overflow: hidden; }
 .doudou-is-hidden { display: none !important; }
 .doudou-header { display: grid; grid-template-columns: auto minmax(108px, 180px) 1fr; align-items: center; gap: 8px; min-height: 52px; padding: max(6px, env(safe-area-inset-top)) 10px 7px; border-bottom: 1px solid var(--doudou-border); background: var(--doudou-bg); }
 .doudou-brand { color: var(--doudou-blue-strong); font-size: 16px; font-weight: 750; white-space: nowrap; }
 .doudou-page-tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
-.doudou-page-tab { min-height: 34px; margin: 0; padding: 4px 10px; border: 0; border-radius: 9px; color: var(--doudou-muted); background: transparent; box-shadow: none; }
-.doudou-page-tab.doudou-is-selected { color: var(--doudou-blue-strong); background: var(--doudou-blue-soft); }
+.doudou-view button.doudou-page-tab { display: inline-flex; align-items: center; justify-content: center; width: auto; height: 34px; min-height: 34px; max-height: none; margin: 0; padding: 4px 10px; overflow: visible; border: 0; border-radius: 9px; color: var(--doudou-muted); line-height: normal; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view button.doudou-page-tab.doudou-is-selected { color: var(--doudou-blue-strong); background: var(--doudou-blue-soft); }
 .doudou-header-tools { display: flex; justify-content: flex-end; gap: 5px; min-width: 0; }
-.doudou-header-tool, .doudou-round-tool { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; margin: 0; padding: 0; border: 1px solid var(--doudou-border); border-radius: 11px; color: var(--doudou-blue-strong); background: var(--doudou-surface); box-shadow: none; touch-action: manipulation; }
-.doudou-ai-tool { border-radius: 50%; color: white; font-weight: 750; background: var(--doudou-blue); }
-.doudou-timeline, .doudou-library-body, .doudou-record-page { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px clamp(12px, 4vw, 28px) max(26px, env(safe-area-inset-bottom)); }
+.doudou-view button.doudou-header-tool, .doudou-view button.doudou-round-tool { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 1px solid var(--doudou-border); border-radius: 11px; color: var(--doudou-blue-strong); line-height: normal; white-space: normal; background: var(--doudou-surface); box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view button.doudou-ai-tool { border-radius: 50%; color: white; font-weight: 750; background: var(--doudou-blue); }
+.doudou-timeline, .doudou-library-body { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 18px clamp(12px, 4vw, 28px) max(26px, env(safe-area-inset-bottom)); }
 .doudou-timeline, .doudou-library-body, .doudou-record-article, .doudou-editor { width: min(100%, 820px); margin-inline: auto; }
 .doudou-month-heading { margin: 12px 2px 4px; font-size: 25px; }
 .doudou-day-heading { margin: 18px 2px 8px; color: var(--doudou-muted); font-size: 14px; font-weight: 650; }
-.doudou-journal-card { display: block; width: 100%; margin: 0 0 14px; padding: 0; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 20px; color: var(--text-normal); text-align: left; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); }
-.doudou-journal-image { display: block; width: 100%; height: clamp(190px, 45vw, 340px); object-fit: cover; }
-.doudou-journal-body { padding: 15px 16px 14px; }
+.doudou-view button.doudou-journal-card { display: block; align-items: initial; width: 100%; height: auto; min-height: 0; max-height: none; margin: 0 0 14px; padding: 0; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 20px; color: var(--text-normal); line-height: normal; text-align: left; white-space: normal; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); appearance: none; }
+.doudou-view .doudou-journal-image { display: block; width: 100%; height: clamp(190px, 45vw, 340px); min-height: 190px; max-height: 340px; object-fit: cover; }
+.doudou-view .doudou-journal-body { display: block; width: 100%; height: auto; padding: 15px 16px 14px; overflow: visible; white-space: normal; }
 .doudou-journal-title { margin-bottom: 6px; font-size: 18px; font-weight: 720; }
-.doudou-journal-preview { display: -webkit-box; overflow: hidden; font-size: 15px; line-height: 1.65; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
+.doudou-view .doudou-journal-preview { display: -webkit-box; height: auto; max-height: none; overflow: hidden; font-size: 15px; line-height: 1.65; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
 .doudou-journal-meta, .doudou-compact-meta, .doudou-record-meta { margin-top: 10px; color: var(--doudou-muted); font-size: 12px; }
 .doudou-empty-state { padding: 48px 16px; color: var(--doudou-muted); text-align: center; }
 .doudou-empty-state::before { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 50%; color: white; font-weight: 750; content: "兜"; background: var(--doudou-blue); }
@@ -35,24 +37,24 @@
 .doudou-folder-list { margin-top: 16px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 16px; background: var(--doudou-surface); }
 .doudou-folder-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--doudou-border); }
 .doudou-folder-row:last-child { border-bottom: 0; }
-.doudou-folder-open { display: flex; flex: 1; align-items: center; gap: 11px; min-width: 0; min-height: 54px; margin: 0; padding: 8px 12px; border: 0; color: var(--text-normal); text-align: left; background: transparent; box-shadow: none; }
+.doudou-view button.doudou-folder-open { display: flex; flex: 1 1 auto; align-items: center; gap: 11px; width: auto; height: auto; min-width: 0; min-height: 54px; max-height: none; margin: 0; padding: 8px 12px; overflow: visible; border: 0; color: var(--text-normal); line-height: normal; text-align: left; white-space: normal; background: transparent; box-shadow: none; appearance: none; }
 .doudou-folder-icon { color: var(--doudou-blue); }
 .doudou-folder-name { flex: 1; overflow: hidden; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .doudou-folder-count, .doudou-folder-chevron { color: var(--doudou-muted); }
-.doudou-folder-more { width: 42px; margin: 0; border: 0; color: var(--doudou-muted); background: transparent; box-shadow: none; }
-.doudou-new-folder, .doudou-back-button { min-height: 40px; margin: 12px 0 0; border: 0; color: var(--doudou-blue-strong); background: transparent; box-shadow: none; }
-.doudou-folder-header .doudou-back-button, .doudou-record-header .doudou-back-button { margin: 0; padding-left: 0; }
+.doudou-view button.doudou-folder-more { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 42px; width: 42px; height: auto; min-height: 42px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; color: var(--doudou-muted); line-height: normal; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view button.doudou-new-folder, .doudou-view button.doudou-back-button { display: inline-flex; align-items: center; width: auto; height: auto; min-height: 40px; max-height: none; margin: 12px 0 0; padding: 6px 8px; overflow: visible; border: 0; color: var(--doudou-blue-strong); line-height: normal; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view .doudou-folder-header button.doudou-back-button, .doudou-view .doudou-record-header button.doudou-back-button { margin: 0; padding-left: 0; }
 .doudou-search-shell { display: flex; align-items: center; gap: 8px; margin: 14px 0; padding: 8px 12px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
-.doudou-search-shell input { flex: 1; min-width: 0; margin: 0; border: 0; background: transparent; box-shadow: none; }
+.doudou-view .doudou-search-shell input { display: block; flex: 1 1 auto; width: auto; height: auto; min-width: 0; min-height: 34px; max-height: none; margin: 0; padding: 4px 0; border: 0; line-height: 1.4; background: transparent; box-shadow: none; appearance: none; }
 .doudou-compact-list { display: grid; gap: 9px; }
-.doudou-compact-card { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 84px; margin: 0; padding: 10px; border: 1px solid var(--doudou-border); border-radius: 15px; color: var(--text-normal); text-align: left; background: var(--doudou-surface); box-shadow: none; }
+.doudou-view button.doudou-compact-card { display: flex; align-items: center; gap: 12px; width: 100%; height: auto; min-height: 92px; max-height: none; margin: 0; padding: 10px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 15px; color: var(--text-normal); line-height: normal; text-align: left; white-space: normal; background: var(--doudou-surface); box-shadow: none; appearance: none; }
 .doudou-compact-image-wrap { position: relative; flex: 0 0 72px; width: 72px; height: 72px; overflow: hidden; border-radius: 11px; }
 .doudou-compact-image { width: 100%; height: 100%; object-fit: cover; }
 .doudou-compact-image-wrap span { position: absolute; right: 4px; bottom: 4px; padding: 2px 5px; border-radius: 7px; color: white; font-size: 10px; background: rgb(0 0 0 / 58%); }
-.doudou-compact-main { min-width: 0; }
+.doudou-view .doudou-compact-main { display: block; flex: 1 1 0%; width: auto; min-width: 0; overflow: hidden; white-space: normal; }
 .doudou-compact-title { overflow: hidden; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
 .doudou-compact-preview { display: -webkit-box; margin-top: 4px; overflow: hidden; color: var(--text-muted); font-size: 13px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.doudou-record-page { position: relative; }
+.doudou-view .doudou-record-page { position: relative; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 18px clamp(12px, 4vw, 28px) max(26px, env(safe-area-inset-bottom)); }
 .doudou-record-header { width: min(100%, 820px); margin: 0 auto 14px; }
 .doudou-record-tools { display: flex; gap: 7px; }
 .doudou-record-menu { position: absolute; top: 64px; right: clamp(12px, 4vw, 28px); z-index: 5; display: grid; min-width: 150px; padding: 6px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); }
@@ -62,18 +64,20 @@
 .doudou-record-full-image { display: block; width: 100%; height: auto; margin: 18px 0; border-radius: 14px; object-fit: contain; }
 .doudou-record-content { margin-top: 18px; font-family: var(--font-text); font-size: 16px; line-height: 1.75; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
 .doudou-editor { display: grid; gap: 12px; }
-.doudou-title-input, .doudou-editor-content, .doudou-editor-folder select, .doudou-modal-content input, .doudou-modal-content textarea { width: 100%; margin: 0; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
-.doudou-title-input { min-height: 46px; font-size: 19px; font-weight: 680; }
-.doudou-editor-content { min-height: 220px; resize: vertical; line-height: 1.65; }
+.doudou-view input.doudou-title-input, .doudou-view textarea.doudou-editor-content, .doudou-view .doudou-editor-folder select, .doudou-modal .doudou-modal-content input, .doudou-modal .doudou-modal-content textarea { display: block; width: 100%; height: auto; max-height: none; margin: 0; padding: 10px 12px; border: 1px solid var(--doudou-border); border-radius: 12px; line-height: 1.5; white-space: normal; background: var(--doudou-surface); appearance: none; }
+.doudou-view input.doudou-title-input { min-height: 46px; font-size: 19px; font-weight: 680; }
+.doudou-view textarea.doudou-editor-content { min-height: 220px; overflow-y: auto; resize: vertical; line-height: 1.65; white-space: pre-wrap; }
+.doudou-view .doudou-editor-folder select { min-height: 42px; appearance: auto; }
 .doudou-editor-folder { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
-.doudou-file-input { min-height: 42px; }
-.doudou-editor-images { display: flex; flex-wrap: wrap; gap: 8px; }
+.doudou-view input.doudou-file-input { position: absolute; width: 1px; height: 1px; min-height: 0; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); border: 0; opacity: 0; white-space: nowrap; }
+.doudou-view .doudou-editor-images { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; max-width: 100%; overflow: visible; }
 .doudou-editor-image { position: relative; width: 88px; height: 88px; overflow: hidden; border-radius: 12px; }
 .doudou-editor-image img { width: 100%; height: 100%; object-fit: cover; }
-.doudou-editor-image button { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; min-height: 26px; margin: 0; padding: 0; border: 0; border-radius: 50%; color: white; background: rgb(0 0 0 / 62%); }
+.doudou-view .doudou-editor-image button { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; min-height: 30px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 50%; color: white; line-height: 1; background: rgb(0 0 0 / 62%); appearance: none; touch-action: manipulation; }
+.doudou-view button.doudou-add-image-button { display: inline-flex; flex: 0 0 88px; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 88px; height: 88px; min-height: 88px; max-height: none; margin: 0; padding: 8px; overflow: visible; border: 1px dashed var(--doudou-blue); border-radius: 12px; color: var(--doudou-blue-strong); font-size: 12px; line-height: 1.2; white-space: normal; background: var(--doudou-blue-soft); box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-editor-actions, .doudou-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.doudou-primary-button, .doudou-secondary-button, .doudou-danger-ghost-button { min-height: 40px; margin: 0; border-radius: 11px; }
-.doudou-primary-button { color: white; background: var(--doudou-blue); }
+.doudou-view button.doudou-primary-button, .doudou-view button.doudou-secondary-button, .doudou-view button.doudou-danger-ghost-button { display: inline-flex; align-items: center; justify-content: center; width: auto; height: auto; min-height: 40px; max-height: none; margin: 0; padding: 7px 14px; overflow: visible; border-radius: 11px; line-height: normal; white-space: nowrap; appearance: none; touch-action: manipulation; }
+.doudou-view button.doudou-primary-button { color: white; background: var(--doudou-blue); }
 .doudou-danger-ghost-button { color: var(--text-error); background: transparent; }
 .doudou-modal-content { display: grid; gap: 12px; }
 .doudou-modal-content h2 { margin: 0; }
@@ -84,7 +88,7 @@
 .doudou-image-preview-full { max-width: 100%; max-height: 82vh; object-fit: contain; }
 @media (max-width: 430px) {
   .doudou-header { grid-template-columns: auto minmax(96px, 1fr) auto; gap: 5px; padding-inline: 8px; }
-  .doudou-header-tool { width: 34px; height: 34px; min-height: 34px; }
+  .doudou-view button.doudou-header-tool { width: 34px; height: 34px; min-height: 34px; }
   .doudou-page-tab { padding-inline: 7px; }
   .doudou-brand { font-size: 15px; }
 }

@@ -16,6 +16,10 @@
   --doudou-surface: #ffffff;
   --doudou-surface-soft: #f4f7fb;
   --doudou-border: #e7edf6;
+  --doudou-control-surface: #ffffff;
+  --doudou-control-border: #e7edf6;
+  --doudou-control-hover: #f2f7ff;
+  --doudou-control-shadow: 0 2px 8px rgb(63 111 181 / 6%);
   --doudou-text-secondary: #7f8998;
   --doudou-shadow: 0 4px 16px rgb(62 92 130 / 6%);
   --doudou-shadow-small: 0 2px 9px rgb(63 111 181 / 6%);
@@ -45,6 +49,10 @@
   --doudou-surface: #192635;
   --doudou-surface-soft: #203043;
   --doudou-border: #30465e;
+  --doudou-control-surface: #192635;
+  --doudou-control-border: #30465e;
+  --doudou-control-hover: #203958;
+  --doudou-control-shadow: 0 2px 8px rgb(0 0 0 / 16%);
   --doudou-text-secondary: #a8b4c3;
   --doudou-shadow: 0 5px 18px rgb(0 0 0 / 18%);
   --doudou-shadow-small: 0 2px 10px rgb(0 0 0 / 15%);
@@ -78,9 +86,10 @@
   width: 100%;
   max-width: 280px;
   padding: 3px;
-  border: 1px solid color-mix(in srgb, var(--doudou-accent) 12%, transparent);
+  border: 1px solid var(--doudou-control-border);
   border-radius: 12px;
-  background: var(--doudou-surface-soft);
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
 }
 
 .doudou-page-tab {
@@ -91,7 +100,7 @@
   border-radius: 9px;
   color: var(--text-muted);
   font-weight: 560;
-  background: transparent;
+  background: var(--doudou-control-surface);
   box-shadow: none;
   touch-action: manipulation;
   transition: color var(--doudou-transition), background var(--doudou-transition),
@@ -100,8 +109,8 @@
 
 .doudou-page-tab.doudou-is-selected {
   color: var(--doudou-accent-strong);
-  background: var(--doudou-surface);
-  box-shadow: var(--doudou-shadow-small);
+  background: var(--doudou-accent-soft);
+  box-shadow: none;
 }
 
 .doudou-refresh-button {
@@ -113,11 +122,11 @@
   min-height: 40px;
   margin: 0;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--doudou-control-border);
   border-radius: 10px;
   color: var(--text-muted);
-  background: transparent;
-  box-shadow: none;
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
   touch-action: manipulation;
   transition: color var(--doudou-transition), background var(--doudou-transition),
     transform 140ms ease;
@@ -126,7 +135,7 @@
 .doudou-refresh-button:hover,
 .doudou-refresh-button:focus-visible {
   color: var(--doudou-accent-strong);
-  background: var(--doudou-accent-soft);
+  background: var(--doudou-control-hover);
 }
 
 .doudou-refresh-button.doudou-is-sync-triggered svg {
@@ -391,13 +400,13 @@
   min-height: 38px;
   margin: 0;
   padding: 5px 14px;
-  border: 1px solid var(--doudou-border);
+  border: 1px solid var(--doudou-control-border);
   border-radius: 999px;
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 540;
-  background: var(--doudou-surface);
-  box-shadow: none;
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
   touch-action: manipulation;
   transition: color var(--doudou-transition), background var(--doudou-transition),
     border-color var(--doudou-transition), transform 140ms ease;
@@ -432,12 +441,12 @@
   min-height: 34px;
   margin: 0;
   padding: 4px 10px;
-  border: 1px solid var(--doudou-border);
+  border: 1px solid var(--doudou-control-border);
   border-radius: 999px;
   color: var(--text-normal);
   font-size: 12px;
-  background: var(--doudou-surface-soft);
-  box-shadow: none;
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
   touch-action: manipulation;
   transition: color var(--doudou-transition), background var(--doudou-transition),
     border-color var(--doudou-transition), transform 140ms ease;
@@ -508,16 +517,17 @@
 }
 
 .doudou-icon-button {
-  border: 1px solid color-mix(in srgb, var(--doudou-border) 78%, transparent);
+  border: 1px solid var(--doudou-control-border);
   color: var(--doudou-text-secondary);
   font-size: 19px;
-  background: var(--doudou-accent-soft);
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
 }
 
 .doudou-icon-button:hover,
 .doudou-icon-button:focus-visible {
   color: var(--doudou-accent-strong);
-  background: var(--doudou-accent-soft);
+  background: var(--doudou-control-hover);
 }
 
 .doudou-send-button {
@@ -817,11 +827,11 @@
   min-height: 32px;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--doudou-border);
+  border: 1px solid var(--doudou-control-border);
   border-radius: 9px;
   color: var(--text-muted);
-  background: var(--doudou-accent-soft-2);
-  box-shadow: none;
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
   touch-action: manipulation;
   transition: color var(--doudou-transition), background var(--doudou-transition),
     transform 140ms ease;
@@ -850,8 +860,9 @@
 }
 
 .doudou-library-copy-button {
-  border: 1px solid var(--doudou-border);
-  background: var(--doudou-accent-soft-2);
+  border: 1px solid var(--doudou-control-border);
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
 }
 
 .doudou-library-item-main {
@@ -905,6 +916,10 @@
   --doudou-surface: #ffffff;
   --doudou-surface-soft: #f4f7fb;
   --doudou-border: #e7edf6;
+  --doudou-control-surface: #ffffff;
+  --doudou-control-border: #e7edf6;
+  --doudou-control-hover: #f2f7ff;
+  --doudou-control-shadow: 0 2px 8px rgb(63 111 181 / 6%);
   --doudou-focus-ring: 0 0 0 3px rgb(77 142 247 / 10%);
   --doudou-transition: 160ms ease;
   width: min(92vw, 620px);
@@ -964,8 +979,10 @@
 }
 
 .doudou-secondary-button {
+  border: 1px solid var(--doudou-control-border);
   color: var(--text-normal);
-  background: var(--doudou-surface-soft);
+  background: var(--doudou-control-surface);
+  box-shadow: var(--doudou-control-shadow);
 }
 
 .doudou-danger-button {
@@ -1195,7 +1212,7 @@
 .doudou-add-tag-inline {
   border-style: dashed;
   color: var(--text-muted);
-  background: transparent;
+  background: var(--doudou-control-surface);
 }
 
 .doudou-modal-status {

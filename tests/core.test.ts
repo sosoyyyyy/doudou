@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { File as NodeFile } from "node:buffer";
 import test from "node:test";
 import type { Vault } from "obsidian";
 import { TFile } from "obsidian";
 import { AiTagService } from "../src/ai/AiTagService";
 import { AskDoudouService } from "../src/ai/AskDoudouService";
 import { DeepSeekError, parseAiTags } from "../src/ai/DeepSeekClient";
-import { buildImagePath, ImageService, type ImageFileLike } from "../src/attachments/ImageService";
+import { buildImagePath, imageMimeType, ImageService, isDoudouImagePath, type ImageFileLike } from "../src/attachments/ImageService";
 import {
   buildFilePath,
   FileService,
@@ -26,23 +27,35 @@ import {
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
+import {
+  canShareImageFile,
+  copyImageFileToClipboard,
+  imageSharePayload,
+  shouldCopyImageShortcut
+} from "../src/ui/imageActions";
+import { galleryLayoutForCount, galleryPresentation } from "../src/ui/imageGallery";
+
+if (typeof globalThis.File === "undefined") {
+  Object.defineProperty(globalThis, "File", { configurable: true, value: NodeFile });
+}
 
 class FakeVault {
-  readonly files = new Map<string, { file: TFile; content: string }>(); readonly folders = new Set<string>(); failNextModify = false; failNextRename = false;
+  readonly files = new Map<string, { file: TFile; content: string }>(); readonly binaries = new Map<string, ArrayBuffer>(); readonly folders = new Set<string>(); failNextModify = false; failNextRename = false;
   getMarkdownFiles(): TFile[] { return [...this.files.values()].map((entry) => entry.file); }
   getAllLoadedFiles(): Array<TFile | { path: string }> { return [...this.files.values()].map((entry) => entry.file).concat([...this.folders].map((path) => ({ path })) as TFile[]); }
   getAbstractFileByPath(path: string): TFile | { path: string } | null { return this.files.get(path)?.file ?? (this.folders.has(path) ? { path } : null); }
   async createFolder(path: string): Promise<void> { this.folders.add(path); }
   async create(path: string, content: string): Promise<TFile> { const file = new TFile(path); this.files.set(path, { file, content }); return file; }
-  async createBinary(path: string, content: ArrayBuffer): Promise<TFile> { return this.create(path, `binary:${content.byteLength}`); }
+  async createBinary(path: string, content: ArrayBuffer): Promise<TFile> { const file = await this.create(path, `binary:${content.byteLength}`); this.binaries.set(path, content.slice(0)); return file; }
+  async readBinary(file: TFile): Promise<ArrayBuffer> { const content = this.binaries.get(file.path); if (!content) throw new Error("Missing fake binary"); return content.slice(0); }
   async cachedRead(file: TFile): Promise<string> { const entry = this.files.get(file.path); if (!entry) throw new Error("Missing fake file"); return entry.content; }
   async modify(file: TFile, content: string): Promise<void> { if (this.failNextModify) { this.failNextModify = false; throw new Error("modify failed"); } this.files.set(file.path, { file, content }); }
   async rename(item: TFile | { path: string }, path: string): Promise<void> {
     if (this.failNextRename) { this.failNextRename = false; throw new Error("rename failed"); }
-    if (item instanceof TFile) { const entry = this.files.get(item.path); if (!entry || this.files.has(path)) throw new Error("rename failed"); this.files.delete(item.path); item.path = path; this.files.set(path, entry); return; }
+    if (item instanceof TFile) { const oldPath = item.path; const entry = this.files.get(oldPath); if (!entry || this.files.has(path)) throw new Error("rename failed"); this.files.delete(oldPath); const binary = this.binaries.get(oldPath); this.binaries.delete(oldPath); item.path = path; this.files.set(path, entry); if (binary) this.binaries.set(path, binary); return; }
     this.folders.delete(item.path); this.folders.add(path);
   }
-  async trash(item: TFile | { path: string }): Promise<void> { if (item instanceof TFile) this.files.delete(item.path); else this.folders.delete(item.path); }
+  async trash(item: TFile | { path: string }): Promise<void> { if (item instanceof TFile) { this.files.delete(item.path); this.binaries.delete(item.path); } else this.folders.delete(item.path); }
   getResourcePath(file: TFile): string { return `app://vault/${file.path}`; }
 }
 
@@ -235,6 +248,81 @@ test("AskDoudou still retrieves via hidden tags and does not persist answers", a
 
 test("image service preserves Vault-relative asset layout and unique paths", async () => {
   const vault = new FakeVault(); const images = new ImageService(vault as unknown as Vault); const created = "2026-08-17T12:00:00"; assert.equal(buildImagePath("record", created, 0, "jpg"), "兜兜/assets/2026/08/record-01.jpg"); const first = await images.saveImages("record", created, [fakeImage("a.jpg", "image/jpeg")]); const second = await images.saveImages("record", created, [fakeImage("b.jpg", "image/jpeg")]); assert.equal(first[0], "兜兜/assets/2026/08/record-01.jpg"); assert.equal(second[0], "兜兜/assets/2026/08/record-01-2.jpg");
+});
+
+test("gallery layout and visible image count follow the social-grid rules", () => {
+  const expectations = new Map<number, string>([[0, "empty"], [1, "single"], [2, "double"], [3, "hero"], [4, "quad"], [5, "nine"], [9, "nine"], [10, "nine"], [20, "nine"]]);
+  for (const [count, layout] of expectations) assert.equal(galleryLayoutForCount(count), layout);
+  for (const count of [0, 1, 2, 3, 4, 5, 9]) {
+    const paths = Array.from({ length: count }, (_, index) => `image-${index}`);
+    const presentation = galleryPresentation(paths);
+    assert.equal(presentation.visiblePaths.length, count);
+    assert.equal(presentation.overflowCount, 0);
+  }
+  for (const [count, overflow] of [[10, 1], [13, 4], [20, 11]]) {
+    const paths = Array.from({ length: count }, (_, index) => `image-${index}`);
+    const presentation = galleryPresentation(paths);
+    assert.equal(presentation.visiblePaths.length, 9);
+    assert.equal(presentation.overflowCount, overflow);
+    assert.deepEqual(presentation.visiblePaths, paths.slice(0, 9));
+  }
+});
+
+test("image export reads the original Vault binary with a safe name and MIME", async () => {
+  const vault = new FakeVault();
+  const path = "兜兜/assets/2026/08/record-01.webp";
+  await vault.createBinary(path, new Uint8Array([1, 2, 3, 4]).buffer);
+  const file = await new ImageService(vault as unknown as Vault).readAsFile(path);
+  assert.equal(file.name, "record-01.webp");
+  assert.equal(file.type, "image/webp");
+  assert.deepEqual([...new Uint8Array(await file.arrayBuffer())], [1, 2, 3, 4]);
+  assert.equal(imageMimeType("photo.JPG"), "image/jpeg");
+  assert.equal(imageMimeType("animation.gif"), "image/gif");
+  assert.equal(isDoudouImagePath(path), true);
+});
+
+test("image export rejects paths outside assets, unsafe paths and missing files", async () => {
+  const vault = new FakeVault();
+  const images = new ImageService(vault as unknown as Vault);
+  assert.equal(isDoudouImagePath("其他目录/photo.png"), false);
+  assert.equal(isDoudouImagePath("兜兜/assets/../secret.png"), false);
+  assert.equal(isDoudouImagePath("/兜兜/assets/2026/08/photo.png"), false);
+  assert.equal(isDoudouImagePath("C:/Vault/兜兜/assets/photo.png"), false);
+  assert.equal(isDoudouImagePath("兜兜/assets/2026/08/file.pdf"), false);
+  await assert.rejects(() => images.readAsFile("其他目录/photo.png"));
+  await assert.rejects(() => images.readAsFile("兜兜/assets/2026/08/missing.png"));
+});
+
+test("share capability and payload require real file-sharing support", () => {
+  const file = { name: "record-01.gif", type: "image/gif" } as File;
+  assert.deepEqual(imageSharePayload(file), { files: [file], title: "record-01.gif" });
+  assert.equal(canShareImageFile(file, {}), false);
+  assert.equal(canShareImageFile(file, { share: async () => {}, canShare: () => true }), true);
+  assert.equal(canShareImageFile(file, { share: async () => {}, canShare: () => false }), false);
+});
+
+test("image clipboard keeps original bytes and rejects unsupported MIME", async () => {
+  const file = new File([new Uint8Array([7, 8])], "record-01.png", { type: "image/png" });
+  let written: ClipboardItems | null = null;
+  class FakeClipboardItem {
+    static supports(type: string): boolean { return type === "image/png"; }
+    constructor(readonly items: Record<string, Blob>) {}
+  }
+  await copyImageFileToClipboard(file, { write: async (items) => { written = items; } }, FakeClipboardItem as unknown as typeof ClipboardItem);
+  assert.equal(written?.length, 1);
+  await assert.rejects(() => copyImageFileToClipboard(
+    new File([new Uint8Array([1])], "photo.heic", { type: "image/heic" }),
+    { write: async () => {} },
+    FakeClipboardItem as unknown as typeof ClipboardItem
+  ), /clipboard-format-unsupported/);
+});
+
+test("image Ctrl+C only activates in an unambiguous viewer context", () => {
+  const shortcut = { key: "c", ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+  assert.equal(shouldCopyImageShortcut(shortcut, false, false), true);
+  assert.equal(shouldCopyImageShortcut(shortcut, true, false), false);
+  assert.equal(shouldCopyImageShortcut(shortcut, false, true), false);
+  assert.equal(shouldCopyImageShortcut({ ...shortcut, key: "v" }, false, false), false);
 });
 
 test("editing removes old images only after Markdown update succeeds", async () => {

@@ -1,4 +1,4 @@
-import { App, Component, Notice, setIcon } from "obsidian";
+import { App, Component, Notice, Platform, setIcon } from "obsidian";
 import type { AiTagService } from "../ai/AiTagService";
 import { imageExtension, type ImageService } from "../attachments/ImageService";
 import {
@@ -11,6 +11,8 @@ import type { DoudouRepository } from "../data/DoudouRepository";
 import type { RecordService } from "../services/RecordService";
 import type { StoredDoudouRecord } from "../types";
 import { ImagePreviewModal } from "./ImagePreviewModal";
+import { showImageActionMenuAtEvent } from "./imageActions";
+import { galleryPresentation } from "./imageGallery";
 import {
   createPendingImages,
   imageFilesFromClipboardItems,
@@ -59,13 +61,20 @@ export class RecordPage extends Component {
     article.createDiv({ cls: "doudou-record-meta", text: `${record.folder} · 创建于 ${formatDateTime(record.created)}${record.updated ? ` · 更新于 ${formatDateTime(record.updated)}` : ""}` });
     if (record.content) article.createDiv({ cls: "doudou-record-content", text: record.content });
     if ((record.images ?? []).length > 0) {
-      const gallery = article.createDiv({ cls: "doudou-record-images" });
-      gallery.toggleClass("doudou-record-images-single", record.images?.length === 1);
-      for (const path of record.images ?? []) {
-        const src = this.dependencies.imageService.resourcePath(path); if (!src) continue;
-        const button = gallery.createEl("button", { cls: "doudou-record-image-button", attr: { type: "button", "aria-label": "查看完整图片" } });
-        button.createEl("img", { cls: "doudou-record-full-image", attr: { src, alt: "备忘录图片" } });
+      const presentation = galleryPresentation(record.images ?? []);
+      const gallery = article.createDiv({ cls: `doudou-record-gallery doudou-gallery-layout-${presentation.layout}`, attr: { "data-count": String(record.images?.length ?? 0) } });
+      for (const [index, path] of presentation.visiblePaths.entries()) {
+        const button = gallery.createEl("button", { cls: "doudou-gallery-item", attr: { type: "button", "aria-label": `查看第 ${index + 1} 张图片` } });
+        const src = this.dependencies.imageService.resourcePath(path);
+        if (src) button.createEl("img", { cls: "doudou-gallery-image", attr: { src, alt: `备忘录图片 ${index + 1}` } });
+        else button.createDiv({ cls: "doudou-image-missing", text: "图片缺失" });
+        if (index === 8 && presentation.overflowCount > 0) button.createDiv({ cls: "doudou-gallery-more", text: `+${presentation.overflowCount}` });
         button.addEventListener("click", () => new ImagePreviewModal(this.app, this.dependencies.imageService, path).open());
+        button.addEventListener("contextmenu", (event) => {
+          if (!Platform.isDesktopApp) return;
+          event.preventDefault();
+          showImageActionMenuAtEvent(this.app, this.dependencies.imageService, path, event);
+        });
       }
     }
     if ((record.files ?? []).length > 0) {
@@ -126,7 +135,10 @@ export class RecordPage extends Component {
   private async renderEdit(isNew: boolean): Promise<void> {
     releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
     const record = this.record; const folders = await this.dependencies.repository.listFolders();
-    const header = this.containerEl.createDiv({ cls: "doudou-record-header" }); header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
+    const header = this.containerEl.createDiv({ cls: "doudou-record-header doudou-editor-header" }); header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
+    const actions = header.createDiv({ cls: "doudou-editor-actions" });
+    const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } });
+    const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } });
     const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
     const content = form.createEl("textarea", { cls: "doudou-editor-content", attr: { placeholder: "记下此刻……\n\n直接输入 #标签", "aria-label": "正文", rows: "10" } }); content.value = record?.content ?? "";
@@ -135,10 +147,6 @@ export class RecordPage extends Component {
     const paintImages = (): void => { images.empty();
       for (const path of retained) { const tile = images.createDiv({ cls: "doudou-editor-image" }); const src = this.dependencies.imageService.resourcePath(path); if (src) tile.createEl("img", { attr: { src, alt: "已有图片" } }); const button = tile.createEl("button", { text: "×", attr: { type: "button", "aria-label": "移除图片" } }); button.addEventListener("click", () => { retained = retained.filter((item) => item !== path); removed.add(path); paintImages(); }); }
       for (const pending of this.pending) { const tile = images.createDiv({ cls: "doudou-editor-image" }); tile.createEl("img", { attr: { src: pending.previewUrl, alt: pending.file.name } }); const button = tile.createEl("button", { text: "×", attr: { type: "button", "aria-label": "移除图片" } }); button.addEventListener("click", () => { URL.revokeObjectURL(pending.previewUrl); this.pending = this.pending.filter((item) => item.id !== pending.id); paintImages(); }); }
-      const addImage = images.createEl("button", { cls: "doudou-add-image-button", attr: { type: "button", "aria-label": "添加图片" } });
-      setIcon(addImage, "image-plus");
-      addImage.createSpan({ text: "添加图片" });
-      addImage.addEventListener("click", () => imageInput.click());
     }; paintImages();
     imageInput.addEventListener("change", () => { const files = Array.from(imageInput.files ?? []).filter((file) => imageExtension(file) !== null); imageInput.value = ""; this.pending.push(...createPendingImages(files)); paintImages(); });
     content.addEventListener("paste", (event) => {
@@ -150,6 +158,11 @@ export class RecordPage extends Component {
       if (!event.clipboardData?.getData("text/plain")) event.preventDefault();
     });
     const attachmentInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", multiple: "true", "aria-label": "选择普通文件附件" } });
+    const attachmentActions = form.createDiv({ cls: "doudou-attachment-actions" });
+    const addImage = attachmentActions.createEl("button", { cls: "doudou-add-image-button", attr: { type: "button", "aria-label": "添加图片" } });
+    setIcon(addImage, "image-plus"); addImage.createSpan({ text: "添加图片" }); addImage.addEventListener("click", () => imageInput.click());
+    const addFile = attachmentActions.createEl("button", { cls: "doudou-add-file-button", attr: { type: "button", "aria-label": "添加普通文件" } });
+    setIcon(addFile, "paperclip"); addFile.createSpan({ text: "添加文件" }); addFile.addEventListener("click", () => attachmentInput.click());
     const fileArea = form.createDiv({ cls: "doudou-editor-files" });
     let retainedFiles = [...(record?.files ?? [])];
     const removedFiles = new Set<string>();
@@ -175,10 +188,6 @@ export class RecordPage extends Component {
         const remove = card.createEl("button", { cls: "doudou-file-card-remove", text: "×", attr: { type: "button", "aria-label": `移除附件 ${pending.file.name}` } });
         remove.addEventListener("click", () => { this.pendingFiles = this.pendingFiles.filter((item) => item.id !== pending.id); paintFiles(); });
       }
-      const addFile = fileArea.createEl("button", { cls: "doudou-add-file-button", attr: { type: "button", "aria-label": "添加普通文件" } });
-      setIcon(addFile, "paperclip");
-      addFile.createSpan({ text: "添加文件" });
-      addFile.addEventListener("click", () => attachmentInput.click());
     };
     paintFiles();
     attachmentInput.addEventListener("change", () => {
@@ -194,9 +203,9 @@ export class RecordPage extends Component {
     });
     const folderRow = form.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } });
     const names = [...new Set([record?.folder ?? this.defaultFolder, ...folders.map((item) => item.name)])]; for (const name of names) folder.createEl("option", { text: name, value: name }); folder.value = record?.folder ?? this.defaultFolder;
-    const status = form.createDiv({ cls: "doudou-editor-status", attr: { role: "status" } }); const actions = form.createDiv({ cls: "doudou-editor-actions" });
-    const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } }); cancel.addEventListener("click", () => { releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; if (record) this.renderRead(); else this.goBack(); });
-    const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } }); save.addEventListener("click", async () => {
+    const status = form.createDiv({ cls: "doudou-editor-status", attr: { role: "status" } });
+    cancel.addEventListener("click", () => { releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; if (record) this.renderRead(); else this.goBack(); });
+    save.addEventListener("click", async () => {
       if (!hasSavableRecordDraft(title.value, content.value, retained.length + this.pending.length, retainedFiles.length + this.pendingFiles.length)) { status.setText("标题、正文、图片和文件不能同时为空"); return; }
       save.disabled = true; cancel.disabled = true; status.setText("正在保存..."); const snapshot = [...this.pending]; const fileSnapshot = [...this.pendingFiles];
       try {

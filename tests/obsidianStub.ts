@@ -4,6 +4,23 @@ export class TFile {
 
 export class Vault {}
 
+export class Menu {
+  addItem(): this { return this; }
+  showAtMouseEvent(): this { return this; }
+  showAtPosition(): this { return this; }
+}
+
+export class Notice {
+  constructor(_message: string) {}
+}
+
+export const Platform = {
+  isDesktopApp: true,
+  isMobileApp: false,
+  isIosApp: false,
+  isAndroidApp: false
+};
+
 export async function requestUrl(): Promise<never> {
   throw new Error("Network calls are disabled in tests");
 }

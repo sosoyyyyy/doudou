@@ -20,6 +20,31 @@ const MIME_EXTENSIONS: Record<string, string> = {
   "image/heif": "heif"
 };
 
+const EXTENSION_MIMES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  heic: "image/heic",
+  heif: "image/heif"
+};
+
+export function imageMimeType(path: string): string | null {
+  const extension = path.split(".").at(-1)?.toLocaleLowerCase() ?? "";
+  return EXTENSION_MIMES[extension] ?? null;
+}
+
+export function isDoudouImagePath(path: string): boolean {
+  const candidate = path.trim().replace(/\\/g, "/");
+  if (!candidate || candidate.startsWith("/") || /^[A-Za-z]:\//.test(candidate) || candidate.split("/").includes("..")) {
+    return false;
+  }
+  const normalized = normalizePath(candidate);
+  return normalized.startsWith(`${DOUDOU_ASSETS_FOLDER}/`) &&
+    imageMimeType(normalized) !== null;
+}
+
 export function imageExtension(file: Pick<ImageFileLike, "name" | "type">): string | null {
   const candidate = file.name.split(".").pop()?.toLocaleLowerCase() ?? "";
   if (SUPPORTED_EXTENSIONS.has(candidate)) return candidate;
@@ -87,6 +112,20 @@ export class ImageService {
   resourcePath(path: string): string | null {
     const file = this.vault.getAbstractFileByPath(normalizePath(path));
     return file instanceof TFile ? this.vault.getResourcePath(file) : null;
+  }
+
+  getFile(path: string): TFile | null {
+    if (!isDoudouImagePath(path)) return null;
+    const file = this.vault.getAbstractFileByPath(normalizePath(path));
+    return file instanceof TFile ? file : null;
+  }
+
+  async readAsFile(path: string): Promise<File> {
+    const file = this.getFile(path);
+    const type = imageMimeType(path);
+    if (!file || !type) throw new Error("Image is missing or outside doudou assets");
+    const name = normalizePath(path).split("/").at(-1) ?? "image";
+    return new File([await this.vault.readBinary(file)], name, { type });
   }
 
   private uniquePath(preferred: string): string {

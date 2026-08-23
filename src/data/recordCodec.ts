@@ -1,4 +1,4 @@
-import { DEFAULT_FOLDER, DOUDOU_ASSETS_FOLDER } from "../constants";
+import { DOUDOU_ASSETS_FOLDER, LEGACY_RECORD_FALLBACK_FOLDER } from "../constants";
 import type { DoudouRecord, StoredDoudouRecord } from "../types";
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
@@ -86,7 +86,7 @@ export function recordFromFrontmatter(
     ? frontmatter.folder.trim()
     : typeof frontmatter.category === "string"
       ? frontmatter.category.trim()
-      : DEFAULT_FOLDER;
+      : LEGACY_RECORD_FALLBACK_FOLDER;
   if (typeof frontmatter.id !== "string" || !created || !folderValue) {
     return null;
   }

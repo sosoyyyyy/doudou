@@ -2,15 +2,18 @@ import { Component, setIcon } from "obsidian";
 import type { ImageService } from "../attachments/ImageService";
 import { ALL_RECORDS_FOLDER, SEARCH_DEBOUNCE_MS } from "../constants";
 import type { DoudouRepository } from "../data/DoudouRepository";
+import type { FolderService } from "../services/FolderService";
 import { filterRecords } from "../services/recordSearch";
 import type { FolderSummary, StoredDoudouRecord } from "../types";
 import { attachmentCountText, formatTime, libraryCardContent, recordTitle } from "./uiHelpers";
 
 export interface LibraryPageDependencies {
   repository: DoudouRepository;
+  folderService: FolderService;
   imageService: ImageService;
   openRecord: (record: StoredDoudouRecord) => void;
   manageFolder: (folder?: string) => void;
+  reorderFolders: () => void;
 }
 
 export class LibraryPage extends Component {
@@ -28,7 +31,7 @@ export class LibraryPage extends Component {
   async refresh(showLoading = false): Promise<void> {
     const version = ++this.version; if (showLoading) this.bodyEl.setText("兜兜努力翻找中...");
     try {
-      const [records, folders] = await Promise.all([this.dependencies.repository.loadAll(), this.dependencies.repository.listFolders()]);
+      const [records, folders] = await Promise.all([this.dependencies.repository.loadAll(), this.dependencies.folderService.listFolders()]);
       if (version !== this.version) return; this.records = records; this.folders = folders; this.render();
     } catch (error) { console.error("[doudou] Failed to load library", error); this.bodyEl.setText("资料暂时没有加载出来"); }
   }
@@ -40,7 +43,9 @@ export class LibraryPage extends Component {
     search.addEventListener("click", () => { this.currentFolder = ALL_RECORDS_FOLDER; this.render(); });
     const list = this.bodyEl.createDiv({ cls: "doudou-folder-list" }); this.folderRow(list, ALL_RECORDS_FOLDER, this.records.length, false);
     for (const folder of this.folders) this.folderRow(list, folder.name, folder.count, true);
-    const add = this.bodyEl.createEl("button", { cls: "doudou-new-folder", text: "+ 新建文件夹", attr: { type: "button" } }); add.addEventListener("click", () => this.dependencies.manageFolder());
+    const actions = this.bodyEl.createDiv({ cls: "doudou-folder-actions" });
+    const add = actions.createEl("button", { cls: "doudou-new-folder", text: "+ 新建文件夹", attr: { type: "button" } }); add.addEventListener("click", () => this.dependencies.manageFolder());
+    const reorder = actions.createEl("button", { cls: "doudou-reorder-folders", text: "调整顺序", attr: { type: "button" } }); reorder.addEventListener("click", this.dependencies.reorderFolders);
   }
   private folderRow(container: HTMLElement, name: string, count: number, editable: boolean): void {
     const row = container.createDiv({ cls: "doudou-folder-row" }); const open = row.createEl("button", { cls: "doudou-folder-open", attr: { type: "button" } });

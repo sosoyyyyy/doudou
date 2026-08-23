@@ -7,6 +7,7 @@ import { FileService } from "./src/attachments/FileService";
 import { DOUDOU_VIEW_TYPE } from "./src/constants";
 import { DoudouRepository } from "./src/data/DoudouRepository";
 import { RecordService } from "./src/services/RecordService";
+import { FolderService } from "./src/services/FolderService";
 import { DoudouSettingTab } from "./src/settings/DoudouSettingTab";
 import { DEFAULT_SETTINGS, normalizeSettings } from "./src/settings/settings";
 import type { DoudouSettings } from "./src/types";
@@ -38,6 +39,14 @@ export default class DoudouPlugin extends Plugin {
     const imageService = new ImageService(this.app.vault);
     const fileService = new FileService(this.app.vault);
     const recordService = new RecordService(repository, imageService, fileService);
+    const folderService = new FolderService(
+      repository,
+      () => this.settings.folderOrder,
+      async (folderOrder) => {
+        this.settings.folderOrder = folderOrder;
+        await this.saveSettings();
+      }
+    );
     const clientProvider = (): DeepSeekClient | null => this.createDeepSeekClient();
     const aiTagService = new AiTagService(
       repository,
@@ -50,6 +59,7 @@ export default class DoudouPlugin extends Plugin {
       DOUDOU_VIEW_TYPE,
       (leaf: WorkspaceLeaf) => new DoudouView(leaf, {
         repository,
+        folderService,
         recordService,
         imageService,
         fileService,

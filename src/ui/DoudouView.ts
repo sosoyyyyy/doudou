@@ -6,15 +6,17 @@ import type { FileService } from "../attachments/FileService";
 import { DOUDOU_VIEW_TYPE, VAULT_REFRESH_DEBOUNCE_MS } from "../constants";
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { RecordService } from "../services/RecordService";
+import type { FolderService } from "../services/FolderService";
 import type { DoudouPage, StoredDoudouRecord } from "../types";
 import { AllPage } from "./AllPage";
 import { LibraryPage } from "./LibraryPage";
 import { RecordPage } from "./RecordPage";
 import { findRemotelySaveStartSyncCommand, type RegisteredCommand } from "./remotelySave";
-import { AskDoudouModal, FolderManagerModal } from "./ToolModals";
+import { AskDoudouModal, FolderManagerModal, FolderOrderModal } from "./ToolModals";
 
 export interface DoudouViewDependencies {
   repository: DoudouRepository;
+  folderService: FolderService;
   recordService: RecordService;
   imageService: ImageService;
   fileService: FileService;
@@ -39,14 +41,14 @@ export class DoudouView extends ItemView {
     const sync = tools.createEl("button", { cls: "doudou-header-tool", attr: { type: "button", "aria-label": "使用 Remotely Save 同步" } }); setIcon(sync, "refresh-cw"); sync.addEventListener("click", () => this.sync(sync));
     const pages = this.mainShellEl.createDiv({ cls: "doudou-pages" }); this.allContainerEl = pages.createDiv({ cls: "doudou-page" }); this.libraryContainerEl = pages.createDiv({ cls: "doudou-page doudou-is-hidden" }); this.recordContainerEl = this.rootEl.createDiv({ cls: "doudou-page doudou-is-hidden" });
     this.allPage = this.addChild(new AllPage(this.allContainerEl, { repository: this.dependencies.repository, imageService: this.dependencies.imageService, openRecord: (record) => this.openRecord(record) }));
-    this.libraryPage = this.addChild(new LibraryPage(this.libraryContainerEl, { repository: this.dependencies.repository, imageService: this.dependencies.imageService, openRecord: (record) => this.openRecord(record), manageFolder: (folder) => new FolderManagerModal(this.app, this.dependencies.repository, folder, async () => this.refreshAll()).open() }));
+    this.libraryPage = this.addChild(new LibraryPage(this.libraryContainerEl, { repository: this.dependencies.repository, folderService: this.dependencies.folderService, imageService: this.dependencies.imageService, openRecord: (record) => this.openRecord(record), manageFolder: (folder) => new FolderManagerModal(this.app, this.dependencies.folderService, folder, async () => this.refreshAll()).open(), reorderFolders: () => new FolderOrderModal(this.app, this.dependencies.folderService, async () => this.refreshAll()).open() }));
     this.recordPage = this.addChild(new RecordPage(this.app, this.recordContainerEl, this.dependencies, () => this.closeRecord(), async () => this.refreshAll()));
   }
   private async switchPage(page: DoudouPage): Promise<void> { if (this.showingRecord) this.closeRecord(); this.activePage = page; const all = page === "all"; this.allContainerEl.toggleClass("doudou-is-hidden", !all); this.libraryContainerEl.toggleClass("doudou-is-hidden", all); this.allTabEl.toggleClass("doudou-is-selected", all); this.libraryTabEl.toggleClass("doudou-is-selected", !all); this.dependencies.repository.invalidateCache(); if (all) await this.allPage.refresh(false); else await this.libraryPage.activate(); }
   private openRecord(record: StoredDoudouRecord): void { this.showingRecord = true; this.mainShellEl.addClass("doudou-is-hidden"); this.recordContainerEl.removeClass("doudou-is-hidden"); this.recordPage.open(record); }
   private closeRecord(): void { this.showingRecord = false; this.recordContainerEl.addClass("doudou-is-hidden"); this.mainShellEl.removeClass("doudou-is-hidden"); void this.refreshAll(); }
   private async newRecord(): Promise<void> { this.showingRecord = true; this.mainShellEl.addClass("doudou-is-hidden"); this.recordContainerEl.removeClass("doudou-is-hidden"); await this.recordPage.create(this.activePage === "library" ? this.libraryPage.currentFolderName() : undefined); }
-  private async refreshAll(): Promise<void> { this.dependencies.repository.invalidateCache(); await Promise.all([this.allPage.refresh(false), this.libraryPage.refresh(false)]); }
+  private async refreshAll(): Promise<void> { this.dependencies.repository.invalidateCache(); await Promise.all([this.allPage.refresh(false), this.libraryPage.refresh(false), this.recordPage.refreshFolders()]); }
   private sync(button: HTMLButtonElement): void { const registry = (this.app as AppWithCommands).commands as CommandRegistry | undefined; if (!registry) return; const id = findRemotelySaveStartSyncCommand(registry.listCommands()); if (!id) return; button.disabled = true; button.addClass("doudou-is-sync-triggered"); try { registry.executeCommandById(id); } finally { window.setTimeout(() => { button.disabled = false; button.removeClass("doudou-is-sync-triggered"); }, 700); } }
   private registerRefresh(): void { const schedule = (path: string, oldPath?: string): void => { if (!this.dependencies.repository.isDoudouPath(path) && (!oldPath || !this.dependencies.repository.isDoudouPath(oldPath))) return; this.dependencies.repository.invalidateCache(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = window.setTimeout(() => { this.refreshTimer = null; void this.refreshAll(); }, VAULT_REFRESH_DEBOUNCE_MS); }; this.registerEvent(this.app.vault.on("create", (file) => schedule(file.path))); this.registerEvent(this.app.vault.on("modify", (file) => schedule(file.path))); this.registerEvent(this.app.vault.on("delete", (file) => schedule(file.path))); this.registerEvent(this.app.vault.on("rename", (file, oldPath) => schedule(file.path, oldPath))); }
   private registerViewport(): void { const viewport = window.visualViewport; if (!viewport) return; const sync = (): void => { const top = this.rootEl.getBoundingClientRect().top; this.rootEl.style.setProperty("--doudou-visual-viewport-height", `${Math.max(0, viewport.offsetTop + viewport.height - top)}px`); this.rootEl.toggleClass("doudou-keyboard-open", Platform.isMobileApp && window.innerHeight - viewport.height > 120); }; viewport.addEventListener("resize", sync); viewport.addEventListener("scroll", sync); this.register(() => { viewport.removeEventListener("resize", sync); viewport.removeEventListener("scroll", sync); }); sync(); }

@@ -19,6 +19,8 @@ import { buildRecordPath, DoudouRepository, isDoudouRecordPath, normalizeFolderN
 import { extractFrontmatter, extractManualTags, recordFromFrontmatter, serializeRecord } from "../src/data/recordCodec";
 import { collectTagOptions, filterRecords, rankRecordsForQuestion } from "../src/services/recordSearch";
 import { RecordService } from "../src/services/RecordService";
+import { FolderService, normalizeFolderOrder } from "../src/services/FolderService";
+import { normalizeSettings } from "../src/settings/settings";
 import type { StoredDoudouRecord } from "../src/types";
 import { libraryCardContent, metaText, recordTitle, writeClipboardText } from "../src/ui/uiHelpers";
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
@@ -199,6 +201,45 @@ test("record path scanning reads custom and legacy records but excludes assets",
 
 test("repository creates, searches and lists custom folders", async () => {
   const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); await repository.createFolder("喵布小铺"); const record = repository.createRecord("7cm 立牌 #淘宝 #定价", "喵布小铺", "立牌价格"); const created = await repository.save(record); assert.match(created.path, /^兜兜\/喵布小铺\/\d{4}\/\d{2}\//); assert.deepEqual(created.tags, ["淘宝", "定价"]); assert.deepEqual(await repository.listFolders(), [{ name: "喵布小铺", count: 1 }]);
+});
+
+test("folder order removes deleted legacy folders and appends new real folders", () => {
+  assert.deepEqual(normalizeFolderOrder(["副业", "日记"], ["生活", "副业", "日记"]), ["副业", "日记"]);
+  assert.deepEqual(normalizeFolderOrder(["副业", "日记", "小说"], ["副业", "日记"]), ["副业", "日记", "小说"]);
+});
+
+test("old settings safely initialize an empty folder order", () => {
+  assert.deepEqual(normalizeSettings({ autoAiTags: true }).folderOrder, []);
+  assert.deepEqual(normalizeSettings({ folderOrder: [" 日记 ", "日记", 42] }).folderOrder, ["日记"]);
+});
+
+test("folder service uses only real Vault folders and excludes assets everywhere", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault);
+  await repository.createFolder("副业"); await repository.createFolder("日记"); await vault.createFolder("兜兜/assets");
+  let folderOrder = ["生活", "副业", "日记", "assets"];
+  const service = new FolderService(repository, () => folderOrder, async (next) => { folderOrder = next; });
+  const library = (await service.listFolders()).map((folder) => folder.name);
+  const createSelector = await service.folderNames(); const editSelector = await service.folderNames();
+  assert.deepEqual(library, ["副业", "日记"]); assert.deepEqual(createSelector, library); assert.deepEqual(editSelector, library); assert.deepEqual(folderOrder, library);
+});
+
+test("custom folder order persists across service instances", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault);
+  for (const name of ["副业", "日记", "小说"]) await repository.createFolder(name);
+  let folderOrder: string[] = [];
+  const createService = () => new FolderService(repository, () => folderOrder, async (next) => { folderOrder = next; });
+  await createService().setOrder(["小说", "日记", "副业"]);
+  assert.deepEqual(await createService().folderNames(), ["小说", "日记", "副业"]);
+});
+
+test("new, deleted and renamed folders reconcile without disturbing existing order", async () => {
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault);
+  for (const name of ["副业", "日记"]) await repository.createFolder(name);
+  let folderOrder = ["日记", "副业"];
+  const service = new FolderService(repository, () => folderOrder, async (next) => { folderOrder = next; });
+  await service.createFolder("小说"); assert.deepEqual(folderOrder, ["日记", "副业", "小说"]);
+  await service.renameFolder("副业", "摘抄"); assert.deepEqual(folderOrder, ["日记", "摘抄", "小说"]);
+  await service.deleteFolder("日记"); assert.deepEqual(folderOrder, ["摘抄", "小说"]); assert.deepEqual(await service.folderNames(), folderOrder);
 });
 
 test("moving a record changes Markdown folder but never attachment paths", async () => {

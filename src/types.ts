@@ -40,6 +40,7 @@ export interface DoudouSettings {
   deepSeekApiKey: string;
   deepSeekModel: DeepSeekModel;
   autoAiTags: boolean;
+  folderOrder: string[];
 }
 
 export interface AskSource {

@@ -48,6 +48,9 @@
 .doudou-folder-count, .doudou-folder-chevron { color: var(--doudou-muted); }
 .doudou-view button.doudou-folder-more { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 42px; width: 42px; height: auto; min-height: 42px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; color: var(--doudou-muted); line-height: normal; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-view button.doudou-new-folder, .doudou-view button.doudou-back-button { display: inline-flex; align-items: center; width: auto; height: auto; min-height: 40px; max-height: none; margin: 12px 0 0; padding: 6px 8px; overflow: visible; border: 0; color: var(--doudou-blue-strong); line-height: normal; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-folder-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 12px; }
+.doudou-view .doudou-folder-actions button.doudou-new-folder { margin: 0; }
+.doudou-view button.doudou-reorder-folders { display: inline-flex; align-items: center; justify-content: center; width: auto; height: auto; min-height: 40px; max-height: none; margin: 0; padding: 6px 10px; overflow: visible; border: 0; color: var(--doudou-blue-strong); line-height: normal; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-view .doudou-folder-header button.doudou-back-button, .doudou-view .doudou-record-header button.doudou-back-button { margin: 0; padding-left: 0; }
 .doudou-search-shell { display: flex; align-items: center; gap: 8px; margin: 14px 0; padding: 8px 12px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
 .doudou-view .doudou-search-shell input { display: block; flex: 1 1 auto; width: auto; height: auto; min-width: 0; min-height: 34px; max-height: none; margin: 0; padding: 4px 0; border: 0; line-height: 1.4; background: transparent; box-shadow: none; appearance: none; }
@@ -111,6 +114,17 @@
 .doudou-danger-ghost-button { color: var(--text-error); background: transparent; }
 .doudou-modal-content { display: grid; gap: 12px; }
 .doudou-modal-content h2 { margin: 0; }
+.doudou-folder-order-hint { color: var(--doudou-muted); font-size: 13px; line-height: 1.5; }
+.doudou-folder-order-list { display: grid; gap: 8px; max-height: min(55dvh, 460px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.doudou-folder-order-item { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; min-height: 48px; padding: 6px 7px 6px 10px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); cursor: grab; touch-action: pan-y; }
+.doudou-folder-order-item.doudou-is-dragging { opacity: .62; cursor: grabbing; }
+.doudou-folder-order-item.doudou-is-drop-target { border-color: var(--doudou-blue); background: var(--doudou-blue-soft); }
+.doudou-folder-order-list.doudou-is-reordering, .doudou-folder-order-list.doudou-is-reordering .doudou-folder-order-item { touch-action: none; }
+.doudou-folder-drag-handle { display: inline-flex; flex: 0 0 24px; align-items: center; justify-content: center; color: var(--doudou-muted); }
+.doudou-folder-order-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doudou-folder-order-controls { display: flex; flex: 0 0 auto; gap: 3px; }
+.doudou-modal .doudou-folder-order-controls button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 9px; color: var(--doudou-blue-strong); line-height: 1; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-modal .doudou-folder-order-controls button:disabled { opacity: .32; }
 .doudou-ask-tool-answer { min-height: 48px; padding: 12px; border-radius: 12px; line-height: 1.65; white-space: pre-wrap; background: var(--doudou-blue-soft); }
 .doudou-ask-tool-sources { display: grid; gap: 7px; }
 .doudou-source-item { width: 100%; min-height: 40px; margin: 0; text-align: left; }

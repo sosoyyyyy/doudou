@@ -6,8 +6,8 @@ import {
   MAX_ATTACHMENT_BYTES,
   type FileService
 } from "../attachments/FileService";
-import { DEFAULT_FOLDER } from "../constants";
 import type { DoudouRepository } from "../data/DoudouRepository";
+import type { FolderService } from "../services/FolderService";
 import type { RecordService } from "../services/RecordService";
 import type { StoredDoudouRecord } from "../types";
 import { ImagePreviewModal } from "./ImagePreviewModal";
@@ -33,6 +33,7 @@ import {
 
 export interface RecordPageDependencies {
   repository: DoudouRepository;
+  folderService: FolderService;
   recordService: RecordService;
   imageService: ImageService;
   fileService: FileService;
@@ -43,15 +44,24 @@ export class RecordPage extends Component {
   private record: StoredDoudouRecord | null = null;
   private pending: PendingImage[] = [];
   private pendingFiles: PendingFile[] = [];
-  private defaultFolder = DEFAULT_FOLDER;
+  private defaultFolder: string | undefined;
+  private folderSelectEl: HTMLSelectElement | null = null;
   constructor(private readonly app: App, private readonly containerEl: HTMLElement, private readonly dependencies: RecordPageDependencies, private readonly goBack: () => void, private readonly changed: () => Promise<void>) { super(); }
   override onload(): void { this.containerEl.addClass("doudou-record-page"); }
   override onunload(): void { releasePendingImages(this.pending); this.pendingFiles = []; this.containerEl.empty(); }
   open(record: StoredDoudouRecord): void { this.record = record; this.renderRead(); }
-  async create(defaultFolder?: string): Promise<void> { this.record = null; this.defaultFolder = defaultFolder ?? DEFAULT_FOLDER; await this.renderEdit(true); }
+  async create(defaultFolder?: string): Promise<void> { this.record = null; this.defaultFolder = defaultFolder; await this.renderEdit(true); }
+
+  async refreshFolders(): Promise<void> {
+    const select = this.folderSelectEl;
+    if (!select?.isConnected) return;
+    const current = select.value;
+    const names = await this.dependencies.folderService.folderNames();
+    this.populateFolderSelect(select, names, current);
+  }
 
   private renderRead(): void {
-    const record = this.record; if (!record) return; this.containerEl.empty();
+    const record = this.record; if (!record) return; this.folderSelectEl = null; this.containerEl.empty();
     const header = this.containerEl.createDiv({ cls: "doudou-record-header" });
     const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 返回", attr: { type: "button" } }); back.addEventListener("click", this.goBack);
     const tools = header.createDiv({ cls: "doudou-record-tools" });
@@ -138,7 +148,7 @@ export class RecordPage extends Component {
 
   private async renderEdit(isNew: boolean): Promise<void> {
     releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
-    const record = this.record; const folders = await this.dependencies.repository.listFolders();
+    const record = this.record; const folders = await this.dependencies.folderService.listFolders();
     const header = this.containerEl.createDiv({ cls: "doudou-record-header doudou-editor-header" }); header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
     const actions = header.createDiv({ cls: "doudou-editor-actions" });
     const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } });
@@ -345,12 +355,17 @@ export class RecordPage extends Component {
       this.pendingFiles.push(...createPendingFiles(accepted));
       paintFiles();
     });
-    const folderRow = form.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } });
-    const names = [...new Set([record?.folder ?? this.defaultFolder, ...folders.map((item) => item.name)])]; for (const name of names) folder.createEl("option", { text: name, value: name }); folder.value = record?.folder ?? this.defaultFolder;
+    const folderRow = form.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } }); this.folderSelectEl = folder;
+    const names = folders.map((item) => item.name);
+    const preferred = record?.folder ?? this.defaultFolder;
+    this.populateFolderSelect(folder, names, preferred);
     const status = form.createDiv({ cls: "doudou-editor-status", attr: { role: "status" } });
     cancel.addEventListener("click", () => { releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; if (record) this.renderRead(); else this.goBack(); });
     save.addEventListener("click", async () => {
       if (!hasSavableRecordDraft(title.value, content.value, editableImages.length, retainedFiles.length + this.pendingFiles.length)) { status.setText("标题、正文、图片和文件不能同时为空"); return; }
+      if (!folder.value) { status.setText("请先在资料页新建文件夹"); return; }
+      const actualFolders = await this.dependencies.folderService.folderNames();
+      if (!actualFolders.includes(folder.value)) { this.populateFolderSelect(folder, actualFolders); status.setText("所选文件夹已不存在，请重新选择"); return; }
       const imagePlan = buildImageSavePlan(editableImages);
       const pendingById = new Map(this.pending.map((item) => [item.id, item]));
       const snapshot = imagePlan.pendingIds.map((id) => pendingById.get(id)).filter((item): item is PendingImage => Boolean(item));
@@ -362,5 +377,13 @@ export class RecordPage extends Component {
         releasePendingImages(snapshot); this.pending = []; this.pendingFiles = []; await this.changed(); this.renderRead(); if (this.record) void this.dependencies.aiTagService.enrich(this.record);
       } catch (error) { console.error("[doudou] Failed to save record", error); status.setText("保存失败，请再试一次"); save.disabled = false; cancel.disabled = false; }
     });
+  }
+
+  private populateFolderSelect(select: HTMLSelectElement, names: readonly string[], preferred?: string): void {
+    select.empty();
+    const selected = preferred && names.includes(preferred) ? preferred : names[0] ?? "";
+    if (names.length === 0) select.createEl("option", { text: "请先新建资料文件夹", value: "", attr: { disabled: "true" } });
+    for (const name of names) select.createEl("option", { text: name, value: name });
+    select.value = selected;
   }
 }

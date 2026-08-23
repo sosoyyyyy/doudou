@@ -3,7 +3,8 @@ import type { DoudouSettings } from "../types";
 export const DEFAULT_SETTINGS: DoudouSettings = {
   deepSeekApiKey: "",
   deepSeekModel: "deepseek-v4-flash",
-  autoAiTags: true
+  autoAiTags: true,
+  folderOrder: []
 };
 
 export function normalizeSettings(value: unknown): DoudouSettings {
@@ -17,6 +18,11 @@ export function normalizeSettings(value: unknown): DoudouSettings {
       ? data.deepSeekApiKey.trim()
       : "",
     deepSeekModel: model,
-    autoAiTags: data.autoAiTags !== false
+    autoAiTags: data.autoAiTags !== false,
+    folderOrder: Array.isArray(data.folderOrder)
+      ? [...new Set(data.folderOrder.filter((name): name is string =>
+        typeof name === "string" && name.trim().length > 0
+      ).map((name) => name.trim()))]
+      : []
   };
 }

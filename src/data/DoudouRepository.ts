@@ -1,7 +1,6 @@
 import { normalizePath, parseYaml, TFile, Vault } from "obsidian";
 import {
   ALL_RECORDS_FOLDER,
-  DEFAULT_FOLDER,
   DOUDOU_ASSETS_FOLDER,
   DOUDOU_DATA_FOLDER
 } from "../constants";
@@ -77,7 +76,7 @@ export class DoudouRepository {
 
   constructor(private readonly vault: Vault) {}
 
-  createRecord(content: string, folder = DEFAULT_FOLDER, title?: string): DoudouRecord {
+  createRecord(content: string, folder: string, title?: string): DoudouRecord {
     const created = new Date();
     const randomPart = globalThis.crypto?.randomUUID?.() ??
       Math.random().toString(36).slice(2, 12);
@@ -212,14 +211,20 @@ export class DoudouRepository {
     const loadedFiles = (this.vault as Vault & { getAllLoadedFiles?: () => Array<{ path: string }> })
       .getAllLoadedFiles?.() ?? [];
     const rootPrefix = `${normalizePath(DOUDOU_DATA_FOLDER)}/`;
+    const actualFolders = new Set<string>();
     for (const item of loadedFiles) {
+      if (item instanceof TFile) continue;
       const normalized = normalizePath(item.path);
       if (!normalized.startsWith(rootPrefix)) continue;
       const relative = normalized.slice(rootPrefix.length);
-      if (!relative || relative.includes("/") || relative === "assets" || /^\d{4}$/.test(relative)) continue;
-      if (!counts.has(relative)) counts.set(relative, 0);
+      if (
+        !relative || relative.includes("/") ||
+        relative.toLocaleLowerCase() === "assets" ||
+        relative === ALL_RECORDS_FOLDER || /^\d{4}$/.test(relative)
+      ) continue;
+      actualFolders.add(relative);
     }
-    return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) =>
+    return [...actualFolders].map((name) => ({ name, count: counts.get(name) ?? 0 })).sort((a, b) =>
       a.name.localeCompare(b.name, "zh-CN")
     );
   }

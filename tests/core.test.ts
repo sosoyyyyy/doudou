@@ -19,6 +19,13 @@ import { ALL_RECORDS_FOLDER, DOUDOU_LEGACY_HIDDEN_CONFIG_PATH, DOUDOU_SHARED_CON
 import { buildRecordPath, DoudouRepository, isDoudouRecordPath, normalizeFolderName } from "../src/data/DoudouRepository";
 import { extractFrontmatter, extractManualTags, recordFromFrontmatter, serializeRecord } from "../src/data/recordCodec";
 import { collectTagOptions, filterRecords, rankRecordsForQuestion } from "../src/services/recordSearch";
+import {
+  applyManualTagCompletion,
+  collectConfirmedManualTagOptions,
+  findManualTagInput,
+  manualTagSuggestions,
+  parseConfirmedManualTagRanges
+} from "../src/services/manualTags";
 import { RecordService } from "../src/services/RecordService";
 import { FolderService, normalizeFolderOrder } from "../src/services/FolderService";
 import { parseSharedDoudouConfig, VaultFolderOrderStore } from "../src/services/VaultFolderOrderStore";
@@ -83,7 +90,7 @@ class FakeVault {
   writeCount(path: string): number { return this.writeCounts.get(path) ?? 0; }
 }
 
-function stored(overrides: Partial<StoredDoudouRecord> = {}): StoredDoudouRecord { return { id: "id-1", title: "猫咪日记", content: "今天记录一只猫 #日记", created: "2026-08-17T08:00:00.000Z", folder: "生活", tags: ["日记"], path: "兜兜/生活/2026/08/record.md", images: [], files: [], ...overrides }; }
+function stored(overrides: Partial<StoredDoudouRecord> = {}): StoredDoudouRecord { return { id: "id-1", title: "猫咪日记", content: "今天记录一只猫 #日记 ", created: "2026-08-17T08:00:00.000Z", folder: "生活", tags: ["日记"], path: "兜兜/生活/2026/08/record.md", images: [], files: [], ...overrides }; }
 function fakeImage(name: string, type: string, bytes = 4): ImageFileLike { return { name, type, arrayBuffer: async () => new ArrayBuffer(bytes) }; }
 function fakeAttachment(name: string, type: string, bytes = 12): AttachmentFileLike { return { name, type, size: bytes, arrayBuffer: async () => new ArrayBuffer(bytes) }; }
 function clipboardItem(
@@ -102,9 +109,37 @@ function clipboardItem(
   };
 }
 
-test("manual hashtags support Chinese, English, numbers, mixed text and deduplicate", () => {
-  assert.deepEqual(extractManualTags("#摘抄\n测试 #淘宝 \n#淘宝 #定价\n#UI #v04 #测试123 #无畏契约"), ["摘抄", "淘宝", "定价", "UI", "v04", "测试123", "无畏契约"]);
-  assert.deepEqual(extractManualTags("C#语言 # #正常"), ["正常"]);
+test("manual hashtags require an ordinary ASCII space and deduplicate", () => {
+  assert.deepEqual(extractManualTags("#摘抄 \n测试 #淘宝 \n#淘宝 #定价 \n#UI #v04 #测试123 #无畏契约 "), ["摘抄", "淘宝", "定价", "UI", "v04", "测试123", "无畏契约"]);
+  assert.deepEqual(extractManualTags("#未完成\n#逗号， #句号。 #叹号！ #问号？ #顿号、 #tab\t#结尾"), []);
+  assert.deepEqual(extractManualTags("# 今天的日记\n## 今天\n今天学了 C#\n#\n#正常 "), ["正常"]);
+  assert.deepEqual(parseConfirmedManualTagRanges("前 #标签 后").map(({ name, start, end }) => ({ name, start, end })), [{ name: "标签", start: 2, end: 5 }]);
+});
+
+test("manual tag completion replaces only the caret fragment and appends confirmation space", () => {
+  const text = "今天 #无 很开心，昨天写了 #日记 ";
+  const caret = text.indexOf("无") + 1;
+  const input = findManualTagInput(text, caret);
+  assert.deepEqual(input, { query: "无", replacementStart: 3, replacementEnd: 6 });
+  assert.deepEqual(applyManualTagCompletion(text, input!, "无畏契约"), {
+    value: "今天 #无畏契约 很开心，昨天写了 #日记 ",
+    selectionStart: 9,
+    selectionEnd: 9
+  });
+  assert.equal(findManualTagInput("# 今天", 2), null);
+  assert.equal(findManualTagInput("C#", 2), null);
+});
+
+test("manual tag suggestions use confirmed body tags only and never hidden AI tags", () => {
+  const records = [
+    stored({ id: "new", content: "#无畏契约 #日记 ", tags: ["无畏契约", "日记"], aiTags: ["游戏", "FPS"], updated: "2026-08-20T00:00:00.000Z" }),
+    stored({ id: "old", content: "#日记 ", tags: ["日记"], aiTags: ["竞技"], created: "2026-08-10T00:00:00.000Z" }),
+    stored({ id: "eof", content: "#未确认", tags: ["未确认"], aiTags: ["情绪"] })
+  ];
+  const options = collectConfirmedManualTagOptions(records);
+  assert.deepEqual(options.map(({ name, count }) => ({ name, count })), [{ name: "日记", count: 2 }, { name: "无畏契约", count: 1 }]);
+  assert.deepEqual(manualTagSuggestions(options, "无", new Set()).map((item) => item.name), ["无畏契约"]);
+  assert.deepEqual(manualTagSuggestions(options, "", new Set(["无畏契约"])).map((item) => item.name), ["日记"]);
 });
 
 test("shared app header keeps a normal-flow flex slot on every page", () => {
@@ -119,6 +154,22 @@ test("shared app header keeps a normal-flow flex slot on every page", () => {
 test("library card previews use primary text while metadata stays muted", () => {
   assert.match(cssDeclarations(".doudou-compact-preview"), /color:\s*var\(--text-normal\)/);
   assert.match(cssDeclarations(".doudou-journal-meta, .doudou-compact-meta, .doudou-record-meta"), /color:\s*var\(--doudou-muted\)/);
+});
+
+test("confirmed manual tags use text color only and editor mirror never captures input", () => {
+  const tag = cssDeclarations(".doudou-confirmed-tag");
+  assert.match(tag, /color:\s*var\(--doudou-tag-color\)/);
+  assert.match(tag, /background:\s*transparent/);
+  assert.doesNotMatch(tag, /border|border-radius|padding/);
+  assert.match(cssDeclarations(".doudou-view .doudou-tag-editor-mirror"), /pointer-events:\s*none/);
+  assert.match(cssDeclarations(".doudou-view textarea.doudou-tag-editor-input"), /caret-color:\s*var\(--text-normal\)/);
+});
+
+test("folder and record navigation use sticky headers inside their real scroll containers", () => {
+  assert.match(cssDeclarations(".doudou-folder-sticky"), /position:\s*sticky/);
+  assert.match(cssDeclarations(".doudou-view .doudou-record-header"), /position:\s*sticky/);
+  assert.match(cssDeclarations(".doudou-view .doudou-library-body.doudou-is-folder-view"), /padding:/);
+  assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
 });
 
 test("folder order modal state loads normal folders through an async service", async () => {
@@ -251,7 +302,7 @@ test("record path scanning reads custom and legacy records but excludes assets",
 });
 
 test("repository creates, searches and lists custom folders", async () => {
-  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); await repository.createFolder("喵布小铺"); const record = repository.createRecord("7cm 立牌 #淘宝 #定价", "喵布小铺", "立牌价格"); const created = await repository.save(record); assert.match(created.path, /^兜兜\/喵布小铺\/\d{4}\/\d{2}\//); assert.deepEqual(created.tags, ["淘宝", "定价"]); assert.deepEqual(await repository.listFolders(), [{ name: "喵布小铺", count: 1 }]);
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); await repository.createFolder("喵布小铺"); const record = repository.createRecord("7cm 立牌 #淘宝 #定价 ", "喵布小铺", "立牌价格"); const created = await repository.save(record); assert.match(created.path, /^兜兜\/喵布小铺\/\d{4}\/\d{2}\//); assert.deepEqual(created.tags, ["淘宝", "定价"]); assert.deepEqual(await repository.listFolders(), [{ name: "喵布小铺", count: 1 }]);
 });
 
 test("folder order removes deleted legacy folders and appends new real folders", () => {
@@ -323,7 +374,20 @@ test("shared internal config never becomes a record, folder or search result", a
 });
 
 test("moving a record changes Markdown folder but never attachment paths", async () => {
-  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); const original = await repository.save({ ...repository.createRecord("正文", "生活"), images: ["兜兜/assets/2026/08/keep.jpg"], files: ["兜兜/assets/2026/08/keep.pdf"] }); const name = original.path.split("/").at(-1)!; const moved = await repository.update(original, { title: "新标题", content: "修改 #标签", folder: "工作", images: original.images, files: original.files }); assert.equal(moved.path, buildRecordPath("工作", original.created, name)); assert.deepEqual(moved.images, original.images); assert.deepEqual(moved.files, original.files); assert.deepEqual(moved.tags, ["标签"]); assert.equal(vault.files.size, 1);
+  const vault = new FakeVault(); const repository = new DoudouRepository(vault as unknown as Vault); const original = await repository.save({ ...repository.createRecord("正文", "生活"), images: ["兜兜/assets/2026/08/keep.jpg"], files: ["兜兜/assets/2026/08/keep.pdf"] }); const name = original.path.split("/").at(-1)!; const moved = await repository.update(original, { title: "新标题", content: "修改 #标签 ", folder: "工作", images: original.images, files: original.files }); assert.equal(moved.path, buildRecordPath("工作", original.created, name)); assert.deepEqual(moved.images, original.images); assert.deepEqual(moved.files, original.files); assert.deepEqual(moved.tags, ["标签"]); assert.equal(vault.files.size, 1);
+});
+
+test("editing only legacy metadata preserves old manual tags without rewriting body syntax", async () => {
+  const vault = new FakeVault();
+  const repository = new DoudouRepository(vault as unknown as Vault);
+  const legacy = await repository.save({ ...repository.createRecord("旧正文", "生活"), tags: ["旧标签"] });
+  const file = vault.files.get(legacy.path)!;
+  file.content = serializeRecord({ ...legacy, content: "旧正文 #旧标签", tags: ["旧标签"] });
+  repository.invalidateCache();
+  const loaded = (await repository.loadAll())[0];
+  const updated = await repository.update(loaded, { title: "只改标题", content: loaded.content, folder: loaded.folder, images: loaded.images, files: loaded.files });
+  assert.deepEqual(updated.tags, ["旧标签"]);
+  assert.equal(updated.content, "旧正文 #旧标签");
 });
 
 test("editing legacy migrates only that Markdown without duplicates", async () => {
@@ -347,7 +411,7 @@ test("empty folders can be deleted while non-empty folders are protected", async
 });
 
 test("search covers title, content, tags, ai_tags and folder without exposing ai tags", () => {
-  const records = [stored({ title: "亚克力定价", content: "准备卖 13.9 #淘宝", folder: "喵布小铺", tags: ["淘宝"], aiTags: ["周边商品"], files: ["兜兜/assets/2026/08/id-file-01-2026报价表.xlsx"] })];
+  const records = [stored({ title: "亚克力定价", content: "准备卖 13.9 #淘宝 ", folder: "喵布小铺", tags: ["淘宝"], aiTags: ["周边商品"], files: ["兜兜/assets/2026/08/id-file-01-2026报价表.xlsx"] })];
   for (const query of ["亚克力", "13.9", "#淘宝", "周边商品", "喵布小铺", "报价表"]) assert.equal(filterRecords(records, { query, tags: new Set() }).length, 1);
   assert.equal(filterRecords(records, { query: "assets", tags: new Set() }).length, 0);
   assert.equal(metaText(records[0]), "喵布小铺 · #淘宝"); assert.deepEqual(collectTagOptions(records).map((item) => item.name), ["淘宝"]);
@@ -355,6 +419,14 @@ test("search covers title, content, tags, ai_tags and folder without exposing ai
 
 test("question ranking uses title, folder and hidden AI tags", () => {
   const result = rankRecordsForQuestion([stored({ title: "亚克力立牌", folder: "喵布小铺", aiTags: ["商品定价"] })], "立牌定价", ["商品定价"], 10); assert.equal(result.length, 1);
+});
+
+test("question ranking still recalls August diary records through hidden AI tags", () => {
+  const result = rankRecordsForQuestion([
+    stored({ content: "八月的一天", tags: [], aiTags: ["日记"] })
+  ], "帮我总结一下八月的日记", [], 10);
+  assert.equal(result.length, 1);
+  assert.ok(result[0].score > 0);
 });
 
 test("record title falls back to first non-empty line then image record", () => {

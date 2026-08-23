@@ -1,5 +1,6 @@
 import { DOUDOU_ASSETS_FOLDER, LEGACY_RECORD_FALLBACK_FOLDER } from "../constants";
 import type { DoudouRecord, StoredDoudouRecord } from "../types";
+import { extractConfirmedManualTags } from "../services/manualTags";
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
@@ -23,13 +24,7 @@ export function normalizeTags(value: unknown): string[] {
 }
 
 export function extractManualTags(content: string): string[] {
-  const matches: string[] = [];
-  const pattern = /(?:^|[\s，。！？、；：,.!?;:()（）\[\]【】{}“”‘’])#([\p{L}\p{N}_-]+)/gu;
-  for (const match of content.matchAll(pattern)) {
-    const tag = cleanTagName(match[1]);
-    if (tag && !matches.includes(tag)) matches.push(tag);
-  }
-  return matches;
+  return extractConfirmedManualTags(content);
 }
 
 function yamlString(value: string): string {

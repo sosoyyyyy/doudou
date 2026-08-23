@@ -3,7 +3,7 @@ import type { ImageService } from "../attachments/ImageService";
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { StoredDoudouRecord } from "../types";
 import { allPageGalleryPresentation } from "./imageGallery";
-import { attachmentCountText, previewText, recordTitle } from "./uiHelpers";
+import { attachmentCountText, recordTitle, renderManualTagText } from "./uiHelpers";
 
 export interface AllPageDependencies {
   repository: DoudouRepository;
@@ -49,7 +49,9 @@ export class AllPage extends Component {
     const body = button.createDiv({ cls: "doudou-journal-body" });
     if (record.title?.trim()) body.createDiv({ cls: "doudou-journal-title", text: record.title });
     const attachmentText = attachmentCountText(record);
-    body.createDiv({ cls: "doudou-journal-preview", text: previewText(record.content) || ((record.images?.length ?? 0) > 0 ? "图片记录" : attachmentText ? `附件记录 · ${attachmentText} 个文件` : "空白记录") });
+    const preview = body.createDiv({ cls: "doudou-journal-preview" });
+    if (record.content.trim()) renderManualTagText(preview, record.content);
+    else preview.setText((record.images?.length ?? 0) > 0 ? "图片记录" : attachmentText ? `附件记录 · ${attachmentText} 个文件` : "空白记录");
     body.createDiv({ cls: "doudou-journal-meta", text: `${time.format(new Date(record.created))} · ${record.folder}` });
     if (attachmentText && record.content.trim()) body.createDiv({ cls: "doudou-card-attachment-count", text: attachmentText });
     const presentation = allPageGalleryPresentation(record.images ?? []);

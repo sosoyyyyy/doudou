@@ -136,7 +136,9 @@ export class DoudouRepository {
       ...(changes.title?.trim() ? { title: changes.title.trim() } : { title: undefined }),
       content: changes.content,
       folder: normalizeFolderName(changes.folder),
-      tags: extractManualTags(changes.content),
+      tags: changes.content === (current?.content ?? record.content)
+        ? (current?.tags ?? record.tags)
+        : extractManualTags(changes.content),
       images: normalizeImagePaths(changes.images ?? current?.images ?? record.images ?? []),
       files: normalizeAssetPaths(changes.files ?? current?.files ?? record.files ?? []),
       updated: new Date().toISOString(),

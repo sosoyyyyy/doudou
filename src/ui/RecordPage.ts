@@ -10,6 +10,13 @@ import type { DoudouRepository } from "../data/DoudouRepository";
 import type { FolderService } from "../services/FolderService";
 import type { RecordService } from "../services/RecordService";
 import type { StoredDoudouRecord } from "../types";
+import {
+  applyManualTagCompletion,
+  collectConfirmedManualTagOptions,
+  extractConfirmedManualTags,
+  findManualTagInput,
+  manualTagSuggestions
+} from "../services/manualTags";
 import { ImagePreviewModal } from "./ImagePreviewModal";
 import { showImageActionMenuAtEvent } from "./imageActions";
 import { recordPageGalleryPresentation } from "./imageGallery";
@@ -24,12 +31,126 @@ import {
   releasePendingImages,
   type PendingImage
 } from "./imageDraft";
-import { formatDateTime, writeClipboardText } from "./uiHelpers";
+import { formatDateTime, renderManualTagText, writeClipboardText } from "./uiHelpers";
 import {
   createPendingFiles,
   hasSavableRecordDraft,
   type PendingFile
 } from "./fileDraft";
+
+function createManualTagEditor(
+  form: HTMLElement,
+  initialValue: string,
+  records: readonly StoredDoudouRecord[]
+): HTMLTextAreaElement {
+  const wrapper = form.createDiv({ cls: "doudou-tag-editor" });
+  const mirror = wrapper.createDiv({
+    cls: "doudou-editor-content doudou-tag-editor-mirror",
+    attr: { "aria-hidden": "true" }
+  });
+  const textarea = wrapper.createEl("textarea", {
+    cls: "doudou-editor-content doudou-tag-editor-input",
+    attr: {
+      placeholder: "记下此刻……\n\n直接输入 #标签",
+      "aria-label": "正文",
+      rows: "10",
+      autocomplete: "off",
+      spellcheck: "true"
+    }
+  });
+  textarea.value = initialValue;
+  const suggestions = wrapper.createDiv({
+    cls: "doudou-tag-suggestions doudou-is-hidden",
+    attr: { role: "listbox", "aria-label": "用户标签建议" }
+  });
+  const options = collectConfirmedManualTagOptions(records);
+  let composing = false;
+
+  const syncMirror = (): void => {
+    renderManualTagText(mirror, textarea.value);
+    if (textarea.value.endsWith("\n")) mirror.appendText("\n");
+    mirror.scrollTop = textarea.scrollTop;
+    mirror.scrollLeft = textarea.scrollLeft;
+  };
+  const hideSuggestions = (): void => {
+    suggestions.empty();
+    suggestions.addClass("doudou-is-hidden");
+  };
+  const applySuggestion = (name: string): void => {
+    const input = findManualTagInput(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd
+    );
+    if (!input) return;
+    const completion = applyManualTagCompletion(textarea.value, input, name);
+    textarea.value = completion.value;
+    textarea.setSelectionRange(completion.selectionStart, completion.selectionEnd);
+    syncMirror();
+    hideSuggestions();
+    textarea.focus({ preventScroll: true });
+  };
+  const updateSuggestions = (): void => {
+    if (composing || document.activeElement !== textarea) {
+      hideSuggestions();
+      return;
+    }
+    const input = findManualTagInput(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd
+    );
+    if (!input) {
+      hideSuggestions();
+      return;
+    }
+    const confirmed = new Set(extractConfirmedManualTags(textarea.value));
+    const matches = manualTagSuggestions(options, input.query, confirmed);
+    if (matches.length === 0) {
+      hideSuggestions();
+      return;
+    }
+    suggestions.empty();
+    suggestions.removeClass("doudou-is-hidden");
+    for (const option of matches) {
+      const button = suggestions.createEl("button", {
+        cls: "doudou-tag-suggestion",
+        text: `#${option.name}`,
+        attr: { type: "button", role: "option" }
+      });
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        applySuggestion(option.name);
+      });
+      button.addEventListener("click", () => applySuggestion(option.name));
+    }
+  };
+
+  textarea.addEventListener("input", () => {
+    syncMirror();
+    if (!composing) updateSuggestions();
+  });
+  textarea.addEventListener("select", updateSuggestions);
+  textarea.addEventListener("click", updateSuggestions);
+  textarea.addEventListener("keyup", updateSuggestions);
+  textarea.addEventListener("scroll", () => {
+    mirror.scrollTop = textarea.scrollTop;
+    mirror.scrollLeft = textarea.scrollLeft;
+  }, { passive: true });
+  textarea.addEventListener("compositionstart", () => {
+    composing = true;
+    hideSuggestions();
+  });
+  textarea.addEventListener("compositionend", () => {
+    composing = false;
+    syncMirror();
+    updateSuggestions();
+  });
+  textarea.addEventListener("focus", updateSuggestions);
+  textarea.addEventListener("blur", hideSuggestions);
+  syncMirror();
+  return textarea;
+}
 
 export interface RecordPageDependencies {
   repository: DoudouRepository;
@@ -67,14 +188,14 @@ export class RecordPage extends Component {
     const tools = header.createDiv({ cls: "doudou-record-tools" });
     const edit = tools.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "编辑备忘录", title: "编辑" } }); setIcon(edit, "pencil"); edit.addEventListener("click", () => void this.renderEdit(false));
     const more = tools.createEl("button", { cls: "doudou-round-tool", text: "…", attr: { type: "button", "aria-label": "更多操作" } });
-    const menu = this.containerEl.createDiv({ cls: "doudou-record-menu doudou-is-hidden" });
+    const menu = header.createDiv({ cls: "doudou-record-menu doudou-is-hidden" });
     const copy = menu.createEl("button", { text: "复制全文", attr: { type: "button" } }); copy.addEventListener("click", () => { void writeClipboardText(record.content); menu.addClass("doudou-is-hidden"); });
     const remove = menu.createEl("button", { cls: "doudou-menu-danger", text: "删除", attr: { type: "button" } }); remove.addEventListener("click", async () => { if (!window.confirm("确定删除这条备忘录吗？它会进入 Obsidian 回收站。")) return; await this.dependencies.recordService.delete(record); await this.changed(); this.goBack(); });
     more.addEventListener("click", () => menu.toggleClass("doudou-is-hidden", !menu.hasClass("doudou-is-hidden")));
     const article = this.containerEl.createEl("article", { cls: "doudou-record-article" });
     if (record.title?.trim()) article.createEl("h1", { text: record.title });
     article.createDiv({ cls: "doudou-record-meta", text: `${record.folder} · 创建于 ${formatDateTime(record.created)}${record.updated ? ` · 更新于 ${formatDateTime(record.updated)}` : ""}` });
-    if (record.content) article.createDiv({ cls: "doudou-record-content", text: record.content });
+    if (record.content) renderManualTagText(article.createDiv({ cls: "doudou-record-content" }), record.content);
     if ((record.images ?? []).length > 0) {
       const presentation = recordPageGalleryPresentation(record.images ?? []);
       const gallery = article.createDiv({ cls: "doudou-record-gallery", attr: { "data-count": String(record.images?.length ?? 0) } });
@@ -148,14 +269,18 @@ export class RecordPage extends Component {
 
   private async renderEdit(isNew: boolean): Promise<void> {
     releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
-    const record = this.record; const folders = await this.dependencies.folderService.listFolders();
+    const record = this.record;
+    const [folders, records] = await Promise.all([
+      this.dependencies.folderService.listFolders(),
+      this.dependencies.repository.loadAll()
+    ]);
     const header = this.containerEl.createDiv({ cls: "doudou-record-header doudou-editor-header" }); header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
     const actions = header.createDiv({ cls: "doudou-editor-actions" });
     const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } });
     const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } });
     const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
-    const content = form.createEl("textarea", { cls: "doudou-editor-content", attr: { placeholder: "记下此刻……\n\n直接输入 #标签", "aria-label": "正文", rows: "10" } }); content.value = record?.content ?? "";
+    const content = createManualTagEditor(form, record?.content ?? "", records);
     const imageInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
     const images = form.createDiv({ cls: "doudou-editor-images" });
     let editableImages: EditableImageItem[] = (record?.images ?? []).map((path, index) => ({

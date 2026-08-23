@@ -5,7 +5,7 @@ import type { DoudouRepository } from "../data/DoudouRepository";
 import type { FolderService } from "../services/FolderService";
 import { filterRecords } from "../services/recordSearch";
 import type { FolderSummary, StoredDoudouRecord } from "../types";
-import { attachmentCountText, formatTime, libraryCardContent, recordTitle } from "./uiHelpers";
+import { attachmentCountText, formatTime, libraryCardContent, recordTitle, renderManualTagText } from "./uiHelpers";
 
 export interface LibraryPageDependencies {
   repository: DoudouRepository;
@@ -22,6 +22,7 @@ export class LibraryPage extends Component {
   private folders: FolderSummary[] = [];
   private currentFolder: string | null = null;
   private query = "";
+  private searchExpanded = false;
   private searchTimer: number | null = null;
   private version = 0;
   constructor(private readonly containerEl: HTMLElement, private readonly dependencies: LibraryPageDependencies) { super(); }
@@ -36,7 +37,7 @@ export class LibraryPage extends Component {
     } catch (error) { console.error("[doudou] Failed to load library", error); this.bodyEl.setText("资料暂时没有加载出来"); }
   }
   currentFolderName(): string | undefined { return this.currentFolder && this.currentFolder !== ALL_RECORDS_FOLDER ? this.currentFolder : undefined; }
-  private render(): void { this.bodyEl.empty(); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); }
+  private render(): void { this.bodyEl.empty(); this.bodyEl.toggleClass("doudou-is-folder-view", this.currentFolder !== null); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); }
   private renderFolders(): void {
     const header = this.bodyEl.createDiv({ cls: "doudou-library-heading" }); header.createEl("h2", { text: "资料" });
     const search = header.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索全部资料" } }); setIcon(search, "search");
@@ -50,13 +51,27 @@ export class LibraryPage extends Component {
   private folderRow(container: HTMLElement, name: string, count: number, editable: boolean): void {
     const row = container.createDiv({ cls: "doudou-folder-row" }); const open = row.createEl("button", { cls: "doudou-folder-open", attr: { type: "button" } });
     const icon = open.createSpan({ cls: "doudou-folder-icon" }); setIcon(icon, "folder"); open.createSpan({ cls: "doudou-folder-name", text: name }); open.createSpan({ cls: "doudou-folder-count", text: String(count) }); open.createSpan({ cls: "doudou-folder-chevron", text: "›" });
-    open.addEventListener("click", () => { this.currentFolder = name; this.query = ""; this.render(); });
+    open.addEventListener("click", () => { this.currentFolder = name; this.query = ""; this.searchExpanded = false; this.render(); });
     if (editable) { const more = row.createEl("button", { cls: "doudou-folder-more", text: "…", attr: { type: "button", "aria-label": `管理文件夹 ${name}` } }); more.addEventListener("click", () => this.dependencies.manageFolder(name)); }
   }
   private renderFolder(): void {
-    const header = this.bodyEl.createDiv({ cls: "doudou-folder-header" }); const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 资料", attr: { type: "button" } }); back.addEventListener("click", () => { this.currentFolder = null; this.query = ""; this.render(); }); header.createEl("h2", { text: this.currentFolder ?? ALL_RECORDS_FOLDER });
-    const searchShell = this.bodyEl.createDiv({ cls: "doudou-search-shell" }); const icon = searchShell.createSpan(); setIcon(icon, "search"); const input = searchShell.createEl("input", { attr: { type: "search", placeholder: "搜索资料", "aria-label": "搜索资料" } }); input.value = this.query;
-    input.addEventListener("input", () => { if (this.searchTimer !== null) window.clearTimeout(this.searchTimer); this.searchTimer = window.setTimeout(() => { this.query = input.value; this.renderCards(); }, SEARCH_DEBOUNCE_MS); });
+    const sticky = this.bodyEl.createDiv({ cls: "doudou-folder-sticky" });
+    const header = sticky.createDiv({ cls: "doudou-folder-header" });
+    const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 资料", attr: { type: "button" } });
+    back.addEventListener("click", () => { this.currentFolder = null; this.query = ""; this.searchExpanded = false; this.render(); });
+    header.createEl("h2", { text: this.currentFolder ?? ALL_RECORDS_FOLDER });
+    const search = header.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索当前文件夹资料" } });
+    setIcon(search, "search");
+    search.addEventListener("click", () => { this.searchExpanded = true; this.render(); });
+    if (this.searchExpanded) {
+      const searchShell = sticky.createDiv({ cls: "doudou-search-shell doudou-folder-search" });
+      const icon = searchShell.createSpan(); setIcon(icon, "search");
+      const input = searchShell.createEl("input", { attr: { type: "search", placeholder: "搜索当前文件夹资料", "aria-label": "搜索当前文件夹资料" } }); input.value = this.query;
+      const close = searchShell.createEl("button", { cls: "doudou-search-close", text: "×", attr: { type: "button", "aria-label": "关闭搜索" } });
+      close.addEventListener("click", () => { if (this.searchTimer !== null) window.clearTimeout(this.searchTimer); this.searchTimer = null; this.query = ""; this.searchExpanded = false; this.render(); });
+      input.addEventListener("input", () => { if (this.searchTimer !== null) window.clearTimeout(this.searchTimer); this.searchTimer = window.setTimeout(() => { this.query = input.value; this.renderCards(); }, SEARCH_DEBOUNCE_MS); });
+      input.focus({ preventScroll: true });
+    }
     this.bodyEl.createDiv({ cls: "doudou-compact-list" }); this.renderCards();
   }
   private renderCards(): void {
@@ -67,7 +82,7 @@ export class LibraryPage extends Component {
       const card = list.createEl("button", { cls: "doudou-compact-card", attr: { type: "button", "aria-label": `打开备忘录：${recordTitle(record)}` } }); const image = record.images?.[0];
       if (image) { const src = this.dependencies.imageService.resourcePath(image); if (src) { const wrap = card.createDiv({ cls: "doudou-compact-image-wrap" }); wrap.createEl("img", { cls: "doudou-compact-image", attr: { src, alt: "" } }); if ((record.images?.length ?? 0) > 1) wrap.createSpan({ text: `${record.images?.length} 张` }); } }
       const attachmentText = attachmentCountText(record); const content = libraryCardContent(record);
-      const main = card.createDiv({ cls: "doudou-compact-main" }); if (content.title) main.createDiv({ cls: "doudou-compact-title", text: content.title }); if (content.preview) main.createDiv({ cls: "doudou-compact-preview", text: content.preview }); main.createDiv({ cls: "doudou-compact-meta", text: `${formatTime(record.created)}${this.currentFolder === ALL_RECORDS_FOLDER ? ` · ${record.folder}` : ""}${attachmentText ? ` · ${attachmentText}` : ""}` }); card.addEventListener("click", () => this.dependencies.openRecord(record));
+      const main = card.createDiv({ cls: "doudou-compact-main" }); if (content.title) main.createDiv({ cls: "doudou-compact-title", text: content.title }); if (content.preview) { const preview = main.createDiv({ cls: "doudou-compact-preview" }); if (record.content.trim()) renderManualTagText(preview, record.content); else preview.setText(content.preview); } main.createDiv({ cls: "doudou-compact-meta", text: `${formatTime(record.created)}${this.currentFolder === ALL_RECORDS_FOLDER ? ` · ${record.folder}` : ""}${attachmentText ? ` · ${attachmentText}` : ""}` }); card.addEventListener("click", () => this.dependencies.openRecord(record));
     }
   }
 }

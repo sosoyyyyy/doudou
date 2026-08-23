@@ -4,6 +4,7 @@ import type {
   StoredDoudouRecord,
   TagOption
 } from "../types";
+import { collectConfirmedManualTagOptions } from "./manualTags";
 
 function attachmentFileNames(record: StoredDoudouRecord): string[] {
   return (record.files ?? []).map((path) => path.replace(/\\/g, "/").split("/").at(-1) ?? "");
@@ -87,22 +88,5 @@ export function filterRecords(
 export function collectTagOptions(
   records: readonly StoredDoudouRecord[]
 ): TagOption[] {
-  const statistics = new Map<string, TagOption>();
-  for (const record of records) {
-    for (const tag of record.tags) {
-      const current = statistics.get(tag);
-      if (current) {
-        current.count += 1;
-        if (record.created > current.lastUsed) current.lastUsed = record.created;
-      } else {
-        statistics.set(tag, { name: tag, count: 1, lastUsed: record.created });
-      }
-    }
-  }
-
-  return [...statistics.values()].sort(
-    (a, b) => b.lastUsed.localeCompare(a.lastUsed) ||
-      b.count - a.count ||
-      a.name.localeCompare(b.name, "zh-CN")
-  );
+  return collectConfirmedManualTagOptions(records);
 }

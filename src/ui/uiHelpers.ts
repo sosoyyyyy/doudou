@@ -1,4 +1,5 @@
 import type { DoudouRecord } from "../types";
+import { parseConfirmedManualTagRanges } from "../services/manualTags";
 
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
@@ -80,6 +81,20 @@ export function dateGroupLabel(value: string, now = new Date()): string {
 
 export function previewText(content: string): string {
   return content.replace(/\s+/g, " ").trim();
+}
+
+export function renderManualTagText(container: HTMLElement, content: string): void {
+  container.empty();
+  let cursor = 0;
+  for (const range of parseConfirmedManualTagRanges(content)) {
+    if (range.start > cursor) container.appendText(content.slice(cursor, range.start));
+    container.createSpan({
+      cls: "doudou-confirmed-tag",
+      text: content.slice(range.start, range.end)
+    });
+    cursor = range.end;
+  }
+  if (cursor < content.length) container.appendText(content.slice(cursor));
 }
 
 export async function writeClipboardText(text: string): Promise<void> {

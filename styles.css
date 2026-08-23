@@ -2,9 +2,9 @@
 .doudou-view, .doudou-modal {
   --doudou-blue: #4d8ef7; --doudou-blue-strong: #3379e8; --doudou-blue-soft: #eaf3ff;
   --doudou-bg: #f7faff; --doudou-surface: #fff; --doudou-border: #e4ecf7;
-  --doudou-muted: #7d8897; --doudou-shadow: 0 5px 18px rgb(54 94 150 / 8%);
+  --doudou-muted: #7d8897; --doudou-tag-color: #b87900; --doudou-shadow: 0 5px 18px rgb(54 94 150 / 8%);
 }
-.theme-dark .doudou-view, .theme-dark .doudou-modal { --doudou-blue: #72a7fb; --doudou-blue-strong: #a9cdfc; --doudou-blue-soft: #203958; --doudou-bg: #111a25; --doudou-surface: #192635; --doudou-border: #30465e; --doudou-muted: #a8b4c3; --doudou-shadow: 0 5px 18px rgb(0 0 0 / 20%); }
+.theme-dark .doudou-view, .theme-dark .doudou-modal { --doudou-blue: #72a7fb; --doudou-blue-strong: #a9cdfc; --doudou-blue-soft: #203958; --doudou-bg: #111a25; --doudou-surface: #192635; --doudou-border: #30465e; --doudou-muted: #a8b4c3; --doudou-tag-color: #e0aa38; --doudou-shadow: 0 5px 18px rgb(0 0 0 / 20%); }
 .doudou-view *, .doudou-view *::before, .doudou-view *::after { box-sizing: border-box; }
 .doudou-view { display: flex; flex-direction: column; width: 100%; height: min(100%, var(--doudou-visual-viewport-height, 100dvh)); min-height: 0; overflow: hidden; color: var(--text-normal); background: var(--doudou-bg); }
 .doudou-main-shell, .doudou-pages, .doudou-page, .doudou-all-page, .doudou-library-page, .doudou-record-page { display: flex; flex-direction: column; min-height: 0; }
@@ -27,6 +27,7 @@
 .doudou-view .doudou-journal-body { display: block; width: 100%; height: auto; padding: 15px 16px 14px; overflow: visible; white-space: normal; }
 .doudou-journal-title { margin-bottom: 6px; font-size: 18px; font-weight: 720; }
 .doudou-view .doudou-journal-preview { display: -webkit-box; height: auto; max-height: none; overflow: hidden; font-size: 15px; line-height: 1.65; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
+.doudou-confirmed-tag { color: var(--doudou-tag-color); background: transparent; }
 .doudou-journal-meta, .doudou-compact-meta, .doudou-record-meta { margin-top: 10px; color: var(--doudou-muted); font-size: 12px; }
 .doudou-view .doudou-journal-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: calc(100% - 32px); min-width: 0; max-width: 500px; margin: 0 16px 16px; overflow: hidden; }
 .doudou-view .doudou-journal-gallery-item { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-width: 0; overflow: hidden; border-radius: 10px; background: var(--doudou-blue-soft); }
@@ -52,8 +53,16 @@
 .doudou-view .doudou-folder-actions button.doudou-new-folder { margin: 0; }
 .doudou-view button.doudou-reorder-folders { display: inline-flex; align-items: center; justify-content: center; width: auto; height: auto; min-height: 40px; max-height: none; margin: 0; padding: 6px 10px; overflow: visible; border: 0; color: var(--doudou-blue-strong); line-height: normal; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-view .doudou-folder-header button.doudou-back-button, .doudou-view .doudou-record-header button.doudou-back-button { margin: 0; padding-left: 0; }
+.doudou-view .doudou-library-body.doudou-is-folder-view { padding: 0 0 max(26px, env(safe-area-inset-bottom)); }
+.doudou-folder-sticky { position: sticky; top: 0; z-index: 4; padding: 12px clamp(12px, 4vw, 28px) 10px; border-bottom: 1px solid var(--doudou-border); background: var(--doudou-bg); }
+.doudou-folder-header { display: grid; grid-template-columns: minmax(74px, 1fr) minmax(0, 2fr) minmax(44px, 1fr); }
+.doudou-folder-header h2 { min-width: 0; overflow: hidden; font-size: 20px !important; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.doudou-folder-header > .doudou-round-tool { justify-self: end; }
+.doudou-view .doudou-library-body.doudou-is-folder-view > .doudou-compact-list { padding: 12px clamp(12px, 4vw, 28px) 0; }
 .doudou-search-shell { display: flex; align-items: center; gap: 8px; margin: 14px 0; padding: 8px 12px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
 .doudou-view .doudou-search-shell input { display: block; flex: 1 1 auto; width: auto; height: auto; min-width: 0; min-height: 34px; max-height: none; margin: 0; padding: 4px 0; border: 0; line-height: 1.4; background: transparent; box-shadow: none; appearance: none; }
+.doudou-folder-search { margin: 10px 0 0; }
+.doudou-view button.doudou-search-close { display: inline-flex; flex: 0 0 34px; align-items: center; justify-content: center; width: 34px; height: 34px; min-height: 34px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 50%; color: var(--doudou-muted); font-size: 21px; line-height: 1; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-compact-list { display: grid; gap: 9px; }
 .doudou-view button.doudou-compact-card { display: flex; align-items: center; gap: 12px; width: 100%; height: auto; min-height: 92px; max-height: none; margin: 0; padding: 10px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 15px; color: var(--text-normal); line-height: normal; text-align: left; white-space: normal; background: var(--doudou-surface); box-shadow: none; appearance: none; }
 .doudou-compact-image-wrap { position: relative; flex: 0 0 72px; width: 72px; height: 72px; overflow: hidden; border-radius: 11px; }
@@ -62,10 +71,10 @@
 .doudou-view .doudou-compact-main { display: block; flex: 1 1 0%; width: auto; min-width: 0; overflow: hidden; white-space: normal; }
 .doudou-compact-title { overflow: hidden; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
 .doudou-compact-preview { display: -webkit-box; margin-top: 4px; overflow: hidden; color: var(--text-normal); font-size: 13px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.doudou-view .doudou-record-page { position: relative; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 18px clamp(12px, 4vw, 28px) max(26px, env(safe-area-inset-bottom)); }
-.doudou-record-header { width: min(100%, 820px); margin: 0 auto 14px; }
+.doudou-view .doudou-record-page { position: relative; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 0 clamp(12px, 4vw, 28px) max(26px, env(safe-area-inset-bottom)); }
+.doudou-view .doudou-record-header { position: sticky; top: 0; z-index: 4; width: min(100%, 820px); margin: 0 auto 14px; padding: max(12px, env(safe-area-inset-top)) 0 10px; border-bottom: 1px solid var(--doudou-border); background: var(--doudou-bg); }
 .doudou-record-tools { display: flex; gap: 7px; }
-.doudou-record-menu { position: absolute; top: 64px; right: clamp(12px, 4vw, 28px); z-index: 5; display: grid; min-width: 150px; padding: 6px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); }
+.doudou-record-menu { position: absolute; top: calc(100% - 5px); right: 0; z-index: 5; display: grid; min-width: 150px; padding: 6px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); }
 .doudou-record-menu button { margin: 0; border: 0; text-align: left; background: transparent; box-shadow: none; }
 .doudou-menu-danger { color: var(--text-error) !important; }
 .doudou-record-article h1 { margin: 10px 0 6px; font-size: 28px; }
@@ -94,6 +103,13 @@
 .doudou-view input.doudou-title-input, .doudou-view textarea.doudou-editor-content, .doudou-view .doudou-editor-folder select, .doudou-modal .doudou-modal-content input, .doudou-modal .doudou-modal-content textarea { display: block; width: 100%; height: auto; max-height: none; margin: 0; padding: 10px 12px; border: 1px solid var(--doudou-border); border-radius: 12px; line-height: 1.5; white-space: normal; background: var(--doudou-surface); appearance: none; }
 .doudou-view input.doudou-title-input { min-height: 46px; font-size: 19px; font-weight: 680; }
 .doudou-view textarea.doudou-editor-content { min-height: 220px; overflow-y: auto; resize: vertical; line-height: 1.65; white-space: pre-wrap; }
+.doudou-tag-editor { position: relative; width: 100%; min-width: 0; }
+.doudou-view .doudou-tag-editor .doudou-editor-content { width: 100%; min-height: 220px; margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--doudou-border); border-radius: 12px; font-family: var(--font-text); font-size: var(--font-text-size); font-weight: 400; line-height: 1.65; letter-spacing: normal; overflow-wrap: break-word; white-space: pre-wrap; word-break: break-word; }
+.doudou-view .doudou-tag-editor-mirror { position: absolute; inset: 0; z-index: 0; height: 100%; color: var(--text-normal); background: var(--doudou-surface); pointer-events: none; user-select: none; }
+.doudou-view textarea.doudou-tag-editor-input { position: relative; z-index: 1; color: transparent; caret-color: var(--text-normal); background: transparent; -webkit-text-fill-color: transparent; }
+.doudou-view textarea.doudou-tag-editor-input::placeholder { color: var(--doudou-muted); opacity: 1; -webkit-text-fill-color: var(--doudou-muted); }
+.doudou-tag-suggestions { position: absolute; top: calc(100% + 6px); left: 0; z-index: 6; display: flex; flex-wrap: wrap; gap: 6px; width: min(100%, 520px); max-height: 132px; padding: 8px; overflow-x: hidden; overflow-y: auto; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); }
+.doudou-view button.doudou-tag-suggestion { display: inline-flex; align-items: center; width: auto; height: auto; min-height: 36px; max-height: none; margin: 0; padding: 6px 9px; overflow: visible; border: 0; border-radius: 8px; color: var(--doudou-tag-color); line-height: 1.3; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-view .doudou-editor-folder select { min-height: 42px; appearance: auto; }
 .doudou-editor-folder { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
 .doudou-view input.doudou-file-input { position: absolute; width: 1px; height: 1px; min-height: 0; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); border: 0; opacity: 0; white-space: nowrap; }

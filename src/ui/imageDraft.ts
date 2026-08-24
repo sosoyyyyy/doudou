@@ -10,6 +10,9 @@ export interface ClipboardItemLike {
   getAsFile(): File | null;
 }
 
+const previewRetainers = new Map<string, number>();
+const deferredPreviewReleases = new Set<string>();
+
 export function imageFilesFromClipboardItems(
   items: ArrayLike<ClipboardItemLike> | null | undefined
 ): File[] {
@@ -39,5 +42,25 @@ export function createPendingImages(files: readonly File[]): PendingImage[] {
 }
 
 export function releasePendingImages(images: readonly PendingImage[]): void {
-  for (const image of images) URL.revokeObjectURL(image.previewUrl);
+  for (const image of images) {
+    if ((previewRetainers.get(image.previewUrl) ?? 0) > 0) deferredPreviewReleases.add(image.previewUrl);
+    else URL.revokeObjectURL(image.previewUrl);
+  }
+}
+
+export function retainPendingPreviewUrls(urls: readonly string[]): () => void {
+  for (const url of urls) previewRetainers.set(url, (previewRetainers.get(url) ?? 0) + 1);
+  let retained = true;
+  return () => {
+    if (!retained) return;
+    retained = false;
+    for (const url of urls) {
+      const next = Math.max(0, (previewRetainers.get(url) ?? 1) - 1);
+      if (next > 0) previewRetainers.set(url, next);
+      else {
+        previewRetainers.delete(url);
+        if (deferredPreviewReleases.delete(url)) URL.revokeObjectURL(url);
+      }
+    }
+  };
 }

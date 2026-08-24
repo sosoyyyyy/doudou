@@ -42,6 +42,8 @@ import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
 import { loadFolderOrderState, type FolderOrderLoadState } from "../src/ui/folderOrderState";
 import {
   imageFilesFromClipboardItems,
+  releasePendingImages,
+  retainPendingPreviewUrls,
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
@@ -49,7 +51,8 @@ import {
   canShareImageFile,
   copyImageFileToClipboard,
   imageSharePayload,
-  shouldCopyImageShortcut
+  shouldCopyImageShortcut,
+  viewerItemFile
 } from "../src/ui/imageActions";
 import { allPageGalleryPresentation, galleryMode, recordPageGalleryPresentation } from "../src/ui/imageGallery";
 import {
@@ -58,6 +61,17 @@ import {
   resolveImageOrder,
   type EditableImageItem
 } from "../src/ui/imageReorder";
+import {
+  clampViewerIndex,
+  clampViewerScale,
+  currentViewerItem,
+  editableViewerItems,
+  ImageViewerControlsTimer,
+  initialViewerState,
+  pendingViewerItem,
+  storedViewerItems,
+  switchViewerImage
+} from "../src/ui/imageViewer";
 
 if (typeof globalThis.File === "undefined") {
   Object.defineProperty(globalThis, "File", { configurable: true, value: NodeFile });
@@ -523,6 +537,120 @@ test("record-page gallery renders every image in its original order", () => {
   }
 });
 
+test("viewer opens at the selected image and respects navigation boundaries", () => {
+  const items = storedViewerItems(["a.jpg", "b.jpg", "c.jpg"]);
+  let state = initialViewerState(1, items.length);
+  assert.equal(state.index, 1);
+  assert.equal(currentViewerItem(items, state), items[1]);
+  state = switchViewerImage(state, -1, items.length);
+  assert.equal(state.index, 0);
+  assert.equal(switchViewerImage(state, -1, items.length).index, 0);
+  state = switchViewerImage(state, 20, items.length);
+  assert.equal(state.index, 2);
+  assert.equal(switchViewerImage(state, 1, items.length).index, 2);
+  assert.equal(initialViewerState(8, 1).index, 0);
+  assert.equal(switchViewerImage(initialViewerState(0, 1), 1, 1).index, 0);
+});
+
+test("viewer resets zoom and translation whenever the current image changes", () => {
+  const state = switchViewerImage({ index: 0, scale: 4, translateX: 120, translateY: -80 }, 1, 3);
+  assert.deepEqual(state, { index: 1, scale: 1, translateX: 0, translateY: 0 });
+  assert.equal(clampViewerScale(0.1), 1);
+  assert.equal(clampViewerScale(9), 5);
+  assert.equal(clampViewerScale(2.5), 2.5);
+});
+
+test("stored and pending viewer items preserve their original sources and GIF MIME", async () => {
+  const storedItems = storedViewerItems(["兜兜/assets/2026/08/animation.gif"]);
+  assert.deepEqual(storedItems[0], { kind: "stored", path: "兜兜/assets/2026/08/animation.gif" });
+  const file = new File([new Uint8Array([71, 73, 70])], "animation.gif", { type: "image/gif" });
+  const pending = pendingViewerItem({ id: "pending-gif", file, previewUrl: "blob:pending-gif" });
+  assert.equal(pending.kind, "pending");
+  assert.equal(pending.previewUrl, "blob:pending-gif");
+  assert.equal(pending.mime, "image/gif");
+  assert.equal(await viewerItemFile({} as ImageService, pending), file);
+});
+
+test("pending preview URLs stay alive while a viewer retains them", () => {
+  const original = URL.revokeObjectURL;
+  const revoked: string[] = [];
+  URL.revokeObjectURL = (url) => { revoked.push(url); };
+  try {
+    const file = new File([new Uint8Array([1])], "draft.png", { type: "image/png" });
+    const pending = { id: "draft", file, previewUrl: "blob:draft" };
+    const releaseViewer = retainPendingPreviewUrls([pending.previewUrl]);
+    releasePendingImages([pending]);
+    assert.deepEqual(revoked, []);
+    releaseViewer();
+    assert.deepEqual(revoked, ["blob:draft"]);
+  } finally {
+    URL.revokeObjectURL = original;
+  }
+});
+
+test("viewer current action target follows image changes and removal clamps its index", () => {
+  const items = storedViewerItems(["first.png", "second.gif", "third.webp"]);
+  let state = initialViewerState(0, items.length);
+  state = switchViewerImage(state, 1, items.length);
+  assert.deepEqual(currentViewerItem(items, state), { kind: "stored", path: "second.gif" });
+  const afterPendingRemoval = items.filter((_, index) => index !== 1);
+  const clamped = { ...state, index: clampViewerIndex(state.index, afterPendingRemoval.length) };
+  assert.deepEqual(currentViewerItem(afterPendingRemoval, clamped), { kind: "stored", path: "third.webp" });
+});
+
+test("removing a pending editor image keeps the remaining viewer order and index", () => {
+  const first = new File([new Uint8Array([1])], "first.png", { type: "image/png" });
+  const removed = new File([new Uint8Array([2])], "removed.png", { type: "image/png" });
+  const pending = [
+    { id: "first", file: first, previewUrl: "blob:first" },
+    { id: "removed", file: removed, previewUrl: "blob:removed" }
+  ];
+  const editorItems: EditableImageItem[] = [
+    { kind: "pending", id: "first" },
+    { kind: "pending", id: "removed" },
+    { kind: "stored", id: "stored", path: "兜兜/assets/2026/08/last.gif" }
+  ];
+  const viewerItems = editableViewerItems(
+    editorItems.filter((item) => item.id !== "removed"),
+    pending.filter((item) => item.id !== "removed")
+  );
+  assert.equal(viewerItems.length, 2);
+  assert.equal(viewerItems[0]?.kind, "pending");
+  assert.deepEqual(viewerItems[1], { kind: "stored", path: "兜兜/assets/2026/08/last.gif" });
+  assert.equal(initialViewerState(1, viewerItems.length).index, 1);
+});
+
+test("viewer controls show initially, hide after inactivity and restart after interaction", () => {
+  let scheduled: (() => void) | null = null;
+  let scheduledDelay = 0;
+  let cancellations = 0;
+  const changes: boolean[] = [];
+  const timer = new ImageViewerControlsTimer(
+    (visible) => changes.push(visible),
+    3_000,
+    ((callback: () => void, delay?: number) => {
+      scheduled = callback;
+      scheduledDelay = delay ?? 0;
+      return 1;
+    }) as typeof setTimeout,
+    (() => { cancellations += 1; }) as typeof clearTimeout
+  );
+  timer.start();
+  assert.equal(timer.visible, true);
+  assert.equal(scheduledDelay, 3_000);
+  assert.ok(scheduled);
+  (scheduled as () => void)();
+  assert.equal(timer.visible, false);
+  assert.deepEqual(changes, [false]);
+  timer.show();
+  assert.equal(timer.visible, true);
+  assert.deepEqual(changes, [false, true]);
+  timer.show();
+  assert.equal(cancellations, 1);
+  timer.stop();
+  assert.equal(cancellations, 2);
+});
+
 test("image reorder moves items without mutating the edit-session source", () => {
   const source = ["stored-a", "pending-b", "stored-c"];
   assert.deepEqual(moveImageItem(source, 0, 2), ["pending-b", "stored-c", "stored-a"]);
@@ -600,6 +728,17 @@ test("image export reads the original Vault binary with a safe name and MIME", a
   assert.equal(imageMimeType("photo.JPG"), "image/jpeg");
   assert.equal(imageMimeType("animation.gif"), "image/gif");
   assert.equal(isDoudouImagePath(path), true);
+});
+
+test("GIF export reads the untouched original Vault binary", async () => {
+  const vault = new FakeVault();
+  const path = "兜兜/assets/2026/08/animation.gif";
+  const bytes = new Uint8Array([71, 73, 70, 56, 57, 97, 1, 2, 3]);
+  await vault.createBinary(path, bytes.buffer);
+  const file = await viewerItemFile(new ImageService(vault as unknown as Vault), { kind: "stored", path });
+  assert.equal(file.name, "animation.gif");
+  assert.equal(file.type, "image/gif");
+  assert.deepEqual([...new Uint8Array(await file.arrayBuffer())], [...bytes]);
 });
 
 test("image export rejects paths outside assets, unsafe paths and missing files", async () => {

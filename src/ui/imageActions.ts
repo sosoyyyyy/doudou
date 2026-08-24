@@ -1,5 +1,6 @@
 import { App, Menu, Notice, Platform } from "obsidian";
 import type { ImageService } from "../attachments/ImageService";
+import type { ImageViewerItem } from "./imageViewer";
 
 interface ClipboardItemConstructor {
   new(items: Record<string, Blob>): ClipboardItem;
@@ -80,7 +81,7 @@ export function showImageActionMenuAtEvent(
   path: string,
   event: MouseEvent
 ): void {
-  const menu = buildImageActionMenu(app, imageService, path);
+  const menu = buildImageActionMenu(app, imageService, { kind: "stored", path });
   menu.showAtMouseEvent(event);
 }
 
@@ -91,13 +92,44 @@ export function showImageActionMenuAtElement(
   element: HTMLElement
 ): void {
   const rect = element.getBoundingClientRect();
-  const menu = buildImageActionMenu(app, imageService, path);
+  const menu = buildImageActionMenu(app, imageService, { kind: "stored", path });
   menu.showAtPosition({ x: rect.right, y: rect.bottom, left: true });
 }
 
 export async function copyOriginalImage(imageService: ImageService, path: string): Promise<void> {
+  return copyViewerImage(imageService, { kind: "stored", path });
+}
+
+export function showViewerImageActionMenuAtEvent(
+  app: App,
+  imageService: ImageService,
+  item: ImageViewerItem,
+  event: MouseEvent
+): void {
+  buildImageActionMenu(app, imageService, item).showAtMouseEvent(event);
+}
+
+export function showViewerImageActionMenuAtElement(
+  app: App,
+  imageService: ImageService,
+  item: ImageViewerItem,
+  element: HTMLElement
+): void {
+  const rect = element.getBoundingClientRect();
+  buildImageActionMenu(app, imageService, item).showAtPosition({
+    x: rect.right,
+    y: rect.bottom,
+    left: true
+  });
+}
+
+export function viewerItemFile(imageService: ImageService, item: ImageViewerItem): Promise<File> {
+  return item.kind === "stored" ? imageService.readAsFile(item.path) : Promise.resolve(item.file);
+}
+
+export async function copyViewerImage(imageService: ImageService, item: ImageViewerItem): Promise<void> {
   try {
-    const file = await imageService.readAsFile(path);
+    const file = await viewerItemFile(imageService, item);
     await copyImageFileToClipboard(file);
     new Notice("原图已复制到剪贴板");
   } catch (error) {
@@ -108,33 +140,35 @@ export async function copyOriginalImage(imageService: ImageService, path: string
   }
 }
 
-function buildImageActionMenu(app: App, imageService: ImageService, path: string): Menu {
+function buildImageActionMenu(app: App, imageService: ImageService, item: ImageViewerItem): Menu {
   const menu = new Menu();
   if (Platform.isDesktopApp) {
-    menu.addItem((item) => item
+    menu.addItem((menuItem) => menuItem
       .setTitle("复制图片")
       .setIcon("copy")
-      .onClick(() => void copyOriginalImage(imageService, path)));
+      .onClick(() => void copyViewerImage(imageService, item)));
   } else {
-    menu.addItem((item) => item
+    menu.addItem((menuItem) => menuItem
       .setTitle("分享图片")
       .setIcon("share-2")
-      .onClick(() => void shareOriginalImage(imageService, path)));
+      .onClick(() => void shareOriginalImage(imageService, item)));
   }
-  menu.addItem((item) => item
+  menu.addItem((menuItem) => menuItem
     .setTitle(Platform.isDesktopApp ? "下载原图" : "保存到文件 / 下载")
     .setIcon("download")
-    .onClick(() => void downloadOriginalImage(imageService, path)));
-  menu.addItem((item) => item
-    .setTitle("在 Obsidian 中打开原图")
-    .setIcon("external-link")
-    .onClick(() => void openOriginalImage(app, imageService, path)));
+    .onClick(() => void downloadOriginalImage(imageService, item)));
+  if (item.kind === "stored") {
+    menu.addItem((menuItem) => menuItem
+      .setTitle("在 Obsidian 中打开原图")
+      .setIcon("external-link")
+      .onClick(() => void openOriginalImage(app, imageService, item.path)));
+  }
   return menu;
 }
 
-async function shareOriginalImage(imageService: ImageService, path: string): Promise<void> {
+async function shareOriginalImage(imageService: ImageService, item: ImageViewerItem): Promise<void> {
   try {
-    const file = await imageService.readAsFile(path);
+    const file = await viewerItemFile(imageService, item);
     if (!canShareImageFile(file)) {
       new Notice("当前设备不支持直接分享文件，可使用下载或打开原图");
       return;
@@ -146,9 +180,9 @@ async function shareOriginalImage(imageService: ImageService, path: string): Pro
   }
 }
 
-async function downloadOriginalImage(imageService: ImageService, path: string): Promise<void> {
+async function downloadOriginalImage(imageService: ImageService, item: ImageViewerItem): Promise<void> {
   try {
-    downloadImageFile(await imageService.readAsFile(path));
+    downloadImageFile(await viewerItemFile(imageService, item));
   } catch {
     new Notice("原图下载失败，请确认文件仍存在");
   }

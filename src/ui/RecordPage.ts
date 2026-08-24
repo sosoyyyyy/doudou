@@ -20,6 +20,7 @@ import {
 import { ImagePreviewModal } from "./ImagePreviewModal";
 import { showImageActionMenuAtEvent } from "./imageActions";
 import { recordPageGalleryPresentation } from "./imageGallery";
+import { editableViewerItems, storedViewerItems } from "./imageViewer";
 import {
   buildImageSavePlan,
   moveImageItem,
@@ -198,13 +199,19 @@ export class RecordPage extends Component {
     if (record.content) renderManualTagText(article.createDiv({ cls: "doudou-record-content" }), record.content);
     if ((record.images ?? []).length > 0) {
       const presentation = recordPageGalleryPresentation(record.images ?? []);
+      const viewerItems = storedViewerItems(presentation.paths);
       const gallery = article.createDiv({ cls: "doudou-record-gallery", attr: { "data-count": String(record.images?.length ?? 0) } });
       for (const [index, path] of presentation.paths.entries()) {
         const button = gallery.createEl("button", { cls: "doudou-gallery-item", attr: { type: "button", "aria-label": `查看第 ${index + 1} 张图片` } });
         const src = this.dependencies.imageService.resourcePath(path);
         if (src) button.createEl("img", { cls: "doudou-gallery-image", attr: { src, alt: `备忘录图片 ${index + 1}` } });
         else button.createDiv({ cls: "doudou-image-missing", text: "图片缺失" });
-        button.addEventListener("click", () => new ImagePreviewModal(this.app, this.dependencies.imageService, path).open());
+        button.addEventListener("click", () => new ImagePreviewModal(
+          this.app,
+          this.dependencies.imageService,
+          viewerItems,
+          index
+        ).open());
         button.addEventListener("contextmenu", (event) => {
           if (!Platform.isDesktopApp) return;
           event.preventDefault();
@@ -297,7 +304,12 @@ export class RecordPage extends Component {
       editableImages = moveImageItem(editableImages, from, to);
       paintImages();
     };
-    const startLongPress = (event: PointerEvent, tile: HTMLElement, sourceId: string): void => {
+    const startLongPress = (
+      event: PointerEvent,
+      tile: HTMLElement,
+      sourceId: string,
+      onActivate: () => void
+    ): void => {
       if (!Platform.isMobileApp || (event.target as Element | null)?.closest("button")) return;
       activePointerCleanup?.();
       const pointerId = event.pointerId;
@@ -307,6 +319,7 @@ export class RecordPage extends Component {
       let targetId = sourceId;
       const timer = window.setTimeout(() => {
         active = true;
+        onActivate();
         tile.addClass("doudou-is-dragging");
         images.addClass("doudou-is-reordering");
         tile.setPointerCapture?.(pointerId);
@@ -361,6 +374,7 @@ export class RecordPage extends Component {
       images.empty();
       for (const [index, item] of editableImages.entries()) {
         let dragStartedFromControl = false;
+        let suppressPreviewClick = false;
         const tile = images.createDiv({
           cls: "doudou-editor-image",
           attr: { "data-image-id": item.id, "aria-label": `图片 ${index + 1}` }
@@ -385,7 +399,7 @@ export class RecordPage extends Component {
         removeButton.addEventListener("click", () => {
           if (item.kind === "stored") removed.add(item.path);
           else if (pending) {
-            URL.revokeObjectURL(pending.previewUrl);
+            releasePendingImages([pending]);
             this.pending = this.pending.filter((candidate) => candidate.id !== pending.id);
           }
           editableImages = editableImages.filter((candidate) => candidate.id !== item.id);
@@ -394,6 +408,7 @@ export class RecordPage extends Component {
         tile.addEventListener("dragstart", (dragEvent) => {
           if (!Platform.isDesktopApp || dragStartedFromControl) { dragEvent.preventDefault(); return; }
           tile.addClass("doudou-is-dragging");
+          suppressPreviewClick = true;
           dragEvent.dataTransfer?.setData("text/plain", item.id);
           if (dragEvent.dataTransfer) dragEvent.dataTransfer.effectAllowed = "move";
         });
@@ -411,10 +426,24 @@ export class RecordPage extends Component {
         });
         tile.addEventListener("pointerdown", (pointerEvent) => {
           dragStartedFromControl = Boolean((pointerEvent.target as Element | null)?.closest("button"));
-          startLongPress(pointerEvent, tile, item.id);
+          startLongPress(pointerEvent, tile, item.id, () => { suppressPreviewClick = true; });
         });
         tile.addEventListener("pointerup", () => { window.setTimeout(() => { dragStartedFromControl = false; }, 0); });
         tile.addEventListener("pointercancel", () => { dragStartedFromControl = false; });
+        tile.addEventListener("click", (event) => {
+          if ((event.target as Element | null)?.closest("button")) return;
+          if (suppressPreviewClick) { suppressPreviewClick = false; return; }
+          const viewerItems = editableViewerItems(editableImages, this.pending);
+          const viewerIndex = viewerItems.findIndex((candidate) => candidate.kind === "stored"
+            ? item.kind === "stored" && candidate.path === item.path
+            : candidate.id === item.id);
+          if (viewerIndex >= 0) new ImagePreviewModal(
+            this.app,
+            this.dependencies.imageService,
+            viewerItems,
+            viewerIndex
+          ).open();
+        });
       }
     };
     paintImages();

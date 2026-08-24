@@ -161,7 +161,7 @@
 .doudou-modal button.doudou-image-viewer-nav:disabled { opacity: .22; }
 .doudou-modal button.doudou-image-viewer-nav[hidden] { display: none !important; }
 .doudou-image-viewer-control { opacity: 1; transition: opacity 180ms ease; }
-.doudou-viewer-controls-hidden .doudou-image-viewer-control { opacity: 0; pointer-events: none; }
+.doudou-modal.doudou-viewer-controls-hidden .doudou-image-viewer-control { opacity: 0 !important; pointer-events: none !important; }
 .doudou-image-preview-stage > .doudou-image-missing { padding: 14px 18px; border-radius: 12px; color: rgb(255 255 255 / 78%); background: rgb(255 255 255 / 8%); }
 @media (max-width: 430px) {
   .doudou-view > .doudou-main-shell > header.doudou-header { grid-template-columns: auto minmax(96px, 1fr) auto; gap: 5px; padding-inline: 8px; }

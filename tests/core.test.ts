@@ -5,7 +5,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { Vault } from "obsidian";
 import { TFile } from "obsidian";
-import { Platform as TestPlatform, resetShownMenuCount, shownMenuCount } from "./obsidianStub";
+import { Modal as TestModal, Platform as TestPlatform, resetShownMenuCount, shownMenuCount } from "./obsidianStub";
 import { AiTagService } from "../src/ai/AiTagService";
 import { AskDoudouService } from "../src/ai/AskDoudouService";
 import { DeepSeekError, parseAiTags } from "../src/ai/DeepSeekClient";
@@ -119,6 +119,9 @@ Object.assign(viewerDom.window.HTMLElement.prototype, {
 });
 
 const pluginCss = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const pluginStyle = document.createElement("style");
+pluginStyle.textContent = pluginCss;
+document.head.appendChild(pluginStyle);
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
 
 function cssDeclarations(selector: string): string {
@@ -842,6 +845,60 @@ test("viewer CSS exposes one interaction hit layer and safe-area toolbar control
   assert.match(cssDeclarations(".doudou-image-preview-toolbar"), /safe-area-inset-right/);
   assert.match(cssDeclarations(".doudou-modal button.doudou-image-toolbar-button"), /width:\s*40px/);
   assert.doesNotMatch(cssDeclarations(".doudou-image-preview-toolbar"), /pointer-events:\s*none/);
+});
+
+test("viewer removes only its native close and hidden state overrides disabled controls", async () => {
+  TestPlatform.isDesktopApp = true;
+  TestPlatform.isMobileApp = false;
+  const ordinaryModal = new TestModal({});
+  ordinaryModal.open();
+  try {
+    assert.ok(ordinaryModal.containerEl.querySelector(".modal-close-button"));
+  } finally {
+    ordinaryModal.close();
+  }
+
+  const modal = new ImagePreviewModal(
+    {} as never,
+    viewerImageService(),
+    storedViewerItems(["兜兜/assets/2026/08/first.png", "兜兜/assets/2026/08/last.png"]),
+    0,
+    15
+  );
+  modal.open();
+  try {
+    const close = modal.containerEl.querySelector<HTMLButtonElement>(".doudou-image-close-button");
+    const previous = modal.containerEl.querySelector<HTMLButtonElement>(".doudou-image-viewer-previous");
+    const next = modal.containerEl.querySelector<HTMLButtonElement>(".doudou-image-viewer-next");
+    const frame = modal.containerEl.querySelector<HTMLElement>(".doudou-image-preview-frame");
+    assert.ok(close && previous && next && frame);
+    assert.equal(modal.containerEl.querySelector(".modal-close-button"), null);
+    assert.equal(close.classList.contains("doudou-image-viewer-control"), true);
+    assert.equal(previous.disabled, true);
+    assert.equal(next.disabled, false);
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(window.getComputedStyle(close).opacity, "0");
+    assert.equal(window.getComputedStyle(previous).opacity, "0");
+    assert.equal(window.getComputedStyle(next).opacity, "0");
+    assert.equal(window.getComputedStyle(previous).pointerEvents, "none");
+
+    frame.dispatchEvent(pointerEvent("pointerdown", 100, 100));
+    frame.dispatchEvent(pointerEvent("pointerup", 100, 100));
+    assert.equal(window.getComputedStyle(close).opacity, "1");
+    assert.equal(previous.matches(":disabled"), true);
+    assert.match(cssDeclarations(".doudou-modal button.doudou-image-viewer-nav:disabled"), /opacity:\s*\.22/);
+    assert.equal(window.getComputedStyle(next).opacity, "1");
+
+    next.click();
+    assert.equal(next.disabled, true);
+    assert.equal(next.matches(":disabled"), true);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(window.getComputedStyle(previous).opacity, "0");
+    assert.equal(window.getComputedStyle(next).opacity, "0");
+  } finally {
+    modal.close();
+  }
 });
 
 test("image reorder moves items without mutating the edit-session source", () => {

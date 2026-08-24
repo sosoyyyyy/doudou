@@ -55,8 +55,8 @@ export class Modal {
     this.titleEl.className = "modal-title";
     this.contentEl = document.createElement("div");
     this.contentEl.className = "modal-content";
-    this.modalEl.append(nativeClose, this.titleEl, this.contentEl);
-    this.containerEl.append(background, this.modalEl);
+    this.modalEl.append(this.titleEl, this.contentEl);
+    this.containerEl.append(background, this.modalEl, nativeClose);
   }
 
   open(): void {

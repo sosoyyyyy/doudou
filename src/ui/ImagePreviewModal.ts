@@ -58,6 +58,7 @@ export class ImagePreviewModal extends Modal {
   override onOpen(): void {
     this.modalEl.addClass("doudou-modal", "doudou-image-preview-modal");
     this.contentEl.addClass("doudou-image-preview-content");
+    this.removeNativeCloseButton();
     this.releasePendingPreviews = retainPendingPreviewUrls(
       this.items.flatMap((item) => item.kind === "pending" ? [item.previewUrl] : [])
     );
@@ -95,7 +96,7 @@ export class ImagePreviewModal extends Modal {
       }
     });
     const closeButton = toolbar.createEl("button", {
-      cls: "doudou-image-toolbar-button doudou-image-close-button",
+      cls: "doudou-image-toolbar-button doudou-image-close-button doudou-image-viewer-control",
       attr: { type: "button", "aria-label": "关闭图片查看器", title: "关闭" }
     });
     setIcon(closeButton, "x");
@@ -129,6 +130,16 @@ export class ImagePreviewModal extends Modal {
   }
 
   private currentItem(): ImageViewerItem | null { return currentViewerItem(this.items, this.state); }
+
+  private removeNativeCloseButton(): void {
+    const scopes = [this.containerEl, this.modalEl, this.modalEl.parentElement];
+    for (const scope of scopes) {
+      const button = scope?.querySelector<HTMLElement>(".modal-close-button");
+      if (!button || button.classList.contains("doudou-image-close-button")) continue;
+      button.remove();
+      return;
+    }
+  }
 
   private renderCurrentImage(): void {
     if (!this.stage) return;

@@ -165,6 +165,23 @@
 .doudou-image-viewer-control { opacity: 1; transition: opacity 180ms ease; }
 .doudou-modal.doudou-viewer-controls-hidden .doudou-image-viewer-control { opacity: 0 !important; pointer-events: none !important; }
 .doudou-image-preview-stage > .doudou-image-missing { padding: 14px 18px; border-radius: 12px; color: rgb(255 255 255 / 78%); background: rgb(255 255 255 / 8%); }
+.is-mobile .doudou-view {
+  --doudou-mobile-navbar-clearance: calc(var(--navbar-height, var(--mobile-toolbar-height, 52px)) + max(var(--navbar-bottom-offset, var(--safe-area-inset-bottom, env(safe-area-inset-bottom))), 8px) + 8px);
+}
+.is-mobile .doudou-view > .doudou-main-shell > header.doudou-header { padding-top: 6px; }
+.is-mobile .doudou-view .doudou-record-header { padding-top: 8px; }
+.is-mobile .doudou-view .doudou-timeline,
+.is-mobile .doudou-view .doudou-library-body,
+.is-mobile .doudou-view .doudou-record-page {
+  padding-bottom: var(--doudou-mobile-navbar-clearance);
+  scroll-padding-bottom: var(--doudou-mobile-navbar-clearance);
+}
+.is-mobile .doudou-view.doudou-keyboard-open .doudou-timeline,
+.is-mobile .doudou-view.doudou-keyboard-open .doudou-library-body,
+.is-mobile .doudou-view.doudou-keyboard-open .doudou-record-page {
+  padding-bottom: 16px;
+  scroll-padding-bottom: 16px;
+}
 @media (max-width: 430px) {
   .doudou-view > .doudou-main-shell > header.doudou-header { grid-template-columns: auto minmax(96px, 1fr) auto; gap: 5px; padding-inline: 8px; }
   .doudou-view button.doudou-header-tool { width: 34px; height: 34px; min-height: 34px; }

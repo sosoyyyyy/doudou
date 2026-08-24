@@ -287,6 +287,30 @@ test("folder and record navigation use sticky headers inside their real scroll c
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
 });
 
+test("mobile pages avoid duplicate top safe area and clear the host navbar", () => {
+  const clearance = cssDeclarations(".is-mobile .doudou-view");
+  assert.match(clearance, /--doudou-mobile-navbar-clearance:/);
+  assert.match(clearance, /--navbar-height/);
+  assert.match(clearance, /--mobile-toolbar-height/);
+  assert.match(clearance, /--navbar-bottom-offset/);
+  assert.match(clearance, /--safe-area-inset-bottom/);
+
+  const appHeader = cssDeclarations(".is-mobile .doudou-view > .doudou-main-shell > header.doudou-header");
+  const recordHeader = cssDeclarations(".is-mobile .doudou-view .doudou-record-header");
+  assert.match(appHeader, /padding-top:\s*6px/);
+  assert.match(recordHeader, /padding-top:\s*8px/);
+  assert.doesNotMatch(appHeader, /safe-area-inset-top/);
+  assert.doesNotMatch(recordHeader, /safe-area-inset-top/);
+
+  const scrollingPages = cssDeclarations(".is-mobile .doudou-view .doudou-timeline,\n.is-mobile .doudou-view .doudou-library-body,\n.is-mobile .doudou-view .doudou-record-page");
+  assert.match(scrollingPages, /padding-bottom:\s*var\(--doudou-mobile-navbar-clearance\)/);
+  assert.match(scrollingPages, /scroll-padding-bottom:\s*var\(--doudou-mobile-navbar-clearance\)/);
+
+  const keyboardOpen = cssDeclarations(".is-mobile .doudou-view.doudou-keyboard-open .doudou-timeline,\n.is-mobile .doudou-view.doudou-keyboard-open .doudou-library-body,\n.is-mobile .doudou-view.doudou-keyboard-open .doudou-record-page");
+  assert.match(keyboardOpen, /padding-bottom:\s*16px/);
+  assert.match(keyboardOpen, /scroll-padding-bottom:\s*16px/);
+});
+
 test("navigation labels change without changing internal page or virtual-folder identity", () => {
   assert.equal(RECENT_PAGE_LABEL, "最近");
   assert.equal(ALL_RECORDS_FOLDER, "全部资料");

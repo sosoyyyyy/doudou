@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 import type { Vault } from "obsidian";
 import { TFile } from "obsidian";
+import { Platform as TestPlatform, resetShownMenuCount, shownMenuCount } from "./obsidianStub";
 import { AiTagService } from "../src/ai/AiTagService";
 import { AskDoudouService } from "../src/ai/AskDoudouService";
 import { DeepSeekError, parseAiTags } from "../src/ai/DeepSeekClient";
@@ -40,6 +42,7 @@ import type { StoredDoudouRecord } from "../src/types";
 import { libraryCardContent, metaText, recordTitle, writeClipboardText } from "../src/ui/uiHelpers";
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
 import { loadFolderOrderState, type FolderOrderLoadState } from "../src/ui/folderOrderState";
+import { ImagePreviewModal } from "../src/ui/ImagePreviewModal";
 import {
   imageFilesFromClipboardItems,
   releasePendingImages,
@@ -77,12 +80,80 @@ if (typeof globalThis.File === "undefined") {
   Object.defineProperty(globalThis, "File", { configurable: true, value: NodeFile });
 }
 
+const viewerDom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://doudou.test" });
+for (const key of ["window", "document", "navigator", "HTMLElement", "Element", "Node", "DOMException", "Event", "MouseEvent", "WheelEvent"] as const) {
+  Object.defineProperty(globalThis, key, { configurable: true, value: viewerDom.window[key] });
+}
+
+interface ObsidianElementOptions {
+  cls?: string;
+  text?: string;
+  attr?: Record<string, string>;
+}
+
+function applyElementOptions(element: HTMLElement, options?: ObsidianElementOptions): void {
+  if (!options) return;
+  if (options.cls) element.className = options.cls;
+  if (options.text !== undefined) element.textContent = options.text;
+  for (const [name, value] of Object.entries(options.attr ?? {})) element.setAttribute(name, value);
+}
+
+Object.assign(viewerDom.window.HTMLElement.prototype, {
+  createDiv(this: HTMLElement, options?: ObsidianElementOptions): HTMLDivElement {
+    const element = document.createElement("div"); applyElementOptions(element, options); this.appendChild(element); return element;
+  },
+  createSpan(this: HTMLElement, options?: ObsidianElementOptions): HTMLSpanElement {
+    const element = document.createElement("span"); applyElementOptions(element, options); this.appendChild(element); return element;
+  },
+  createEl(this: HTMLElement, tag: keyof HTMLElementTagNameMap, options?: ObsidianElementOptions): HTMLElement {
+    const element = document.createElement(tag); applyElementOptions(element, options); this.appendChild(element); return element;
+  },
+  addClass(this: HTMLElement, ...classes: string[]): void { this.classList.add(...classes); },
+  removeClass(this: HTMLElement, ...classes: string[]): void { this.classList.remove(...classes); },
+  toggleClass(this: HTMLElement, classes: string | string[], value: boolean): void {
+    for (const name of Array.isArray(classes) ? classes : [classes]) this.classList.toggle(name, value);
+  },
+  hasClass(this: HTMLElement, name: string): boolean { return this.classList.contains(name); },
+  setText(this: HTMLElement, value: string): void { this.textContent = value; },
+  empty(this: HTMLElement): void { this.replaceChildren(); }
+});
+
 const pluginCss = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
 
 function cssDeclarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return pluginCss.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+}
+
+function pointerEvent(type: string, x: number, y: number, pointerId = 1): PointerEvent {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    pointerId: { value: pointerId },
+    clientX: { value: x },
+    clientY: { value: y }
+  });
+  return event as PointerEvent;
+}
+
+function touchEvent(
+  type: string,
+  touches: Array<{ clientX: number; clientY: number }>,
+  changedTouches: Array<{ clientX: number; clientY: number }> = []
+): TouchEvent {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    touches: { value: touches },
+    changedTouches: { value: changedTouches }
+  });
+  return event as TouchEvent;
+}
+
+function viewerImageService(): ImageService {
+  return {
+    resourcePath: (path: string) => `https://doudou.test/${encodeURIComponent(path)}`,
+    readAsFile: async (path: string) => new File([path], path.split("/").at(-1) ?? "image", { type: imageMimeType(path) ?? "image/png" })
+  } as ImageService;
 }
 
 class FakeVault {
@@ -649,6 +720,128 @@ test("viewer controls show initially, hide after inactivity and restart after in
   assert.equal(cancellations, 1);
   timer.stop();
   assert.equal(cancellations, 2);
+});
+
+test("desktop viewer DOM buttons, actions, wheel, drag and hidden class use live event paths", async () => {
+  TestPlatform.isDesktopApp = true;
+  TestPlatform.isMobileApp = false;
+  resetShownMenuCount();
+  const modal = new ImagePreviewModal(
+    {} as never,
+    viewerImageService(),
+    storedViewerItems([
+      "兜兜/assets/2026/08/first.png",
+      "兜兜/assets/2026/08/second.gif",
+      "兜兜/assets/2026/08/third.webp"
+    ]),
+    1,
+    15
+  );
+  modal.open();
+  try {
+    const previous = modal.modalEl.querySelector<HTMLButtonElement>(".doudou-image-viewer-previous");
+    const next = modal.modalEl.querySelector<HTMLButtonElement>(".doudou-image-viewer-next");
+    const actions = modal.modalEl.querySelector<HTMLButtonElement>(".doudou-image-action-button");
+    const frame = modal.modalEl.querySelector<HTMLElement>(".doudou-image-preview-frame");
+    assert.ok(previous && next && actions && frame);
+    assert.match(modal.modalEl.querySelector<HTMLImageElement>("img")?.alt ?? "", /2$/);
+    previous.click();
+    assert.match(modal.modalEl.querySelector<HTMLImageElement>("img")?.alt ?? "", /1$/);
+    next.click(); next.click();
+    assert.match(modal.modalEl.querySelector<HTMLImageElement>("img")?.alt ?? "", /3$/);
+    actions.click();
+    assert.equal(shownMenuCount, 1);
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(modal.modalEl.classList.contains("doudou-viewer-controls-hidden"), true);
+    frame.dispatchEvent(pointerEvent("pointerdown", 100, 100));
+    frame.dispatchEvent(pointerEvent("pointerup", 100, 100));
+    assert.equal(modal.modalEl.classList.contains("doudou-viewer-controls-hidden"), false);
+
+    Object.defineProperty(frame, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ width: 600, height: 400, top: 0, left: 0, right: 600, bottom: 400, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    frame.dispatchEvent(new WheelEvent("wheel", { deltaY: -500, bubbles: true, cancelable: true }));
+    let image = modal.modalEl.querySelector<HTMLImageElement>("img");
+    assert.match(image?.style.transform ?? "", /scale\((?!1\))/);
+    if (!image) throw new Error("viewer image missing");
+    Object.defineProperty(image, "clientWidth", { configurable: true, value: 400 });
+    Object.defineProperty(image, "clientHeight", { configurable: true, value: 300 });
+    frame.dispatchEvent(pointerEvent("pointerdown", 100, 100, 2));
+    frame.dispatchEvent(pointerEvent("pointermove", 145, 125, 2));
+    frame.dispatchEvent(pointerEvent("pointerup", 145, 125, 2));
+    image = modal.modalEl.querySelector<HTMLImageElement>("img");
+    assert.doesNotMatch(image?.style.transform ?? "", /translate3d\(0px, 0px/);
+  } finally {
+    modal.close();
+  }
+});
+
+test("mobile viewer DOM touch swipe, pinch, pan and custom close use live event paths", () => {
+  TestPlatform.isDesktopApp = false;
+  TestPlatform.isMobileApp = true;
+  const modal = new ImagePreviewModal(
+    {} as never,
+    viewerImageService(),
+    storedViewerItems(["兜兜/assets/2026/08/one.png", "兜兜/assets/2026/08/two.gif"]),
+    0,
+    50
+  );
+  modal.open();
+  try {
+    const frame = modal.modalEl.querySelector<HTMLElement>(".doudou-image-preview-frame");
+    const close = modal.modalEl.querySelector<HTMLButtonElement>(".doudou-image-close-button");
+    const actions = modal.modalEl.querySelector<HTMLButtonElement>(".doudou-image-action-button");
+    assert.ok(frame && close && actions);
+    assert.equal(close.getAttribute("data-icon"), "x");
+    assert.equal(actions.getAttribute("data-icon"), "share-2");
+    Object.defineProperty(frame, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ width: 300, height: 300, top: 0, left: 0, right: 300, bottom: 300, x: 0, y: 0, toJSON: () => ({}) })
+    });
+
+    frame.dispatchEvent(touchEvent("touchstart", [{ clientX: 120, clientY: 100 }]));
+    frame.dispatchEvent(touchEvent("touchmove", [{ clientX: 30, clientY: 100 }]));
+    frame.dispatchEvent(touchEvent("touchend", [], [{ clientX: 30, clientY: 100 }]));
+    assert.match(modal.modalEl.querySelector<HTMLImageElement>("img")?.alt ?? "", /2$/);
+
+    let image = modal.modalEl.querySelector<HTMLImageElement>("img");
+    if (!image) throw new Error("viewer image missing");
+    Object.defineProperty(image, "clientWidth", { configurable: true, value: 200 });
+    Object.defineProperty(image, "clientHeight", { configurable: true, value: 200 });
+    frame.dispatchEvent(touchEvent("touchstart", [
+      { clientX: 80, clientY: 100 }, { clientX: 180, clientY: 100 }
+    ]));
+    frame.dispatchEvent(touchEvent("touchmove", [
+      { clientX: 30, clientY: 100 }, { clientX: 230, clientY: 100 }
+    ]));
+    frame.dispatchEvent(touchEvent("touchend", [], [{ clientX: 230, clientY: 100 }]));
+    image = modal.modalEl.querySelector<HTMLImageElement>("img");
+    assert.match(image?.style.transform ?? "", /scale\(2\)/);
+
+    frame.dispatchEvent(touchEvent("touchstart", [{ clientX: 100, clientY: 100 }]));
+    frame.dispatchEvent(touchEvent("touchmove", [{ clientX: 135, clientY: 120 }]));
+    frame.dispatchEvent(touchEvent("touchend", [], [{ clientX: 135, clientY: 120 }]));
+    assert.doesNotMatch(image?.style.transform ?? "", /translate3d\(0px, 0px/);
+
+    close.click();
+    assert.equal(document.body.contains(modal.containerEl), false);
+  } finally {
+    modal.close();
+    TestPlatform.isDesktopApp = true;
+    TestPlatform.isMobileApp = false;
+  }
+});
+
+test("viewer CSS exposes one interaction hit layer and safe-area toolbar controls", () => {
+  assert.match(cssDeclarations(".doudou-image-preview-modal .modal-close-button"), /display:\s*none\s*!important/);
+  assert.match(cssDeclarations(".doudou-image-preview-frame"), /pointer-events:\s*auto/);
+  assert.match(cssDeclarations(".doudou-image-preview-stage"), /pointer-events:\s*none/);
+  assert.match(cssDeclarations(".doudou-image-preview-toolbar"), /safe-area-inset-top/);
+  assert.match(cssDeclarations(".doudou-image-preview-toolbar"), /safe-area-inset-right/);
+  assert.match(cssDeclarations(".doudou-modal button.doudou-image-toolbar-button"), /width:\s*40px/);
+  assert.doesNotMatch(cssDeclarations(".doudou-image-preview-toolbar"), /pointer-events:\s*none/);
 });
 
 test("image reorder moves items without mutating the edit-session source", () => {

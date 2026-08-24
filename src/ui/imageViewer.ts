@@ -26,6 +26,10 @@ export interface ImageViewerState extends ImageViewerTransform {
   index: number;
 }
 
+type ViewerTimer = ReturnType<typeof setTimeout>;
+type ViewerTimerSchedule = (callback: () => void, delay: number) => ViewerTimer;
+type ViewerTimerCancel = (timer: ViewerTimer) => void;
+
 export function storedViewerItems(paths: readonly string[]): ImageViewerItem[] {
   return paths.map((path) => ({ kind: "stored", path }));
 }
@@ -106,13 +110,14 @@ export function clampViewerTranslation(
 
 export class ImageViewerControlsTimer {
   visible = true;
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private timer: ViewerTimer | null = null;
 
   constructor(
     private readonly changed: (visible: boolean) => void,
     private readonly delay = IMAGE_VIEWER_CONTROLS_DELAY,
-    private readonly schedule: typeof setTimeout = setTimeout,
-    private readonly cancel: typeof clearTimeout = clearTimeout
+    private readonly schedule: ViewerTimerSchedule = (callback, timeout) =>
+      globalThis.setTimeout(callback, timeout),
+    private readonly cancel: ViewerTimerCancel = (timer) => globalThis.clearTimeout(timer)
   ) {}
 
   start(): void {

@@ -145,22 +145,24 @@
 .doudou-ask-tool-sources { display: grid; gap: 7px; }
 .doudou-source-item { width: 100%; min-height: 40px; margin: 0; text-align: left; }
 .doudou-modal.doudou-image-preview-modal { box-sizing: border-box; width: min(1180px, calc(100vw - 32px)); max-width: calc(100vw - 32px); height: min(92dvh, 920px); max-height: calc(100dvh - 32px); padding: 0; overflow: hidden; border-color: rgb(255 255 255 / 12%); background: rgb(8 18 32 / 96%); }
-.doudou-image-preview-modal .modal-close-button { z-index: 8; color: rgb(255 255 255 / 82%); }
+.doudou-image-preview-modal .modal-close-button { display: none !important; }
 .doudou-image-preview-content { position: relative; display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; max-height: none; padding: 0; overflow: hidden; }
-.doudou-image-preview-toolbar { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); left: max(10px, env(safe-area-inset-left)); z-index: 7; display: flex; align-items: center; justify-content: flex-end; min-height: 42px; padding-right: 42px; pointer-events: none; }
-.doudou-image-preview-counter { position: absolute; left: 50%; padding: 6px 11px; border-radius: 999px; color: rgb(255 255 255 / 92%); font-size: 13px; line-height: 1.2; background: rgb(0 0 0 / 48%); transform: translateX(-50%); }
-.doudou-modal button.doudou-image-action-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-height: 40px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 1px solid rgb(255 255 255 / 18%); border-radius: 12px; color: white; line-height: normal; background: rgb(8 32 58 / 72%); box-shadow: none; appearance: none; touch-action: manipulation; pointer-events: auto; }
-.doudou-image-preview-frame { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: max(58px, calc(env(safe-area-inset-top) + 48px)) max(62px, calc(env(safe-area-inset-right) + 52px)) max(18px, env(safe-area-inset-bottom)) max(62px, calc(env(safe-area-inset-left) + 52px)); overflow: hidden; color: rgb(255 255 255 / 78%); touch-action: none; user-select: none; -webkit-user-select: none; }
-.doudou-image-preview-full { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; margin: 0; object-fit: contain; transform-origin: center center; transition: transform 90ms ease-out; will-change: transform; }
+.doudou-image-preview-frame { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 0; overflow: hidden; color: rgb(255 255 255 / 78%); touch-action: none; user-select: none; -webkit-user-select: none; pointer-events: auto; }
+.doudou-image-preview-stage { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: calc(env(safe-area-inset-top) + 62px) max(62px, calc(env(safe-area-inset-right) + 52px)) max(18px, env(safe-area-inset-bottom)) max(62px, calc(env(safe-area-inset-left) + 52px)); overflow: hidden; pointer-events: none; }
+.doudou-image-preview-full { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; margin: 0; object-fit: contain; transform-origin: center center; transition: transform 90ms ease-out; will-change: transform; pointer-events: none; }
 .doudou-image-preview-full.doudou-is-zoomed { cursor: grab; transition-duration: 35ms; }
-.doudou-modal button.doudou-image-viewer-nav { position: absolute; top: 50%; z-index: 6; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 58px; min-height: 58px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 1px solid rgb(255 255 255 / 12%); border-radius: 14px; color: rgb(255 255 255 / 88%); font-size: 38px; font-weight: 300; line-height: 1; background: rgb(0 0 0 / 35%); box-shadow: none; appearance: none; touch-action: manipulation; transform: translateY(-50%); }
+.doudou-image-viewer-controls { height: 0; overflow: visible; }
+.doudou-image-preview-toolbar { position: absolute; top: calc(env(safe-area-inset-top) + 10px); right: calc(env(safe-area-inset-right) + 10px); z-index: 20; display: flex; align-items: center; gap: 8px; width: auto; min-height: 40px; }
+.doudou-image-preview-counter { position: absolute; top: calc(env(safe-area-inset-top) + 15px); left: 50%; z-index: 20; padding: 6px 11px; border-radius: 999px; color: rgb(255 255 255 / 92%); font-size: 13px; line-height: 1.2; background: rgb(0 0 0 / 48%); transform: translateX(-50%); pointer-events: none; }
+.doudou-modal button.doudou-image-toolbar-button { display: inline-flex; flex: 0 0 40px; align-items: center; justify-content: center; width: 40px; height: 40px; min-height: 40px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 1px solid rgb(255 255 255 / 18%); border-radius: 12px; color: white; line-height: normal; background: rgb(8 32 58 / 72%); box-shadow: none; appearance: none; touch-action: manipulation; pointer-events: auto; }
+.doudou-modal button.doudou-image-viewer-nav { position: absolute; top: 50%; z-index: 20; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 58px; min-height: 58px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 1px solid rgb(255 255 255 / 12%); border-radius: 14px; color: rgb(255 255 255 / 88%); font-size: 38px; font-weight: 300; line-height: 1; background: rgb(0 0 0 / 35%); box-shadow: none; appearance: none; touch-action: manipulation; transform: translateY(-50%); pointer-events: auto; }
 .doudou-modal button.doudou-image-viewer-previous { left: max(9px, env(safe-area-inset-left)); }
 .doudou-modal button.doudou-image-viewer-next { right: max(9px, env(safe-area-inset-right)); }
 .doudou-modal button.doudou-image-viewer-nav:disabled { opacity: .22; }
 .doudou-modal button.doudou-image-viewer-nav[hidden] { display: none !important; }
 .doudou-image-viewer-control { opacity: 1; transition: opacity 180ms ease; }
 .doudou-viewer-controls-hidden .doudou-image-viewer-control { opacity: 0; pointer-events: none; }
-.doudou-image-preview-frame > .doudou-image-missing { padding: 14px 18px; border-radius: 12px; color: rgb(255 255 255 / 78%); background: rgb(255 255 255 / 8%); }
+.doudou-image-preview-stage > .doudou-image-missing { padding: 14px 18px; border-radius: 12px; color: rgb(255 255 255 / 78%); background: rgb(255 255 255 / 8%); }
 @media (max-width: 430px) {
   .doudou-view > .doudou-main-shell > header.doudou-header { grid-template-columns: auto minmax(96px, 1fr) auto; gap: 5px; padding-inline: 8px; }
   .doudou-view button.doudou-header-tool { width: 34px; height: 34px; min-height: 34px; }
@@ -174,7 +176,7 @@
   .doudou-view .doudou-record-gallery { gap: 5px; }
   .doudou-view .doudou-file-card-name { white-space: normal; }
   .doudou-modal.doudou-image-preview-modal { width: calc(100vw - 8px); max-width: calc(100vw - 8px); height: calc(100dvh - 8px); max-height: calc(100dvh - 8px); border-radius: 16px; }
-  .doudou-image-preview-frame { padding: max(54px, calc(env(safe-area-inset-top) + 46px)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  .doudou-image-preview-stage { padding: calc(env(safe-area-inset-top) + 58px) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
   .doudou-modal button.doudou-image-viewer-nav { top: auto; bottom: max(10px, env(safe-area-inset-bottom)); width: 44px; height: 44px; min-height: 44px; border-radius: 50%; font-size: 32px; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) { .doudou-editor-image { transition: none; } }

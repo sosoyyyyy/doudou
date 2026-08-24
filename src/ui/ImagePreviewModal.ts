@@ -17,6 +17,7 @@ export class ImagePreviewModal extends Modal {
   private state: ImageViewerState;
   private image: HTMLImageElement | null = null;
   private frame: HTMLElement | null = null;
+  private stage: HTMLElement | null = null;
   private counter: HTMLElement | null = null;
   private previousButton: HTMLButtonElement | null = null;
   private nextButton: HTMLButtonElement | null = null;
@@ -47,7 +48,8 @@ export class ImagePreviewModal extends Modal {
     app: App,
     private readonly imageService: ImageService,
     private readonly items: readonly ImageViewerItem[],
-    initialIndex = 0
+    initialIndex = 0,
+    private readonly controlsDelay = 3_000
   ) {
     super(app);
     this.state = initialViewerState(initialIndex, items.length);
@@ -61,11 +63,27 @@ export class ImagePreviewModal extends Modal {
     );
     this.controls = new ImageViewerControlsTimer((visible) => {
       this.modalEl.toggleClass("doudou-viewer-controls-hidden", !visible);
+    }, this.controlsDelay);
+
+    this.frame = this.contentEl.createDiv({ cls: "doudou-image-preview-frame" });
+    this.stage = this.frame.createDiv({ cls: "doudou-image-preview-stage" });
+    this.bindFrameInteractions(this.frame);
+    this.frame.addEventListener("mouseenter", () => this.noteInteraction());
+    this.frame.addEventListener("contextmenu", (event) => {
+      if (!Platform.isDesktopApp) return;
+      event.preventDefault();
+      const current = this.currentItem();
+      if (current) showViewerImageActionMenuAtEvent(this.app, this.imageService, current, event);
     });
-    const toolbar = this.contentEl.createDiv({ cls: "doudou-image-preview-toolbar doudou-image-viewer-control" });
-    this.counter = toolbar.createDiv({ cls: "doudou-image-preview-counter", attr: { "aria-live": "polite" } });
+
+    const controlLayer = this.contentEl.createDiv({ cls: "doudou-image-viewer-controls" });
+    this.counter = controlLayer.createDiv({
+      cls: "doudou-image-preview-counter doudou-image-viewer-control",
+      attr: { "aria-live": "polite" }
+    });
+    const toolbar = controlLayer.createDiv({ cls: "doudou-image-preview-toolbar" });
     this.actionsButton = toolbar.createEl("button", {
-      cls: "doudou-image-action-button",
+      cls: "doudou-image-toolbar-button doudou-image-action-button doudou-image-viewer-control",
       attr: { type: "button", "aria-label": "图片操作", title: "图片操作" }
     });
     setIcon(this.actionsButton, Platform.isMobileApp ? "share-2" : "ellipsis");
@@ -76,19 +94,22 @@ export class ImagePreviewModal extends Modal {
         showViewerImageActionMenuAtElement(this.app, this.imageService, item, this.actionsButton);
       }
     });
-    this.frame = this.contentEl.createDiv({ cls: "doudou-image-preview-frame" });
-    this.previousButton = this.frame.createEl("button", {
+    const closeButton = toolbar.createEl("button", {
+      cls: "doudou-image-toolbar-button doudou-image-close-button",
+      attr: { type: "button", "aria-label": "关闭图片查看器", title: "关闭" }
+    });
+    setIcon(closeButton, "x");
+    closeButton.addEventListener("click", () => this.close());
+    this.previousButton = controlLayer.createEl("button", {
       cls: "doudou-image-viewer-nav doudou-image-viewer-previous doudou-image-viewer-control",
       text: "‹", attr: { type: "button", "aria-label": "上一张图片" }
     });
-    this.nextButton = this.frame.createEl("button", {
+    this.nextButton = controlLayer.createEl("button", {
       cls: "doudou-image-viewer-nav doudou-image-viewer-next doudou-image-viewer-control",
       text: "›", attr: { type: "button", "aria-label": "下一张图片" }
     });
-    this.previousButton.addEventListener("click", () => this.changeImage(-1));
-    this.nextButton.addEventListener("click", () => this.changeImage(1));
-    this.bindFrameInteractions(this.frame);
-    this.frame.addEventListener("mouseenter", () => this.noteInteraction());
+    this.previousButton.addEventListener("click", () => { this.noteInteraction(); this.changeImage(-1); });
+    this.nextButton.addEventListener("click", () => { this.noteInteraction(); this.changeImage(1); });
     this.renderCurrentImage();
     this.controls.start();
     document.addEventListener("keydown", this.keydownHandler);
@@ -103,40 +124,35 @@ export class ImagePreviewModal extends Modal {
     this.pointers.clear();
     this.image = null;
     this.frame = null;
+    this.stage = null;
     this.contentEl.empty();
   }
 
   private currentItem(): ImageViewerItem | null { return currentViewerItem(this.items, this.state); }
 
   private renderCurrentImage(): void {
-    if (!this.frame) return;
-    this.frame.querySelector(".doudou-image-preview-full, .doudou-image-missing")?.remove();
+    if (!this.stage) return;
+    this.stage.empty();
     this.state = { index: this.state.index, ...resetViewerTransform() };
     this.image = null;
     const item = this.currentItem();
     const source = item?.kind === "stored" ? this.imageService.resourcePath(item.path) : item?.previewUrl ?? null;
     if (!item || !source) {
-      this.frame.createDiv({ cls: "doudou-image-missing", text: "这张图片暂时找不到了" });
+      this.stage.createDiv({ cls: "doudou-image-missing", text: "这张图片暂时找不到了" });
     } else {
       const image = document.createElement("img");
       image.className = "doudou-image-preview-full";
       image.src = source;
       image.alt = `兜兜记录图片 ${this.state.index + 1}`;
       image.draggable = false;
-      this.frame.insertBefore(image, this.nextButton);
+      this.stage.appendChild(image);
       this.image = image;
       this.applyTransform();
-      image.addEventListener("contextmenu", (event) => {
-        if (!Platform.isDesktopApp) return;
-        event.preventDefault();
-        const current = this.currentItem();
-        if (current) showViewerImageActionMenuAtEvent(this.app, this.imageService, current, event);
-      });
       image.addEventListener("error", () => {
         if (this.image !== image) return;
         image.remove();
         this.image = null;
-        this.frame?.createDiv({ cls: "doudou-image-missing", text: "当前设备暂时无法预览这种图片格式" });
+        this.stage?.createDiv({ cls: "doudou-image-missing", text: "当前设备暂时无法预览这种图片格式" });
       }, { once: true });
     }
     this.updateControls();
@@ -163,13 +179,19 @@ export class ImagePreviewModal extends Modal {
     frame.addEventListener("wheel", (event) => {
       if (!this.image) return;
       event.preventDefault();
-      this.noteInteraction();
       this.zoomTo(this.state.scale * Math.exp(-event.deltaY * 0.0015));
     }, { passive: false });
-    frame.addEventListener("pointerdown", (event) => this.pointerDown(event));
-    frame.addEventListener("pointermove", (event) => this.pointerMove(event));
-    frame.addEventListener("pointerup", (event) => this.pointerEnd(event));
-    frame.addEventListener("pointercancel", (event) => this.pointerEnd(event));
+    if (Platform.isMobileApp) {
+      frame.addEventListener("touchstart", (event) => this.touchStart(event), { passive: false });
+      frame.addEventListener("touchmove", (event) => this.touchMove(event), { passive: false });
+      frame.addEventListener("touchend", (event) => this.touchEnd(event), { passive: false });
+      frame.addEventListener("touchcancel", (event) => this.touchEnd(event), { passive: false });
+    } else {
+      frame.addEventListener("pointerdown", (event) => this.pointerDown(event));
+      frame.addEventListener("pointermove", (event) => this.pointerMove(event));
+      frame.addEventListener("pointerup", (event) => this.pointerEnd(event));
+      frame.addEventListener("pointercancel", (event) => this.pointerEnd(event));
+    }
   }
 
   private pointerDown(event: PointerEvent): void {
@@ -192,17 +214,19 @@ export class ImagePreviewModal extends Modal {
     if (!this.pointers.has(event.pointerId)) return;
     event.preventDefault();
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    this.noteInteraction();
     if (this.pointers.size >= 2) {
       const distance = this.pointerDistance();
       if (this.pinchDistance > 0) this.zoomTo(this.gestureOrigin.scale * distance / this.pinchDistance);
       return;
     }
     if (!this.gestureStart || this.state.scale <= 1) return;
+    const previousX = this.state.translateX;
+    const previousY = this.state.translateY;
     this.state.translateX = this.gestureOrigin.translateX + event.clientX - this.gestureStart.x;
     this.state.translateY = this.gestureOrigin.translateY + event.clientY - this.gestureStart.y;
     this.constrainTransform();
     this.applyTransform();
+    if (previousX !== this.state.translateX || previousY !== this.state.translateY) this.noteInteraction();
   }
 
   private pointerEnd(event: PointerEvent): void {
@@ -214,19 +238,78 @@ export class ImagePreviewModal extends Modal {
       this.gestureOrigin = { scale: this.state.scale, translateX: this.state.translateX, translateY: this.state.translateY };
       return;
     }
-    if (ended && this.gestureStart) {
-      const deltaX = ended.x - this.gestureStart.x;
-      const deltaY = ended.y - this.gestureStart.y;
-      if (this.state.scale === 1 && !this.swipeBlocked && Math.abs(deltaX) >= 56 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
-        this.changeImage(deltaX < 0 ? 1 : -1);
-      } else if (Math.hypot(deltaX, deltaY) < 10) {
-        const now = Date.now();
-        if (now - this.lastTapAt < 320) { this.zoomTo(this.state.scale > 1 ? 1 : 2); this.lastTapAt = 0; }
-        else this.lastTapAt = now;
-      }
+    if (ended && this.gestureStart) this.finishSingleGesture(this.gestureStart, ended);
+    this.gestureStart = null;
+    this.pinchDistance = 0;
+  }
+
+  private touchStart(event: TouchEvent): void {
+    if (event.touches.length === 0) return;
+    event.preventDefault();
+    this.noteInteraction();
+    if (event.touches.length === 1) {
+      this.gestureStart = this.touchPosition(event.touches[0]);
+      this.gestureOrigin = { scale: this.state.scale, translateX: this.state.translateX, translateY: this.state.translateY };
+      this.swipeBlocked = false;
+    } else {
+      this.pinchDistance = this.touchDistance(event.touches[0], event.touches[1]);
+      this.gestureOrigin = { scale: this.state.scale, translateX: this.state.translateX, translateY: this.state.translateY };
+      this.swipeBlocked = true;
+    }
+  }
+
+  private touchMove(event: TouchEvent): void {
+    if (event.touches.length === 0) return;
+    event.preventDefault();
+    if (event.touches.length >= 2) {
+      const distance = this.touchDistance(event.touches[0], event.touches[1]);
+      if (this.pinchDistance > 0) this.zoomTo(this.gestureOrigin.scale * distance / this.pinchDistance);
+      return;
+    }
+    if (!this.gestureStart || this.state.scale <= 1) return;
+    const point = this.touchPosition(event.touches[0]);
+    const previousX = this.state.translateX;
+    const previousY = this.state.translateY;
+    this.state.translateX = this.gestureOrigin.translateX + point.x - this.gestureStart.x;
+    this.state.translateY = this.gestureOrigin.translateY + point.y - this.gestureStart.y;
+    this.constrainTransform();
+    this.applyTransform();
+    if (previousX !== this.state.translateX || previousY !== this.state.translateY) this.noteInteraction();
+  }
+
+  private touchEnd(event: TouchEvent): void {
+    event.preventDefault();
+    if (event.touches.length > 0) {
+      this.gestureStart = this.touchPosition(event.touches[0]);
+      this.gestureOrigin = { scale: this.state.scale, translateX: this.state.translateX, translateY: this.state.translateY };
+      return;
+    }
+    const endedTouch = event.changedTouches[0];
+    if (endedTouch && this.gestureStart) {
+      this.finishSingleGesture(this.gestureStart, this.touchPosition(endedTouch));
     }
     this.gestureStart = null;
     this.pinchDistance = 0;
+  }
+
+  private finishSingleGesture(start: PointerPosition, end: PointerPosition): void {
+    const deltaX = end.x - start.x;
+    const deltaY = end.y - start.y;
+    if (this.state.scale === 1 && !this.swipeBlocked && Math.abs(deltaX) >= 56 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      this.changeImage(deltaX < 0 ? 1 : -1);
+    } else if (Math.hypot(deltaX, deltaY) < 10) {
+      const now = Date.now();
+      if (now - this.lastTapAt < 320) { this.zoomTo(this.state.scale > 1 ? 1 : 2); this.lastTapAt = 0; }
+      else this.lastTapAt = now;
+    }
+  }
+
+  private touchPosition(touch: Touch): PointerPosition {
+    return { x: touch.clientX, y: touch.clientY };
+  }
+
+  private touchDistance(first: Touch, second: Touch): number {
+    return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
   }
 
   private pointerDistance(): number {
@@ -235,9 +318,15 @@ export class ImagePreviewModal extends Modal {
   }
 
   private zoomTo(scale: number): void {
+    const previousScale = this.state.scale;
+    const previousX = this.state.translateX;
+    const previousY = this.state.translateY;
     this.state.scale = clampViewerScale(scale);
     this.constrainTransform();
     this.applyTransform();
+    if (previousScale !== this.state.scale || previousX !== this.state.translateX || previousY !== this.state.translateY) {
+      this.noteInteraction();
+    }
   }
 
   private constrainTransform(): void {

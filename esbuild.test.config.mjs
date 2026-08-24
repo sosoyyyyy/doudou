@@ -10,6 +10,7 @@ await esbuild.build({
   platform: "node",
   format: "esm",
   target: "node18",
+  external: ["jsdom"],
   outfile: path.join(projectRoot, ".test-build/core.test.mjs"),
   alias: {
     obsidian: path.join(projectRoot, "tests/obsidianStub.ts")

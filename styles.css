@@ -33,7 +33,8 @@
 .doudou-view .doudou-journal-gallery-item { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-width: 0; overflow: hidden; border-radius: 10px; background: var(--doudou-blue-soft); }
 .doudou-view .doudou-journal-gallery-item { aspect-ratio: 1 / 1; }
 .doudou-view .doudou-journal-gallery-image { display: block; width: 100%; height: 100%; min-width: 0; margin: 0; object-fit: cover; }
-.doudou-view .doudou-journal-gallery-more { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: white; font-size: clamp(20px, 5vw, 32px); font-weight: 750; background: rgb(0 0 0 / 52%); }
+.doudou-view .doudou-journal-gallery-more { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; color: white; font-size: clamp(20px, 5vw, 32px); font-weight: 750; background: rgb(0 0 0 / 52%); }
+.doudou-view .doudou-gif-badge { position: absolute; right: 5px; bottom: 5px; z-index: 3; display: inline-flex; align-items: center; justify-content: center; min-width: 27px; min-height: 18px; padding: 2px 5px; border-radius: 6px; color: white; font-size: 9px; font-weight: 750; line-height: 1; letter-spacing: .04em; background: rgb(0 0 0 / 62%); pointer-events: none; }
 .doudou-view .doudou-journal-gallery-item .doudou-image-missing { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 80px; color: var(--doudou-muted); font-size: 12px; }
 .doudou-empty-state { padding: 48px 16px; color: var(--doudou-muted); text-align: center; }
 .doudou-empty-state::before { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 50%; color: white; font-weight: 750; content: "兜"; background: var(--doudou-blue); }
@@ -67,7 +68,8 @@
 .doudou-view button.doudou-compact-card { display: flex; align-items: center; gap: 12px; width: 100%; height: auto; min-height: 92px; max-height: none; margin: 0; padding: 10px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 15px; color: var(--text-normal); line-height: normal; text-align: left; white-space: normal; background: var(--doudou-surface); box-shadow: none; appearance: none; }
 .doudou-compact-image-wrap { position: relative; flex: 0 0 72px; width: 72px; height: 72px; overflow: hidden; border-radius: 11px; }
 .doudou-compact-image { width: 100%; height: 100%; object-fit: cover; }
-.doudou-compact-image-wrap span { position: absolute; right: 4px; bottom: 4px; padding: 2px 5px; border-radius: 7px; color: white; font-size: 10px; background: rgb(0 0 0 / 58%); }
+.doudou-compact-image-wrap .doudou-compact-image-count { position: absolute; right: 4px; bottom: 4px; padding: 2px 5px; border-radius: 7px; color: white; font-size: 10px; background: rgb(0 0 0 / 58%); }
+.doudou-view .doudou-compact-image-wrap .doudou-gif-badge { right: auto; left: 4px; bottom: 4px; }
 .doudou-view .doudou-compact-main { display: block; flex: 1 1 0%; width: auto; min-width: 0; overflow: hidden; white-space: normal; }
 .doudou-compact-title { overflow: hidden; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
 .doudou-compact-preview { display: -webkit-box; margin-top: 4px; overflow: hidden; color: var(--text-normal); font-size: 13px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }

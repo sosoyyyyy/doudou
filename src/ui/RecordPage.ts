@@ -18,6 +18,7 @@ import {
   manualTagSuggestions
 } from "../services/manualTags";
 import { ImagePreviewModal } from "./ImagePreviewModal";
+import { GifPreviewSession, isGifFile, isGifPath } from "./gifPreview";
 import { showImageActionMenuAtEvent } from "./imageActions";
 import { recordPageGalleryPresentation } from "./imageGallery";
 import { editableViewerItems, storedViewerItems } from "./imageViewer";
@@ -163,6 +164,7 @@ export interface RecordPageDependencies {
 }
 
 export class RecordPage extends Component {
+  private readonly gifPreviews = new GifPreviewSession();
   private record: StoredDoudouRecord | null = null;
   private pending: PendingImage[] = [];
   private pendingFiles: PendingFile[] = [];
@@ -170,7 +172,8 @@ export class RecordPage extends Component {
   private folderSelectEl: HTMLSelectElement | null = null;
   constructor(private readonly app: App, private readonly containerEl: HTMLElement, private readonly dependencies: RecordPageDependencies, private readonly goBack: () => void, private readonly changed: () => Promise<void>) { super(); }
   override onload(): void { this.containerEl.addClass("doudou-record-page"); }
-  override onunload(): void { releasePendingImages(this.pending); this.pendingFiles = []; this.containerEl.empty(); }
+  override onunload(): void { this.gifPreviews.dispose(); releasePendingImages(this.pending); this.pendingFiles = []; this.containerEl.empty(); }
+  deactivate(): void { this.gifPreviews.clear(); }
   open(record: StoredDoudouRecord): void { this.record = record; this.renderRead(); }
   async create(defaultFolder?: string): Promise<void> { this.record = null; this.defaultFolder = defaultFolder; await this.renderEdit(true); }
 
@@ -183,7 +186,7 @@ export class RecordPage extends Component {
   }
 
   private renderRead(): void {
-    const record = this.record; if (!record) return; this.folderSelectEl = null; this.containerEl.empty();
+    const record = this.record; if (!record) return; this.gifPreviews.clear(); this.folderSelectEl = null; this.containerEl.empty();
     const header = this.containerEl.createDiv({ cls: "doudou-record-header" });
     const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 返回", attr: { type: "button" } }); back.addEventListener("click", this.goBack);
     const tools = header.createDiv({ cls: "doudou-record-tools" });
@@ -204,7 +207,11 @@ export class RecordPage extends Component {
       for (const [index, path] of presentation.paths.entries()) {
         const button = gallery.createEl("button", { cls: "doudou-gallery-item", attr: { type: "button", "aria-label": `查看第 ${index + 1} 张图片` } });
         const src = this.dependencies.imageService.resourcePath(path);
-        if (src) button.createEl("img", { cls: "doudou-gallery-image", attr: { src, alt: `备忘录图片 ${index + 1}` } });
+        if (src) {
+          const gif = isGifPath(path);
+          const image = button.createEl("img", { cls: "doudou-gallery-image", attr: { ...(gif ? {} : { src }), alt: `备忘录图片 ${index + 1}` } });
+          if (gif) this.gifPreviews.applyStored(image, button, path, this.dependencies.imageService, src);
+        }
         else button.createDiv({ cls: "doudou-image-missing", text: "图片缺失" });
         button.addEventListener("click", () => new ImagePreviewModal(
           this.app,
@@ -275,7 +282,7 @@ export class RecordPage extends Component {
   }
 
   private async renderEdit(isNew: boolean): Promise<void> {
-    releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
+    this.gifPreviews.clear(); releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
     const record = this.record;
     const [folders, records] = await Promise.all([
       this.dependencies.folderService.listFolders(),
@@ -386,7 +393,12 @@ export class RecordPage extends Component {
         const src = item.kind === "stored"
           ? this.dependencies.imageService.resourcePath(item.path)
           : pending?.previewUrl ?? null;
-        if (src) tile.createEl("img", { attr: { src, alt: item.kind === "stored" ? "已有图片" : pending?.file.name ?? "待上传图片", draggable: "false" } });
+        if (src) {
+          const gif = item.kind === "stored" ? isGifPath(item.path) : Boolean(pending && isGifFile(pending.file));
+          const image = tile.createEl("img", { attr: { ...(gif ? {} : { src }), alt: item.kind === "stored" ? "已有图片" : pending?.file.name ?? "待上传图片", draggable: "false" } });
+          if (gif && item.kind === "stored") this.gifPreviews.applyStored(image, tile, item.path, this.dependencies.imageService, src);
+          else if (gif && pending) this.gifPreviews.applyPending(image, tile, pending, src);
+        }
         else tile.createDiv({ cls: "doudou-image-missing", text: "图片缺失" });
         const orderControls = tile.createDiv({ cls: "doudou-editor-image-order" });
         const backward = orderControls.createEl("button", { cls: "doudou-image-move-button", attr: { type: "button", "aria-label": "向前移动图片", title: "向前移动" } });

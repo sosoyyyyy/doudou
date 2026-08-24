@@ -9,6 +9,7 @@ import type { DoudouRepository } from "../data/DoudouRepository";
 import type { FolderService } from "../services/FolderService";
 import { filterRecords, librarySearchFolder } from "../services/recordSearch";
 import type { FolderSummary, StoredDoudouRecord } from "../types";
+import { GifPreviewSession, isGifPath } from "./gifPreview";
 import { attachmentCountText, formatTime, libraryCardContent, recordTitle, renderManualTagText } from "./uiHelpers";
 
 export interface LibraryPageDependencies {
@@ -21,6 +22,7 @@ export interface LibraryPageDependencies {
 }
 
 export class LibraryPage extends Component {
+  private readonly gifPreviews = new GifPreviewSession();
   private bodyEl!: HTMLElement;
   private records: StoredDoudouRecord[] = [];
   private folders: FolderSummary[] = [];
@@ -31,7 +33,8 @@ export class LibraryPage extends Component {
   private version = 0;
   constructor(private readonly containerEl: HTMLElement, private readonly dependencies: LibraryPageDependencies) { super(); }
   override onload(): void { this.containerEl.addClass("doudou-library-page"); this.bodyEl = this.containerEl.createDiv({ cls: "doudou-library-body" }); this.register(() => { if (this.searchTimer !== null) window.clearTimeout(this.searchTimer); }); }
-  override onunload(): void { this.containerEl.empty(); }
+  override onunload(): void { this.gifPreviews.dispose(); this.containerEl.empty(); }
+  deactivate(): void { this.gifPreviews.clear(); }
   async activate(): Promise<void> { await this.refresh(this.records.length === 0); }
   async refresh(showLoading = false): Promise<void> {
     const version = ++this.version; if (showLoading) this.bodyEl.setText("兜兜努力翻找中...");
@@ -41,7 +44,7 @@ export class LibraryPage extends Component {
     } catch (error) { console.error("[doudou] Failed to load library", error); this.bodyEl.setText("资料暂时没有加载出来"); }
   }
   currentFolderName(): string | undefined { return this.currentFolder && this.currentFolder !== ALL_RECORDS_FOLDER ? this.currentFolder : undefined; }
-  private render(): void { this.bodyEl.empty(); this.bodyEl.toggleClass("doudou-is-folder-view", this.currentFolder !== null); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); }
+  private render(): void { this.gifPreviews.clear(); this.bodyEl.empty(); this.bodyEl.toggleClass("doudou-is-folder-view", this.currentFolder !== null); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); }
   private renderFolders(): void {
     const header = this.bodyEl.createDiv({ cls: "doudou-library-heading" }); header.createEl("h2", { text: "资料" });
     const search = header.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索全部资料" } }); setIcon(search, "search");
@@ -116,7 +119,7 @@ export class LibraryPage extends Component {
     if (records.length === 0) { target.createDiv({ cls: "doudou-empty-state doudou-library-empty", text: "这里还空空的", attr: { "data-subtitle": "去记下点什么吧" } }); return; }
     for (const record of records) {
       const card = target.createEl("button", { cls: "doudou-compact-card", attr: { type: "button", "aria-label": `打开备忘录：${recordTitle(record)}` } }); const image = record.images?.[0];
-      if (image) { const src = this.dependencies.imageService.resourcePath(image); if (src) { const wrap = card.createDiv({ cls: "doudou-compact-image-wrap" }); wrap.createEl("img", { cls: "doudou-compact-image", attr: { src, alt: "" } }); if ((record.images?.length ?? 0) > 1) wrap.createSpan({ text: `${record.images?.length} 张` }); } }
+      if (image) { const src = this.dependencies.imageService.resourcePath(image); if (src) { const wrap = card.createDiv({ cls: "doudou-compact-image-wrap" }); const gif = isGifPath(image); const preview = wrap.createEl("img", { cls: "doudou-compact-image", attr: { ...(gif ? {} : { src }), alt: "" } }); if (gif) this.gifPreviews.applyStored(preview, wrap, image, this.dependencies.imageService, src); if ((record.images?.length ?? 0) > 1) wrap.createSpan({ cls: "doudou-compact-image-count", text: `${record.images?.length} 张` }); } }
       const attachmentText = attachmentCountText(record); const content = libraryCardContent(record);
       const main = card.createDiv({ cls: "doudou-compact-main" }); if (content.title) main.createDiv({ cls: "doudou-compact-title", text: content.title }); if (content.preview) { const preview = main.createDiv({ cls: "doudou-compact-preview" }); if (record.content.trim()) renderManualTagText(preview, record.content); else preview.setText(content.preview); } main.createDiv({ cls: "doudou-compact-meta", text: `${formatTime(record.created)}${showFolder ? ` · ${record.folder}` : ""}${attachmentText ? ` · ${attachmentText}` : ""}` }); card.addEventListener("click", () => this.dependencies.openRecord(record));
     }

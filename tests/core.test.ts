@@ -43,6 +43,7 @@ import { libraryCardContent, metaText, recordTitle, writeClipboardText } from ".
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
 import { loadFolderOrderState, type FolderOrderLoadState } from "../src/ui/folderOrderState";
 import { ImagePreviewModal } from "../src/ui/ImagePreviewModal";
+import { GifPreviewSession, isGifFile, isGifPath } from "../src/ui/gifPreview";
 import {
   imageFilesFromClipboardItems,
   releasePendingImages,
@@ -648,6 +649,117 @@ test("stored and pending viewer items preserve their original sources and GIF MI
   assert.equal(await viewerItemFile({} as ImageService, pending), file);
 });
 
+test("GIF preview session staticizes stored GIFs, labels them and reuses its memory cache", async () => {
+  const root = document.body.createDiv();
+  const firstWrap = root.createDiv();
+  const secondWrap = root.createDiv();
+  const first = firstWrap.createEl("img") as HTMLImageElement;
+  const second = secondWrap.createEl("img") as HTMLImageElement;
+  let decoded = 0;
+  let created = 0;
+  const revoked: string[] = [];
+  const session = new GifPreviewSession(
+    async () => { decoded += 1; return new Blob(["still"], { type: "image/png" }); },
+    {
+      createObjectURL: () => `blob:still-${++created}`,
+      revokeObjectURL: (url) => revoked.push(url)
+    }
+  );
+  const images = {
+    readAsFile: async () => new File(["gif"], "motion.gif", { type: "image/gif" })
+  } as ImageService;
+  assert.equal(session.applyStored(first, firstWrap, "兜兜/assets/2026/08/motion.gif", images, "app://original.gif"), true);
+  assert.equal(session.applyStored(second, secondWrap, "兜兜/assets/2026/08/motion.gif", images, "app://original.gif"), true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(decoded, 1);
+  assert.equal(created, 1);
+  assert.equal(first.src, "blob:still-1");
+  assert.equal(second.src, "blob:still-1");
+  assert.equal(first.dataset.gifPreview, "static");
+  assert.equal(firstWrap.querySelector(".doudou-gif-badge")?.textContent, "GIF");
+  assert.equal(secondWrap.querySelector(".doudou-gif-badge")?.textContent, "GIF");
+  session.dispose();
+  assert.deepEqual(revoked, ["blob:still-1"]);
+  root.remove();
+});
+
+test("GIF preview supports pending files while non-GIF images bypass decoding", async () => {
+  const root = document.body.createDiv();
+  const pendingWrap = root.createDiv();
+  const ordinaryWrap = root.createDiv();
+  const pendingImage = pendingWrap.createEl("img") as HTMLImageElement;
+  const ordinaryImage = ordinaryWrap.createEl("img", { attr: { src: "app://photo.png" } }) as HTMLImageElement;
+  let decoded = 0;
+  const session = new GifPreviewSession(
+    async () => { decoded += 1; return new Blob(["still"]); },
+    { createObjectURL: () => "blob:pending-still", revokeObjectURL: () => undefined }
+  );
+  const pending = {
+    id: "draft-gif",
+    file: new File(["gif"], "draft.gif", { type: "image/gif" }),
+    previewUrl: "blob:pending-original"
+  };
+  assert.equal(session.applyPending(pendingImage, pendingWrap, pending), true);
+  assert.equal(session.applyStored(ordinaryImage, ordinaryWrap, "兜兜/assets/2026/08/photo.png", {} as ImageService), false);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(decoded, 1);
+  assert.equal(pendingImage.src, "blob:pending-still");
+  assert.equal(pendingWrap.querySelector(".doudou-gif-badge")?.textContent, "GIF");
+  assert.equal(ordinaryImage.src, "app://photo.png");
+  assert.equal(ordinaryWrap.querySelector(".doudou-gif-badge"), null);
+  assert.equal(isGifPath("兜兜/assets/a.GIF"), true);
+  assert.equal(isGifFile(new File(["x"], "unknown.bin", { type: "image/gif" })), true);
+  assert.equal(isGifPath("兜兜/assets/a.webp"), false);
+  session.dispose();
+  root.remove();
+});
+
+test("every non-viewer thumbnail surface uses the shared GIF preview session", () => {
+  const allPage = readFileSync(new URL("../src/ui/AllPage.ts", import.meta.url), "utf8");
+  const recordPage = readFileSync(new URL("../src/ui/RecordPage.ts", import.meta.url), "utf8");
+  const viewer = readFileSync(new URL("../src/ui/ImagePreviewModal.ts", import.meta.url), "utf8");
+  assert.match(allPage, /gifPreviews\.applyStored/);
+  assert.match(libraryPageSource, /gifPreviews\.applyStored/);
+  assert.match(recordPage, /gifPreviews\.applyStored/);
+  assert.match(recordPage, /gifPreviews\.applyPending/);
+  assert.doesNotMatch(viewer, /GifPreviewSession|gifPreviews|doudou-gif-badge/);
+});
+
+test("GIF preview failure keeps the original source and late decode URLs are revoked after clear", async () => {
+  const root = document.body.createDiv();
+  const failedWrap = root.createDiv();
+  const failedImage = failedWrap.createEl("img") as HTMLImageElement;
+  const failed = new GifPreviewSession(async () => { throw new Error("decode failed"); });
+  failed.applyStored(failedImage, failedWrap, "兜兜/assets/fallback.gif", {
+    readAsFile: async () => new File(["gif"], "fallback.gif", { type: "image/gif" })
+  } as ImageService, "app://fallback.gif");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(failedImage.src, "app://fallback.gif");
+  assert.equal(failedImage.dataset.gifPreview, "fallback");
+  assert.equal(failedWrap.querySelector(".doudou-gif-badge")?.textContent, "GIF");
+  failed.dispose();
+
+  let finishDecode: ((blob: Blob) => void) | null = null;
+  const revoked: string[] = [];
+  const pending = new GifPreviewSession(
+    () => new Promise((resolve) => { finishDecode = resolve; }),
+    { createObjectURL: () => "blob:late-still", revokeObjectURL: (url) => revoked.push(url) }
+  );
+  const lateWrap = root.createDiv();
+  const lateImage = lateWrap.createEl("img") as HTMLImageElement;
+  pending.applyStored(lateImage, lateWrap, "兜兜/assets/late.gif", {
+    readAsFile: async () => new File(["gif"], "late.gif", { type: "image/gif" })
+  } as ImageService, "app://late.gif");
+  await Promise.resolve();
+  pending.clear();
+  if (!finishDecode) throw new Error("GIF decoder did not start");
+  (finishDecode as (blob: Blob) => void)(new Blob(["still"]));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(revoked, ["blob:late-still"]);
+  assert.equal(lateImage.getAttribute("src"), null);
+  root.remove();
+});
+
 test("pending preview URLs stay alive while a viewer retains them", () => {
   const original = URL.revokeObjectURL;
   const revoked: string[] = [];
@@ -750,7 +862,11 @@ test("desktop viewer DOM buttons, actions, wheel, drag and hidden class use live
     const actions = modal.modalEl.querySelector<HTMLButtonElement>(".doudou-image-action-button");
     const frame = modal.modalEl.querySelector<HTMLElement>(".doudou-image-preview-frame");
     assert.ok(previous && next && actions && frame);
-    assert.match(modal.modalEl.querySelector<HTMLImageElement>("img")?.alt ?? "", /2$/);
+    const originalGif = modal.modalEl.querySelector<HTMLImageElement>("img");
+    assert.match(originalGif?.alt ?? "", /2$/);
+    assert.match(originalGif?.src ?? "", /second\.gif/);
+    assert.equal(originalGif?.dataset.gifPreview, undefined);
+    assert.equal(modal.modalEl.querySelector(".doudou-gif-badge"), null);
     previous.click();
     assert.match(modal.modalEl.querySelector<HTMLImageElement>("img")?.alt ?? "", /1$/);
     next.click(); next.click();
@@ -848,6 +964,8 @@ test("viewer CSS exposes one interaction hit layer and safe-area toolbar control
   assert.match(cssDeclarations(".doudou-image-preview-toolbar"), /safe-area-inset-right/);
   assert.match(cssDeclarations(".doudou-modal button.doudou-image-toolbar-button"), /width:\s*40px/);
   assert.doesNotMatch(cssDeclarations(".doudou-image-preview-toolbar"), /pointer-events:\s*none/);
+  assert.match(cssDeclarations(".doudou-view .doudou-gif-badge"), /right:\s*5px/);
+  assert.match(cssDeclarations(".doudou-view .doudou-gif-badge"), /background:\s*rgb\(0 0 0 \/ 62%\)/);
 });
 
 test("viewer suppresses only its native close and hidden state overrides disabled controls", async () => {

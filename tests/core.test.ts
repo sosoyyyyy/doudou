@@ -133,6 +133,22 @@ function cssDeclarations(selector: string): string {
   return pluginCss.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
 }
 
+function mediaCssDeclarations(media: string, selector: string): string {
+  const marker = `@media ${media} {`;
+  const start = pluginCss.indexOf(marker);
+  if (start < 0) return "";
+  let depth = 1;
+  let end = start + marker.length;
+  while (end < pluginCss.length && depth > 0) {
+    if (pluginCss[end] === "{") depth += 1;
+    else if (pluginCss[end] === "}") depth -= 1;
+    end += 1;
+  }
+  const block = pluginCss.slice(start + marker.length, end - 1);
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return block.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+}
+
 function pointerEvent(type: string, x: number, y: number, pointerId = 1): PointerEvent {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperties(event, {
@@ -966,6 +982,24 @@ test("viewer CSS exposes one interaction hit layer and safe-area toolbar control
   assert.doesNotMatch(cssDeclarations(".doudou-image-preview-toolbar"), /pointer-events:\s*none/);
   assert.match(cssDeclarations(".doudou-view .doudou-gif-badge"), /right:\s*5px/);
   assert.match(cssDeclarations(".doudou-view .doudou-gif-badge"), /background:\s*rgb\(0 0 0 \/ 62%\)/);
+});
+
+test("mobile viewer fills the viewport without changing desktop sizing or safe-area controls", () => {
+  const desktop = cssDeclarations(".doudou-modal.doudou-image-preview-modal");
+  const mobile = mediaCssDeclarations("(max-width: 430px)", ".doudou-modal.doudou-image-preview-modal");
+  assert.match(desktop, /width:\s*min\(1180px, calc\(100vw - 32px\)\)/);
+  assert.match(desktop, /height:\s*min\(92dvh, 920px\)/);
+  assert.match(mobile, /width:\s*100vw/);
+  assert.match(mobile, /height:\s*100dvh/);
+  assert.match(mobile, /min-height:\s*100dvh/);
+  assert.match(mobile, /max-width:\s*none/);
+  assert.match(mobile, /max-height:\s*none/);
+  assert.match(mobile, /margin:\s*0/);
+  assert.match(mobile, /border-radius:\s*0/);
+  assert.doesNotMatch(mobile, /calc\(100(?:d)?v[wh]\s*-\s*8px\)/);
+  assert.match(desktop, /background:\s*rgb\(8 18 32 \/ 96%\)/);
+  assert.match(cssDeclarations(".doudou-image-preview-toolbar"), /safe-area-inset-top/);
+  assert.match(cssDeclarations(".doudou-image-preview-toolbar"), /safe-area-inset-right/);
 });
 
 test("viewer suppresses only its native close and hidden state overrides disabled controls", async () => {

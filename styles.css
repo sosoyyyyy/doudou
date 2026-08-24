@@ -177,7 +177,7 @@
   .doudou-view .doudou-journal-gallery { gap: 5px; max-width: 320px; }
   .doudou-view .doudou-record-gallery { gap: 5px; }
   .doudou-view .doudou-file-card-name { white-space: normal; }
-  .doudou-modal.doudou-image-preview-modal { width: calc(100vw - 8px); max-width: calc(100vw - 8px); height: calc(100dvh - 8px); max-height: calc(100dvh - 8px); border-radius: 16px; }
+  .doudou-modal.doudou-image-preview-modal { width: 100vw; max-width: none; height: 100dvh; min-height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; }
   .doudou-image-preview-stage { padding: calc(env(safe-area-inset-top) + 58px) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
   .doudou-modal button.doudou-image-viewer-nav { top: auto; bottom: max(10px, env(safe-area-inset-bottom)); width: 44px; height: 44px; min-height: 44px; border-radius: 50%; font-size: 32px; transform: none; }
 }

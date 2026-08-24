@@ -30,6 +30,9 @@ export class ImagePreviewModal extends Modal {
   private lastTapAt = 0;
   private controls: ImageViewerControlsTimer | null = null;
   private releasePendingPreviews: (() => void) | null = null;
+  private hostCloseObserver: MutationObserver | null = null;
+  private hostCloseFrame: number | null = null;
+  private hostCloseStopTimer: number | null = null;
 
   private readonly keydownHandler = (event: KeyboardEvent): void => {
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
@@ -58,7 +61,7 @@ export class ImagePreviewModal extends Modal {
   override onOpen(): void {
     this.modalEl.addClass("doudou-modal", "doudou-image-preview-modal");
     this.contentEl.addClass("doudou-image-preview-content");
-    this.removeNativeCloseButton();
+    this.startHostCloseSuppression();
     this.releasePendingPreviews = retainPendingPreviewUrls(
       this.items.flatMap((item) => item.kind === "pending" ? [item.previewUrl] : [])
     );
@@ -118,6 +121,7 @@ export class ImagePreviewModal extends Modal {
 
   override onClose(): void {
     document.removeEventListener("keydown", this.keydownHandler);
+    this.stopHostCloseSuppression();
     this.controls?.stop();
     this.controls = null;
     this.releasePendingPreviews?.();
@@ -131,14 +135,81 @@ export class ImagePreviewModal extends Modal {
 
   private currentItem(): ImageViewerItem | null { return currentViewerItem(this.items, this.state); }
 
-  private removeNativeCloseButton(): void {
-    const scopes = [this.containerEl, this.modalEl, this.modalEl.parentElement];
-    for (const scope of scopes) {
-      const button = scope?.querySelector<HTMLElement>(".modal-close-button");
-      if (!button || button.classList.contains("doudou-image-close-button")) continue;
-      button.remove();
-      return;
+  private startHostCloseSuppression(): void {
+    const root = this.modalEl.closest<HTMLElement>(".modal-container")
+      ?? this.containerEl.closest<HTMLElement>(".modal-container")
+      ?? this.containerEl;
+    const hostWindow = root.ownerDocument.defaultView;
+    this.suppressHostCloseControls(root);
+    const Observer = hostWindow?.MutationObserver;
+    if (Observer) {
+      this.hostCloseObserver = new Observer(() => this.suppressHostCloseControls(root));
+      this.hostCloseObserver.observe(root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "aria-label", "title", "data-icon"]
+      });
     }
+    if (hostWindow?.requestAnimationFrame) {
+      this.hostCloseFrame = hostWindow.requestAnimationFrame(() => {
+        this.hostCloseFrame = null;
+        this.suppressHostCloseControls(root);
+      });
+    }
+    if (hostWindow) {
+      this.hostCloseStopTimer = hostWindow.setTimeout(() => {
+        this.hostCloseStopTimer = null;
+        this.hostCloseObserver?.disconnect();
+        this.hostCloseObserver = null;
+      }, 1_000);
+    }
+  }
+
+  private stopHostCloseSuppression(): void {
+    const hostWindow = this.modalEl.ownerDocument.defaultView;
+    this.hostCloseObserver?.disconnect();
+    this.hostCloseObserver = null;
+    if (this.hostCloseFrame !== null && hostWindow?.cancelAnimationFrame) {
+      hostWindow.cancelAnimationFrame(this.hostCloseFrame);
+    }
+    if (this.hostCloseStopTimer !== null && hostWindow) hostWindow.clearTimeout(this.hostCloseStopTimer);
+    this.hostCloseFrame = null;
+    this.hostCloseStopTimer = null;
+  }
+
+  private suppressHostCloseControls(scope: Node): void {
+    if (scope.nodeType !== 1) return;
+    const element = scope as Element;
+    const candidates: Element[] = [];
+    if (element.matches("button, .clickable-icon, .modal-close-button, [aria-label], [title]")) {
+      candidates.push(element);
+    }
+    candidates.push(...element.querySelectorAll("button, .clickable-icon, .modal-close-button, [aria-label], [title]"));
+    for (const candidate of candidates) {
+      const HTMLElementConstructor = candidate.ownerDocument.defaultView?.HTMLElement;
+      if (!HTMLElementConstructor || !(candidate instanceof HTMLElementConstructor)) continue;
+      const control = candidate as HTMLElement;
+      if (!this.isHostCloseControl(control)) continue;
+      control.hidden = true;
+      control.setAttribute("aria-hidden", "true");
+      control.style.setProperty("display", "none", "important");
+      control.style.setProperty("pointer-events", "none", "important");
+    }
+  }
+
+  private isHostCloseControl(candidate: HTMLElement): boolean {
+    if (candidate.classList.contains("doudou-image-close-button") ||
+      candidate.closest(".doudou-image-preview-toolbar")) return false;
+    if (candidate.classList.contains("modal-close-button")) return true;
+    const closeLabels = ["close", "close modal", "close window", "关闭", "关闭弹窗", "关闭窗口"];
+    const labels = [candidate.getAttribute("aria-label"), candidate.getAttribute("title")]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.trim().toLocaleLowerCase());
+    if (labels.some((label) => closeLabels.includes(label))) return true;
+    if (!candidate.matches("button, .clickable-icon")) return false;
+    return candidate.getAttribute("data-icon") === "x" ||
+      Boolean(candidate.querySelector(".lucide-x, [data-icon='x']"));
   }
 
   private renderCurrentImage(): void {

@@ -80,8 +80,11 @@ if (typeof globalThis.File === "undefined") {
   Object.defineProperty(globalThis, "File", { configurable: true, value: NodeFile });
 }
 
-const viewerDom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://doudou.test" });
-for (const key of ["window", "document", "navigator", "HTMLElement", "Element", "Node", "DOMException", "Event", "MouseEvent", "WheelEvent"] as const) {
+const viewerDom = new JSDOM("<!doctype html><html><body></body></html>", {
+  url: "https://doudou.test",
+  pretendToBeVisual: true
+});
+for (const key of ["window", "document", "navigator", "HTMLElement", "Element", "Node", "DOMException", "Event", "MouseEvent", "WheelEvent", "MutationObserver"] as const) {
   Object.defineProperty(globalThis, key, { configurable: true, value: viewerDom.window[key] });
 }
 
@@ -847,13 +850,16 @@ test("viewer CSS exposes one interaction hit layer and safe-area toolbar control
   assert.doesNotMatch(cssDeclarations(".doudou-image-preview-toolbar"), /pointer-events:\s*none/);
 });
 
-test("viewer removes only its native close and hidden state overrides disabled controls", async () => {
+test("viewer suppresses only its native close and hidden state overrides disabled controls", async () => {
   TestPlatform.isDesktopApp = true;
   TestPlatform.isMobileApp = false;
   const ordinaryModal = new TestModal({});
   ordinaryModal.open();
   try {
-    assert.ok(ordinaryModal.containerEl.querySelector(".modal-close-button"));
+    const ordinaryClose = ordinaryModal.containerEl.querySelector<HTMLElement>(".modal-close-button");
+    assert.ok(ordinaryClose);
+    assert.equal(ordinaryClose.hidden, false);
+    assert.notEqual(ordinaryClose.style.getPropertyValue("display"), "none");
   } finally {
     ordinaryModal.close();
   }
@@ -872,8 +878,13 @@ test("viewer removes only its native close and hidden state overrides disabled c
     const next = modal.containerEl.querySelector<HTMLButtonElement>(".doudou-image-viewer-next");
     const frame = modal.containerEl.querySelector<HTMLElement>(".doudou-image-preview-frame");
     assert.ok(close && previous && next && frame);
-    assert.equal(modal.containerEl.querySelector(".modal-close-button"), null);
+    const hostClose = modal.containerEl.querySelector<HTMLElement>(".modal-close-button");
+    assert.ok(hostClose);
+    assert.equal(hostClose.hidden, true);
+    assert.equal(hostClose.style.getPropertyValue("display"), "none");
     assert.equal(close.classList.contains("doudou-image-viewer-control"), true);
+    assert.equal(close.hidden, false);
+    assert.notEqual(close.style.getPropertyValue("display"), "none");
     assert.equal(previous.disabled, true);
     assert.equal(next.disabled, false);
 
@@ -899,6 +910,40 @@ test("viewer removes only its native close and hidden state overrides disabled c
   } finally {
     modal.close();
   }
+});
+
+test("viewer suppresses asynchronously inserted host close variants and disconnects on close", async () => {
+  const modal = new ImagePreviewModal(
+    {} as never,
+    viewerImageService(),
+    storedViewerItems(["兜兜/assets/2026/08/only.png"]),
+    0,
+    50
+  );
+  modal.open();
+  const root = modal.containerEl;
+  const semanticClose = document.createElement("button");
+  semanticClose.className = "clickable-icon";
+  semanticClose.setAttribute("aria-label", "Close");
+  const iconClose = document.createElement("button");
+  iconClose.className = "clickable-icon";
+  iconClose.setAttribute("data-icon", "x");
+  root.append(semanticClose, iconClose);
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  assert.equal(semanticClose.hidden, true);
+  assert.equal(iconClose.hidden, true);
+  const customClose = root.querySelector<HTMLElement>(".doudou-image-close-button");
+  assert.ok(customClose);
+  assert.equal(customClose.hidden, false);
+  assert.notEqual(customClose.style.getPropertyValue("display"), "none");
+
+  modal.close();
+  const afterClose = document.createElement("button");
+  afterClose.setAttribute("title", "关闭");
+  root.appendChild(afterClose);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(afterClose.hidden, false);
+  assert.notEqual(afterClose.style.getPropertyValue("display"), "none");
 });
 
 test("image reorder moves items without mutating the edit-session source", () => {

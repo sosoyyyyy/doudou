@@ -44,7 +44,7 @@ export class LibraryPage extends Component {
     } catch (error) { console.error("[doudou] Failed to load library", error); this.bodyEl.setText("资料暂时没有加载出来"); }
   }
   currentFolderName(): string | undefined { return this.currentFolder && this.currentFolder !== ALL_RECORDS_FOLDER ? this.currentFolder : undefined; }
-  private render(): void { this.gifPreviews.clear(); this.bodyEl.empty(); this.bodyEl.toggleClass("doudou-is-folder-view", this.currentFolder !== null); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); }
+  private render(): void { this.gifPreviews.clear(); this.bodyEl.empty(); this.bodyEl.toggleClass("doudou-is-folder-view", this.currentFolder !== null); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); this.bodyEl.createDiv({ cls: "doudou-mobile-bottom-spacer", attr: { "aria-hidden": "true" } }); }
   private renderFolders(): void {
     const header = this.bodyEl.createDiv({ cls: "doudou-library-heading" }); header.createEl("h2", { text: "资料" });
     const search = header.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索全部资料" } }); setIcon(search, "search");

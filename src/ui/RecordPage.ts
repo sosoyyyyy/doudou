@@ -232,6 +232,7 @@ export class RecordPage extends Component {
       const list = section.createDiv({ cls: "doudou-record-file-list" });
       for (const path of record.files ?? []) this.renderStoredFile(list, path, false);
     }
+    this.containerEl.createDiv({ cls: "doudou-mobile-bottom-spacer", attr: { "aria-hidden": "true" } });
   }
 
   private renderStoredFile(
@@ -543,6 +544,7 @@ export class RecordPage extends Component {
         releasePendingImages(snapshot); this.pending = []; this.pendingFiles = []; await this.changed(); this.renderRead(); if (this.record) void this.dependencies.aiTagService.enrich(this.record);
       } catch (error) { console.error("[doudou] Failed to save record", error); status.setText("保存失败，请再试一次"); save.disabled = false; cancel.disabled = false; }
     });
+    this.containerEl.createDiv({ cls: "doudou-mobile-bottom-spacer", attr: { "aria-hidden": "true" } });
   }
 
   private populateFolderSelect(select: HTMLSelectElement, names: readonly string[], preferred?: string): void {

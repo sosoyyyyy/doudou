@@ -126,7 +126,9 @@ const pluginCss = readFileSync(new URL("../styles.css", import.meta.url), "utf8"
 const pluginStyle = document.createElement("style");
 pluginStyle.textContent = pluginCss;
 document.head.appendChild(pluginStyle);
+const allPageSource = readFileSync(new URL("../src/ui/AllPage.ts", import.meta.url), "utf8");
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
+const recordPageSource = readFileSync(new URL("../src/ui/RecordPage.ts", import.meta.url), "utf8");
 
 function cssDeclarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -285,6 +287,52 @@ test("folder and record navigation use sticky headers inside their real scroll c
   assert.match(cssDeclarations(".doudou-view .doudou-record-header"), /position:\s*sticky/);
   assert.match(cssDeclarations(".doudou-view .doudou-library-body.doudou-is-folder-view"), /padding:/);
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
+});
+
+test("mobile bottom spacer is ordinary trailing content on every scrolling page", () => {
+  assert.equal(allPageSource.match(/cls: "doudou-mobile-bottom-spacer"/g)?.length, 2);
+  assert.equal(libraryPageSource.match(/cls: "doudou-mobile-bottom-spacer"/g)?.length, 1);
+  assert.equal(recordPageSource.match(/cls: "doudou-mobile-bottom-spacer"/g)?.length, 2);
+  assert.match(allPageSource, /this\.renderCard\(record\);[\s\S]*this\.listEl\.createDiv\(\{ cls: "doudou-mobile-bottom-spacer"/);
+  assert.match(libraryPageSource, /if \(this\.currentFolder === null\) this\.renderFolders\(\); else this\.renderFolder\(\); this\.bodyEl\.createDiv\(\{ cls: "doudou-mobile-bottom-spacer"/);
+  assert.match(recordPageSource, /article\.createEl\("section", \{ cls: "doudou-record-files" \}\)[\s\S]*this\.containerEl\.createDiv\(\{ cls: "doudou-mobile-bottom-spacer"/);
+});
+
+test("mobile bottom spacer is hidden on desktop and sized only by bottom clearance", () => {
+  assert.match(cssDeclarations(".doudou-mobile-bottom-spacer"), /display:\s*none/);
+  const mobileRoot = cssDeclarations(".is-mobile .doudou-view");
+  assert.match(mobileRoot, /--doudou-mobile-bottom-clearance:\s*calc\(/);
+  assert.match(mobileRoot, /--navbar-height/);
+  assert.match(mobileRoot, /--mobile-toolbar-height/);
+  assert.match(mobileRoot, /--navbar-bottom-offset/);
+  assert.match(mobileRoot, /--safe-area-inset-bottom/);
+  const mobileSpacer = cssDeclarations(".is-mobile .doudou-view .doudou-mobile-bottom-spacer");
+  assert.match(mobileSpacer, /height:\s*var\(--doudou-mobile-bottom-clearance\)/);
+  assert.match(mobileSpacer, /min-height:\s*var\(--doudou-mobile-bottom-clearance\)/);
+  assert.match(mobileSpacer, /flex:\s*0 0 var\(--doudou-mobile-bottom-clearance\)/);
+  assert.match(mobileSpacer, /pointer-events:\s*none/);
+});
+
+test("mobile bottom clearance leaves the 0.5.4 scrolling, editor and top safe-area rules unchanged", () => {
+  const recordPage = cssDeclarations(".doudou-view .doudou-record-page");
+  assert.match(recordPage, /overflow-y:\s*auto/);
+  assert.match(recordPage, /overscroll-behavior:\s*contain/);
+  assert.match(recordPage, /-webkit-overflow-scrolling:\s*touch/);
+  assert.doesNotMatch(recordPage, /scroll-padding|scroll-margin/);
+  assert.doesNotMatch(pluginCss, /scroll-padding-bottom|scroll-margin|doudou-keyboard-open/);
+
+  const textarea = cssDeclarations(".doudou-view textarea.doudou-editor-content");
+  assert.match(textarea, /min-height:\s*220px/);
+  assert.match(textarea, /overflow-y:\s*auto/);
+  assert.match(textarea, /resize:\s*vertical/);
+  assert.match(textarea, /line-height:\s*1\.65/);
+
+  const appHeader = cssDeclarations(".doudou-view > .doudou-main-shell > header.doudou-header");
+  const recordHeader = cssDeclarations(".doudou-view .doudou-record-header");
+  assert.match(appHeader, /padding:\s*max\(6px, env\(safe-area-inset-top\)\) 10px 7px/);
+  assert.match(recordHeader, /padding:\s*max\(12px, env\(safe-area-inset-top\)\) 0 10px/);
+  assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view > \.doudou-main-shell > header\.doudou-header/);
+  assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view \.doudou-record-header/);
 });
 
 test("navigation labels change without changing internal page or virtual-folder identity", () => {

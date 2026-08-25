@@ -11,6 +11,9 @@
 .doudou-main-shell, .doudou-pages, .doudou-page, .doudou-record-page { flex: 1 1 auto; min-width: 0; }
 .doudou-main-shell, .doudou-pages, .doudou-page { overflow: hidden; }
 .doudou-is-hidden { display: none !important; }
+.doudou-mobile-bottom-spacer { display: none; }
+.is-mobile .doudou-view { --doudou-mobile-bottom-clearance: calc(var(--navbar-height, var(--mobile-toolbar-height, 52px)) + max(var(--navbar-bottom-offset, var(--safe-area-inset-bottom, env(safe-area-inset-bottom))), 8px) + 8px); }
+.is-mobile .doudou-view .doudou-mobile-bottom-spacer { display: block; flex: 0 0 var(--doudou-mobile-bottom-clearance); width: 100%; height: var(--doudou-mobile-bottom-clearance); min-height: var(--doudou-mobile-bottom-clearance); pointer-events: none; }
 .doudou-view > .doudou-main-shell > header.doudou-header { position: relative; inset: auto; z-index: 1; display: grid; flex: 0 0 auto; grid-template-columns: auto minmax(108px, 180px) 1fr; align-items: center; gap: 8px; width: 100%; height: auto; min-height: 52px; max-height: none; margin: 0; padding: max(6px, env(safe-area-inset-top)) 10px 7px; overflow: visible; border-bottom: 1px solid var(--doudou-border); background: var(--doudou-bg); }
 .doudou-brand { color: var(--doudou-blue-strong); font-size: 16px; font-weight: 750; white-space: nowrap; }
 .doudou-page-tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }

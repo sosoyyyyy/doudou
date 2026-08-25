@@ -38,7 +38,9 @@ export class AllPage extends Component {
     this.gifPreviews.clear();
     this.listEl.empty();
     if (this.records.length === 0) {
-      this.listEl.createDiv({ cls: "doudou-empty-state doudou-timeline-empty", text: "这里还空空的", attr: { "data-subtitle": "点右上角 ＋ 记下点什么吧" } }); return;
+      this.listEl.createDiv({ cls: "doudou-empty-state doudou-timeline-empty", text: "这里还空空的", attr: { "data-subtitle": "点右上角 ＋ 记下点什么吧" } });
+      this.listEl.createDiv({ cls: "doudou-mobile-bottom-spacer", attr: { "aria-hidden": "true" } });
+      return;
     }
     let monthKey = ""; let dayKey = "";
     for (const record of this.records) {
@@ -47,6 +49,7 @@ export class AllPage extends Component {
       if (nextDay !== dayKey) { dayKey = nextDay; this.listEl.createEl("h3", { cls: "doudou-day-heading", text: day.format(date) }); }
       this.renderCard(record);
     }
+    this.listEl.createDiv({ cls: "doudou-mobile-bottom-spacer", attr: { "aria-hidden": "true" } });
   }
   private renderCard(record: StoredDoudouRecord): void {
     const button = this.listEl.createEl("button", { cls: "doudou-journal-card", attr: { type: "button", "aria-label": `打开备忘录：${recordTitle(record)}` } });

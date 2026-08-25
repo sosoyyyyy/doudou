@@ -66,7 +66,7 @@ export class RecordPage extends Component {
   }
 
   private renderRead(): void {
-    const record = this.record; if (!record) return; this.containerEl.removeClass("doudou-is-editing"); this.gifPreviews.clear(); this.folderSelectEl = null; this.containerEl.empty();
+    const record = this.record; if (!record) return; this.gifPreviews.clear(); this.folderSelectEl = null; this.containerEl.empty();
     const header = this.containerEl.createDiv({ cls: "doudou-record-header" });
     const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 返回", attr: { type: "button" } }); back.addEventListener("click", this.goBack);
     const tools = header.createDiv({ cls: "doudou-record-tools" });
@@ -162,25 +162,21 @@ export class RecordPage extends Component {
   }
 
   private async renderEdit(isNew: boolean): Promise<void> {
-    this.containerEl.addClass("doudou-is-editing"); this.gifPreviews.clear(); releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
+    this.gifPreviews.clear(); releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
     const record = this.record;
     const [folders, records] = await Promise.all([
       this.dependencies.folderService.listFolders(),
       this.dependencies.repository.loadAll()
     ]);
-    const shell = this.containerEl.createDiv({ cls: "doudou-editor-shell" });
-    const header = shell.createDiv({ cls: "doudou-record-header doudou-editor-header" }); header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
+    const header = this.containerEl.createDiv({ cls: "doudou-record-header doudou-editor-header" }); header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
     const actions = header.createDiv({ cls: "doudou-editor-actions" });
     const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } });
     const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } });
-    const form = shell.createDiv({ cls: "doudou-editor doudou-editor-main" });
+    const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
     const content = createRecordTextareaEditor(form, record?.content ?? "", records);
-    const footer = shell.createDiv({ cls: "doudou-editor-footer" });
-    const imageInput = footer.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
-    const attachmentInput = footer.createEl("input", { cls: "doudou-file-input", attr: { type: "file", multiple: "true", "aria-label": "选择普通文件附件" } });
-    const attachmentViewport = footer.createDiv({ cls: "doudou-editor-attachments" });
-    const images = attachmentViewport.createDiv({ cls: "doudou-editor-images" });
+    const imageInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
+    const images = form.createDiv({ cls: "doudou-editor-images" });
     let editableImages: EditableImageItem[] = (record?.images ?? []).map((path, index) => ({
       kind: "stored",
       id: `stored-${index}-${path}`,
@@ -361,12 +357,13 @@ export class RecordPage extends Component {
       paintImages();
       if (!event.clipboardData?.getData("text/plain")) event.preventDefault();
     });
-    const attachmentActions = footer.createDiv({ cls: "doudou-attachment-actions" });
+    const attachmentInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", multiple: "true", "aria-label": "选择普通文件附件" } });
+    const attachmentActions = form.createDiv({ cls: "doudou-attachment-actions" });
     const addImage = attachmentActions.createEl("button", { cls: "doudou-add-image-button", attr: { type: "button", "aria-label": "添加图片" } });
     setIcon(addImage, "image-plus"); addImage.createSpan({ text: "添加图片" }); addImage.addEventListener("click", () => imageInput.click());
     const addFile = attachmentActions.createEl("button", { cls: "doudou-add-file-button", attr: { type: "button", "aria-label": "添加普通文件" } });
     setIcon(addFile, "paperclip"); addFile.createSpan({ text: "添加文件" }); addFile.addEventListener("click", () => attachmentInput.click());
-    const fileArea = attachmentViewport.createDiv({ cls: "doudou-editor-files" });
+    const fileArea = form.createDiv({ cls: "doudou-editor-files" });
     let retainedFiles = [...(record?.files ?? [])];
     const removedFiles = new Set<string>();
     const paintFiles = (): void => {
@@ -404,12 +401,12 @@ export class RecordPage extends Component {
       this.pendingFiles.push(...createPendingFiles(accepted));
       paintFiles();
     });
-    const folderRow = footer.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } }); this.folderSelectEl = folder;
+    const folderRow = form.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } }); this.folderSelectEl = folder;
     const names = folders.map((item) => item.name);
     const preferred = record?.folder ?? this.defaultFolder;
     this.populateFolderSelect(folder, names, preferred);
-    const status = footer.createDiv({ cls: "doudou-editor-status", attr: { role: "status" } });
-    cancel.addEventListener("click", () => { releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; if (record) this.renderRead(); else { this.containerEl.removeClass("doudou-is-editing"); this.goBack(); } });
+    const status = form.createDiv({ cls: "doudou-editor-status", attr: { role: "status" } });
+    cancel.addEventListener("click", () => { releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; if (record) this.renderRead(); else this.goBack(); });
     save.addEventListener("click", async () => {
       if (!hasSavableRecordDraft(title.value, content.value, editableImages.length, retainedFiles.length + this.pendingFiles.length)) { status.setText("标题、正文、图片和文件不能同时为空"); return; }
       if (!folder.value) { status.setText("请先在资料页新建文件夹"); return; }

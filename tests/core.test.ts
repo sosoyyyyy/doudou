@@ -187,6 +187,16 @@ function mockTextareaScrollHeight(
   };
 }
 
+async function countStyleMutations(element: HTMLElement, action: () => void): Promise<number> {
+  let count = 0;
+  const observer = new MutationObserver((records) => { count += records.length; });
+  observer.observe(element, { attributes: true, attributeFilter: ["style"] });
+  action();
+  await Promise.resolve();
+  observer.disconnect();
+  return count;
+}
+
 function createViewportHarness(initialHeight = 700, rootTop = 80): {
   root: HTMLElement;
   viewport: ViewportResizeSource;
@@ -390,7 +400,7 @@ test("the per-input iOS outer scroll correction is removed", () => {
 
 test("all platforms share one editor code path", () => {
   assert.doesNotMatch(recordTextareaEditorSource, /Platform|isIosApp|isMobileApp|isDesktopApp/);
-  assert.match(recordPageSource, /createRecordTextareaEditor\(form, record\?\.content \?\? "", records\)/);
+  assert.match(recordPageSource, /createRecordTextareaEditor\(form, record\?\.content \?\? "", records,/);
 });
 
 test("empty and existing bodies load directly into the visible textarea", () => {
@@ -407,7 +417,7 @@ test("empty and existing bodies load directly into the visible textarea", () => 
 });
 
 test("textarea auto-grows during initialization", () => {
-  const restore = mockTextareaScrollHeight(() => 240);
+  const restore = mockTextareaScrollHeight(() => 238);
   try {
     const form = document.createElement("div");
     const textarea = createRecordTextareaEditor(form, "短正文", []);
@@ -417,32 +427,53 @@ test("textarea auto-grows during initialization", () => {
   }
 });
 
-test("ordinary input and Enter recalculate textarea height", () => {
-  let height = 220;
+test("ordinary input with unchanged content height never writes the real textarea height", async () => {
+  const restore = mockTextareaScrollHeight((textarea) => {
+    assert.ok(textarea.classList.contains("doudou-textarea-measure"));
+    return 498;
+  });
+  try {
+    const form = document.createElement("div");
+    const textarea = createRecordTextareaEditor(form, "正文", []);
+    assert.equal(textarea.style.height, "500px");
+    const mutations = await countStyleMutations(textarea, () => {
+      textarea.value += "字";
+      textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
+    });
+    assert.equal(mutations, 0);
+    assert.equal(textarea.style.height, "500px");
+    assert.doesNotMatch(recordTextareaEditorSource, /textarea\.style\.height\s*=\s*["']auto["']/);
+  } finally {
+    restore();
+  }
+});
+
+test("Enter writes the final increased height exactly once", async () => {
+  let height = 498;
   const restore = mockTextareaScrollHeight(() => height);
   try {
     const form = document.createElement("div");
     const textarea = createRecordTextareaEditor(form, "正文", []);
-    height = 840;
-    textarea.value = Array.from({ length: 30 }, (_, index) => `第 ${index + 1} 行`).join("\n");
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
-    assert.equal(textarea.style.height, "840px");
-    height = 876;
-    textarea.value += "\n";
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
-    assert.equal(textarea.style.height, "876px");
+    assert.equal(textarea.style.height, "500px");
+    height = 524;
+    const mutations = await countStyleMutations(textarea, () => {
+      textarea.value += "\n";
+      textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
+    });
+    assert.equal(mutations, 1);
+    assert.equal(textarea.style.height, "526px");
   } finally {
     restore();
   }
 });
 
 test("pasting long text recalculates textarea height", () => {
-  let height = 220;
+  let height = 218;
   const restore = mockTextareaScrollHeight(() => height);
   try {
     const form = document.createElement("div");
     const textarea = createRecordTextareaEditor(form, "", []);
-    height = 2_400;
+    height = 2_398;
     textarea.value = "粘贴的长正文\n".repeat(120);
     textarea.dispatchEvent(new viewerDom.window.InputEvent("input", {
       bubbles: true,
@@ -455,13 +486,13 @@ test("pasting long text recalculates textarea height", () => {
 });
 
 test("IME composition keeps the value and auto-grows on completion", () => {
-  let height = 220;
+  let height = 218;
   const restore = mockTextareaScrollHeight(() => height);
   try {
     const form = document.createElement("div");
     const textarea = createRecordTextareaEditor(form, "中文", []);
     textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionstart", { bubbles: true }));
-    height = 310;
+    height = 308;
     textarea.value = "中文输入完成";
     textarea.dispatchEvent(new viewerDom.window.InputEvent("input", {
       bubbles: true,
@@ -476,29 +507,27 @@ test("IME composition keeps the value and auto-grows on completion", () => {
   }
 });
 
-test("deleting text resets height to auto before shrinking", () => {
-  let height = 1_200;
-  let observedAutoHeight = false;
-  const restore = mockTextareaScrollHeight((textarea) => {
-    if (height === 220) observedAutoHeight = textarea.style.height === "auto";
-    return height;
-  });
+test("deleting a line writes the final reduced height exactly once", async () => {
+  let height = 524;
+  const restore = mockTextareaScrollHeight(() => height);
   try {
     const form = document.createElement("div");
-    const textarea = createRecordTextareaEditor(form, "很长的正文\n".repeat(50), []);
-    assert.equal(textarea.style.height, "1200px");
-    height = 220;
+    const textarea = createRecordTextareaEditor(form, "第一行\n第二行", []);
+    assert.equal(textarea.style.height, "526px");
+    height = 498;
     textarea.value = "缩短后的正文";
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
-    assert.ok(observedAutoHeight);
-    assert.equal(textarea.style.height, "220px");
+    const mutations = await countStyleMutations(textarea, () => {
+      textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    });
+    assert.equal(mutations, 1);
+    assert.equal(textarea.style.height, "500px");
   } finally {
     restore();
   }
 });
 
 test("tag suggestion completion recalculates textarea height", () => {
-  let height = 220;
+  let height = 218;
   const restore = mockTextareaScrollHeight(() => height);
   const record: StoredDoudouRecord = {
     id: "tag-source",
@@ -516,7 +545,7 @@ test("tag suggestion completion recalculates textarea height", () => {
     textarea.focus();
     const suggestion = form.querySelector<HTMLButtonElement>(".doudou-tag-suggestion");
     assert.ok(suggestion);
-    height = 260;
+    height = 258;
     suggestion.click();
     assert.equal(textarea.value, "#工作 ");
     assert.equal(textarea.style.height, "260px");
@@ -527,7 +556,7 @@ test("tag suggestion completion recalculates textarea height", () => {
 });
 
 test("hundreds of lines grow without introducing an editor max height", () => {
-  const restore = mockTextareaScrollHeight(() => 12_000);
+  const restore = mockTextareaScrollHeight(() => 11_998);
   try {
     const form = document.createElement("div");
     const textarea = createRecordTextareaEditor(form, "长正文\n".repeat(400), []);
@@ -569,6 +598,62 @@ test("editor contains no mirror or transparent overlay", () => {
   assert.equal(textarea.value, "普通正文");
   assert.doesNotMatch(recordTextareaEditorSource, /mirror|renderManualTagText/);
   assert.doesNotMatch(pluginCss, /doudou-tag-editor-mirror|doudou-tag-editor-input|color:\s*transparent/);
+});
+
+test("measurement textarea stays outside flow and cleanup disconnects width observation", () => {
+  const originalResizeObserver = globalThis.ResizeObserver;
+  let observed: Element | null = null;
+  let disconnected = false;
+  let triggerResize: (() => void) | null = null;
+  class TestResizeObserver implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      triggerResize = () => callback([], this);
+    }
+    observe(target: Element): void { observed = target; }
+    unobserve(): void { /* No-op test double. */ }
+    disconnect(): void { disconnected = true; }
+  }
+  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: TestResizeObserver });
+  let height = 298;
+  const restoreHeight = mockTextareaScrollHeight(() => height);
+  const form = document.createElement("div");
+  let cleanup: (() => void) | null = null;
+  try {
+    const textarea = createRecordTextareaEditor(form, "已有长正文", [], (registered) => { cleanup = registered; });
+    const measurement = form.querySelector<HTMLTextAreaElement>(".doudou-textarea-measure");
+    assert.ok(measurement);
+    assert.equal(observed, textarea);
+    assert.equal(measurement.getAttribute("aria-hidden"), "true");
+    assert.equal(measurement.tabIndex, -1);
+    assert.equal(measurement.readOnly, true);
+    assert.equal(measurement.offsetHeight, 0);
+    const measureCss = cssDeclarations(".doudou-view textarea.doudou-editor-content.doudou-textarea-measure");
+    assert.match(measureCss, /position:\s*absolute/);
+    assert.match(measureCss, /visibility:\s*hidden/);
+    assert.match(measureCss, /pointer-events:\s*none/);
+    assert.match(measureCss, /height:\s*0/);
+    assert.match(measureCss, /min-height:\s*0/);
+    const formScrollHeight = form.scrollHeight;
+    measurement.value = "不会参与正常流的测量正文\n".repeat(100);
+    assert.equal(form.scrollHeight, formScrollHeight);
+
+    textarea.getBoundingClientRect = () => ({
+      top: 0, bottom: 300, left: 0, right: 320, width: 320, height: 300, x: 0, y: 0,
+      toJSON: () => ({})
+    });
+    height = 358;
+    triggerResize?.();
+    assert.equal(textarea.style.height, "360px");
+    assert.equal(measurement.style.width, "320px");
+    assert.ok(cleanup);
+    cleanup?.();
+    assert.equal(disconnected, true);
+    assert.equal(form.querySelector(".doudou-textarea-measure"), null);
+  } finally {
+    cleanup?.();
+    restoreHeight();
+    Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: originalResizeObserver });
+  }
 });
 
 test("textarea does not create nested vertical scrolling", () => {

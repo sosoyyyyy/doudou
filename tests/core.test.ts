@@ -357,6 +357,16 @@ test("folder and record navigation use sticky headers inside their real scroll c
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
 });
 
+test("only editing mode disables record-page scrolling", () => {
+  const readingPage = cssDeclarations(".doudou-view .doudou-record-page");
+  const editingPage = cssDeclarations(".doudou-view .doudou-record-page.doudou-is-editing");
+  assert.match(readingPage, /overflow-y:\s*auto/);
+  assert.match(editingPage, /overflow:\s*hidden/);
+  assert.match(editingPage, /overflow:\s*clip/);
+  assert.match(recordPageSource, /containerEl\.addClass\("doudou-is-editing"\)/);
+  assert.match(recordPageSource, /containerEl\.removeClass\("doudou-is-editing"\)/);
+});
+
 test("editing header is normal-flow while the reading header remains sticky", () => {
   assert.match(cssDeclarations(".doudou-view .doudou-record-header"), /position:\s*sticky/);
   const editorHeader = cssDeclarations(".doudou-view .doudou-record-header.doudou-editor-header");
@@ -386,6 +396,9 @@ test("the per-input iOS outer scroll correction is removed", () => {
 test("all platforms share one editor code path", () => {
   assert.doesNotMatch(recordTextareaEditorSource, /Platform|isIosApp|isMobileApp|isDesktopApp/);
   assert.match(recordPageSource, /createRecordTextareaEditor\(form, record\?\.content \?\? "", records\)/);
+  assert.match(recordPageSource, /createDiv\(\{ cls: "doudou-editor-shell" \}\)/);
+  assert.match(recordPageSource, /createDiv\(\{ cls: "doudou-editor doudou-editor-main" \}\)/);
+  assert.match(recordPageSource, /createDiv\(\{ cls: "doudou-editor-footer" \}\)/);
 });
 
 test("empty and existing bodies load directly into the visible textarea", () => {
@@ -401,13 +414,29 @@ test("empty and existing bodies load directly into the visible textarea", () => 
   assert.equal(existingForm.querySelector(".doudou-tag-editor-mirror"), null);
 });
 
-test("textarea uses one fixed 300px geometry on every platform", () => {
+test("editor shell and main use a bounded flex-column layout", () => {
+  const shellCss = cssDeclarations(".doudou-view .doudou-editor-shell");
+  assert.match(shellCss, /display:\s*flex/);
+  assert.match(shellCss, /flex-direction:\s*column/);
+  assert.match(shellCss, /height:\s*100%/);
+  assert.match(shellCss, /min-height:\s*0/);
+  assert.match(shellCss, /overflow:\s*hidden/);
+  const mainCss = cssDeclarations(".doudou-view .doudou-editor-main");
+  assert.match(mainCss, /display:\s*flex/);
+  assert.match(mainCss, /flex:\s*1 1 auto/);
+  assert.match(mainCss, /flex-direction:\s*column/);
+  assert.match(mainCss, /min-height:\s*0/);
+  assert.match(mainCss, /overflow:\s*hidden/);
+});
+
+test("textarea flexes into remaining shell height without a fixed 300px size", () => {
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
-  assert.match(textareaCss, /height:\s*300px/);
-  assert.match(textareaCss, /min-height:\s*300px/);
-  assert.match(textareaCss, /max-height:\s*300px/);
+  assert.match(textareaCss, /flex:\s*1 1 auto/);
+  assert.match(textareaCss, /height:\s*auto/);
+  assert.match(textareaCss, /min-height:\s*0/);
+  assert.match(textareaCss, /max-height:\s*none/);
   assert.match(textareaCss, /resize:\s*none/);
-  assert.doesNotMatch(textareaCss, /\b(?:vh|dvh|svh|lvh)\b/);
+  assert.doesNotMatch(textareaCss, /300px|\b(?:vh|dvh|svh|lvh)\b/);
 });
 
 test("ordinary input never changes textarea geometry", async () => {
@@ -475,7 +504,7 @@ test("deleting a line never changes textarea geometry", async () => {
   assert.equal(textarea.style.height, "");
 });
 
-test("tag suggestion completion keeps the fixed textarea geometry", async () => {
+test("tag suggestion completion keeps the flex textarea geometry", async () => {
   const record: StoredDoudouRecord = {
     id: "tag-source",
     path: "兜兜/工作/2026/08/tag-source.md",
@@ -509,7 +538,7 @@ test("long content remains inside a vertically scrollable textarea", () => {
   assert.ok(textarea.scrollHeight > textarea.clientHeight);
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
   assert.match(textareaCss, /overflow-y:\s*auto/);
-  assert.match(textareaCss, /height:\s*300px/);
+  assert.match(textareaCss, /flex:\s*1 1 auto/);
 });
 
 test("ordinary text input leaves hidden tag suggestions unchanged", async () => {
@@ -530,6 +559,10 @@ test("ordinary text input leaves hidden tag suggestions unchanged", async () => 
   assert.equal(mutations, 0);
   assert.equal(suggestions.childNodes.length, 0);
   assert.ok(suggestions.classList.contains("doudou-is-hidden"));
+  const suggestionsCss = cssDeclarations(".doudou-tag-suggestions");
+  assert.match(suggestionsCss, /position:\s*absolute/);
+  assert.match(suggestionsCss, /top:\s*auto/);
+  assert.match(suggestionsCss, /bottom:\s*6px/);
 });
 
 test("editor contains no mirror or transparent overlay", () => {
@@ -552,12 +585,26 @@ test("editor has no measurement textarea or auto-grow observer", () => {
   assert.doesNotMatch(pluginCss, /doudou-textarea-measure/);
 });
 
-test("textarea owns long-body scrolling while the record page owns form scrolling", () => {
+test("textarea owns body scrolling while the editing page stays locked", () => {
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
   assert.match(textareaCss, /overflow-y:\s*auto/);
   assert.match(textareaCss, /overflow-x:\s*hidden/);
   assert.match(textareaCss, /resize:\s*none/);
-  assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
+  assert.match(cssDeclarations(".doudou-view .doudou-record-page.doudou-is-editing"), /overflow:\s*hidden/);
+});
+
+test("footer controls stay in shell and large attachment sets scroll locally", () => {
+  const footerCss = cssDeclarations(".doudou-view .doudou-editor-footer");
+  assert.match(footerCss, /flex:\s*0 0 auto/);
+  assert.match(footerCss, /max-height:\s*230px/);
+  assert.match(footerCss, /overflow:\s*hidden/);
+  const attachmentsCss = cssDeclarations(".doudou-view .doudou-editor-attachments");
+  assert.match(attachmentsCss, /max-height:\s*110px/);
+  assert.match(attachmentsCss, /overflow-y:\s*auto/);
+  assert.match(attachmentsCss, /overscroll-behavior:\s*contain/);
+  assert.match(recordPageSource, /attachmentViewport\.createDiv\(\{ cls: "doudou-editor-images" \}\)/);
+  assert.match(recordPageSource, /attachmentViewport\.createDiv\(\{ cls: "doudou-editor-files" \}\)/);
+  assert.match(recordPageSource, /footer\.createDiv\(\{ cls: "doudou-editor-folder" \}\)/);
 });
 
 test("VisualViewport resize updates the root layout height", () => {

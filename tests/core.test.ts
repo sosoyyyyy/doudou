@@ -51,6 +51,7 @@ import {
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
+import { editorScrollTarget } from "../src/ui/editorScroll";
 import {
   canShareImageFile,
   copyImageFileToClipboard,
@@ -285,6 +286,39 @@ test("folder and record navigation use sticky headers inside their real scroll c
   assert.match(cssDeclarations(".doudou-view .doudou-record-header"), /position:\s*sticky/);
   assert.match(cssDeclarations(".doudou-view .doudou-library-body.doudou-is-folder-view"), /padding:/);
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
+});
+
+test("editor line break keeps the outer scroll position after textarea layout work", () => {
+  assert.equal(editorScrollTarget({
+    initialScrollTop: 180,
+    caretTop: 240,
+    caretBottom: 266,
+    viewportTop: 0,
+    viewportBottom: 520,
+    maxScrollTop: 900
+  }), 180);
+});
+
+test("editor line break does not add scroll while the caret remains visible", () => {
+  assert.equal(editorScrollTarget({
+    initialScrollTop: 72,
+    caretTop: 450,
+    caretBottom: 476,
+    viewportTop: 40,
+    viewportBottom: 500,
+    maxScrollTop: 900
+  }), 72);
+});
+
+test("editor line break scrolls only the missing distance when the keyboard covers the caret", () => {
+  assert.equal(editorScrollTarget({
+    initialScrollTop: 72,
+    caretTop: 488,
+    caretBottom: 514,
+    viewportTop: 40,
+    viewportBottom: 500,
+    maxScrollTop: 900
+  }), 94);
 });
 
 test("mobile pages avoid duplicate top safe area and clear the host navbar", () => {

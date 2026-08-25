@@ -39,6 +39,7 @@ import {
   hasSavableRecordDraft,
   type PendingFile
 } from "./fileDraft";
+import { stabilizeIosTextareaLineBreaks } from "./editorScroll";
 
 function createManualTagEditor(
   form: HTMLElement,
@@ -170,9 +171,10 @@ export class RecordPage extends Component {
   private pendingFiles: PendingFile[] = [];
   private defaultFolder: string | undefined;
   private folderSelectEl: HTMLSelectElement | null = null;
+  private editorScrollCleanup: (() => void) | null = null;
   constructor(private readonly app: App, private readonly containerEl: HTMLElement, private readonly dependencies: RecordPageDependencies, private readonly goBack: () => void, private readonly changed: () => Promise<void>) { super(); }
   override onload(): void { this.containerEl.addClass("doudou-record-page"); }
-  override onunload(): void { this.gifPreviews.dispose(); releasePendingImages(this.pending); this.pendingFiles = []; this.containerEl.empty(); }
+  override onunload(): void { this.editorScrollCleanup?.(); this.editorScrollCleanup = null; this.gifPreviews.dispose(); releasePendingImages(this.pending); this.pendingFiles = []; this.containerEl.empty(); }
   deactivate(): void { this.gifPreviews.clear(); }
   open(record: StoredDoudouRecord): void { this.record = record; this.renderRead(); }
   async create(defaultFolder?: string): Promise<void> { this.record = null; this.defaultFolder = defaultFolder; await this.renderEdit(true); }
@@ -186,7 +188,7 @@ export class RecordPage extends Component {
   }
 
   private renderRead(): void {
-    const record = this.record; if (!record) return; this.gifPreviews.clear(); this.folderSelectEl = null; this.containerEl.empty();
+    const record = this.record; if (!record) return; this.editorScrollCleanup?.(); this.editorScrollCleanup = null; this.gifPreviews.clear(); this.folderSelectEl = null; this.containerEl.empty();
     const header = this.containerEl.createDiv({ cls: "doudou-record-header" });
     const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 返回", attr: { type: "button" } }); back.addEventListener("click", this.goBack);
     const tools = header.createDiv({ cls: "doudou-record-tools" });
@@ -282,7 +284,7 @@ export class RecordPage extends Component {
   }
 
   private async renderEdit(isNew: boolean): Promise<void> {
-    this.gifPreviews.clear(); releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
+    this.editorScrollCleanup?.(); this.editorScrollCleanup = null; this.gifPreviews.clear(); releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
     const record = this.record;
     const [folders, records] = await Promise.all([
       this.dependencies.folderService.listFolders(),
@@ -295,6 +297,7 @@ export class RecordPage extends Component {
     const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
     const content = createManualTagEditor(form, record?.content ?? "", records);
+    if (Platform.isIosApp) this.editorScrollCleanup = stabilizeIosTextareaLineBreaks(content, this.containerEl);
     const imageInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
     const images = form.createDiv({ cls: "doudou-editor-images" });
     let editableImages: EditableImageItem[] = (record?.images ?? []).map((path, index) => ({

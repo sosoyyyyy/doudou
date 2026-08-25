@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { File as NodeFile } from "node:buffer";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { Vault } from "obsidian";
@@ -51,7 +51,7 @@ import {
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
-import { stabilizeIosTextareaInput, textareaOuterScrollTarget } from "../src/ui/editorScroll";
+import { createManualTagEditor } from "../src/ui/manualTagEditor";
 import {
   canShareImageFile,
   copyImageFileToClipboard,
@@ -128,7 +128,8 @@ const pluginStyle = document.createElement("style");
 pluginStyle.textContent = pluginCss;
 document.head.appendChild(pluginStyle);
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
-const editorScrollSource = readFileSync(new URL("../src/ui/editorScroll.ts", import.meta.url), "utf8");
+const recordPageSource = readFileSync(new URL("../src/ui/RecordPage.ts", import.meta.url), "utf8");
+const manualTagEditorSource = readFileSync(new URL("../src/ui/manualTagEditor.ts", import.meta.url), "utf8");
 
 function cssDeclarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -151,45 +152,18 @@ function mediaCssDeclarations(media: string, selector: string): string {
   return block.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
 }
 
-async function simulateIosEditorInput(
-  inputType: string,
-  initialScrollTop: number,
-  webkitScrollTop: number,
-  textareaBottom: number
-): Promise<number> {
-  Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
-  Object.defineProperty(window, "visualViewport", {
-    configurable: true,
-    value: { height: 400, offsetTop: 100 }
-  });
+function simulateEditorInputWithoutOuterScroll(inputType: string): number {
   const outer = document.createElement("div");
-  const textarea = document.createElement("textarea");
-  Object.defineProperty(outer, "scrollHeight", { configurable: true, value: 1_000 });
-  Object.defineProperty(outer, "clientHeight", { configurable: true, value: 400 });
-  textarea.getBoundingClientRect = () => ({
-    top: textareaBottom - 220,
-    bottom: textareaBottom,
-    left: 0,
-    right: 320,
-    width: 320,
-    height: 220,
-    x: 0,
-    y: textareaBottom - 220,
-    toJSON: () => ({})
-  });
-  outer.appendChild(textarea);
+  const form = outer.createDiv();
+  const textarea = createManualTagEditor(form, "正文", []);
   document.body.appendChild(outer);
   textarea.focus();
-  const cleanup = stabilizeIosTextareaInput(textarea, outer);
+  outer.scrollTop = 72;
   try {
-    outer.scrollTop = initialScrollTop;
-    textarea.dispatchEvent(new window.InputEvent("beforeinput", { bubbles: true, inputType }));
-    outer.scrollTop = webkitScrollTop;
-    textarea.dispatchEvent(new window.InputEvent("input", { bubbles: true, inputType }));
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("beforeinput", { bubbles: true, inputType }));
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType }));
     return outer.scrollTop;
   } finally {
-    cleanup();
     outer.remove();
   }
 }
@@ -332,31 +306,68 @@ test("folder and record navigation use sticky headers inside their real scroll c
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
 });
 
-test("insertText keeps outer scrollTop when the textarea element is visible", async () => {
-  assert.equal(await simulateIosEditorInput("insertText", 180, 420, 480), 180);
+test("insertText never writes the outer editor scrollTop", () => {
+  assert.equal(simulateEditorInputWithoutOuterScroll("insertText"), 72);
 });
 
-test("deleteContentBackward keeps outer scrollTop when the textarea element is visible", async () => {
-  assert.equal(await simulateIosEditorInput("deleteContentBackward", 72, 310, 476), 72);
+test("deleteContentBackward never writes the outer editor scrollTop", () => {
+  assert.equal(simulateEditorInputWithoutOuterScroll("deleteContentBackward"), 72);
 });
 
-test("insertLineBreak keeps outer scrollTop when the textarea element is visible", async () => {
-  assert.equal(await simulateIosEditorInput("insertLineBreak", 72, 290, 492), 72);
+test("insertLineBreak never writes the outer editor scrollTop", () => {
+  assert.equal(simulateEditorInputWithoutOuterScroll("insertLineBreak"), 72);
 });
 
-test("textarea internal caret movement cannot affect the outer scroll decision", () => {
-  assert.doesNotMatch(editorScrollSource, /caret|selectionStart|selectionEnd|textarea\.scrollTop/);
-  assert.doesNotMatch(editorScrollSource, /scrollIntoView|scrollTo\(/);
-  assert.match(editorScrollSource, /if \(scrollContainer\.scrollTop !== target\) scrollContainer\.scrollTop = target/);
+test("the per-input iOS outer scroll correction is removed", () => {
+  assert.equal(existsSync(new URL("../src/ui/editorScroll.ts", import.meta.url)), false);
+  const editorSources = recordPageSource + manualTagEditorSource;
+  assert.doesNotMatch(editorSources, /stabilizeIosTextarea|beforeinput|requestAnimationFrame|visualViewport/);
+  assert.doesNotMatch(editorSources, /scrollContainer\.scrollTop|containerEl\.scrollTop/);
 });
 
-test("outer editor scrolls only enough to reveal the textarea element above the keyboard", () => {
-  assert.equal(textareaOuterScrollTarget({
-    initialScrollTop: 72,
-    textareaBottom: 514,
-    viewportBottom: 500,
-    maxScrollTop: 900
-  }), 94);
+test("ordinary text input leaves hidden tag suggestions unchanged", async () => {
+  const form = document.createElement("div");
+  const textarea = createManualTagEditor(form, "普通正文", []);
+  const suggestions = form.querySelector<HTMLElement>(".doudou-tag-suggestions");
+  assert.ok(suggestions);
+  textarea.focus();
+  let mutations = 0;
+  const observer = new MutationObserver((records) => { mutations += records.length; });
+  observer.observe(suggestions, { childList: true, attributes: true });
+  textarea.value += "字";
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
+  textarea.dispatchEvent(new viewerDom.window.KeyboardEvent("keyup", { bubbles: true, key: "字" }));
+  await Promise.resolve();
+  observer.disconnect();
+  assert.equal(mutations, 0);
+  assert.equal(suggestions.childNodes.length, 0);
+  assert.ok(suggestions.classList.contains("doudou-is-hidden"));
+});
+
+test("mirror input updates reuse DOM and stay outside wrapper flow", () => {
+  const form = document.createElement("div");
+  const textarea = createManualTagEditor(form, "普通正文", []);
+  const wrapper = form.querySelector<HTMLElement>(".doudou-tag-editor");
+  const mirror = form.querySelector<HTMLElement>(".doudou-tag-editor-mirror");
+  assert.ok(wrapper);
+  assert.ok(mirror);
+  const textNode = mirror.firstChild;
+  const wrapperChildren = wrapper.childNodes.length;
+  textarea.value += "字";
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
+  assert.equal(mirror.firstChild, textNode);
+  assert.equal(wrapper.childNodes.length, wrapperChildren);
+  assert.match(cssDeclarations(".doudou-tag-editor"), /position:\s*relative/);
+  assert.match(cssDeclarations(".doudou-view .doudou-tag-editor-mirror"), /position:\s*absolute/);
+});
+
+test("scroll anchoring is disabled only for the editing page and mirror", () => {
+  const mobileAnchors = cssDeclarations(".is-mobile .doudou-view .doudou-record-page.doudou-is-editing,\n.is-mobile .doudou-view .doudou-tag-editor-mirror");
+  assert.match(mobileAnchors, /overflow-anchor:\s*none/);
+  assert.doesNotMatch(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-anchor/);
+  assert.doesNotMatch(cssDeclarations(".doudou-view .doudou-tag-editor-mirror"), /overflow-anchor/);
+  assert.doesNotMatch(cssDeclarations(".doudou-tag-editor"), /overflow-anchor/);
 });
 
 test("mobile pages avoid duplicate top safe area and clear the host navbar", () => {

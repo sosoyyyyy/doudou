@@ -83,18 +83,62 @@ export function previewText(content: string): string {
   return content.replace(/\s+/g, " ").trim();
 }
 
-export function renderManualTagText(container: HTMLElement, content: string): void {
-  container.empty();
+interface ManualTagTextSegment {
+  tag: boolean;
+  text: string;
+}
+
+function manualTagTextSegments(content: string, preserveTrailingLine: boolean): ManualTagTextSegment[] {
+  const segments: ManualTagTextSegment[] = [];
+  const append = (tag: boolean, text: string): void => {
+    if (!text) return;
+    const previous = segments[segments.length - 1];
+    if (previous?.tag === tag) previous.text += text;
+    else segments.push({ tag, text });
+  };
   let cursor = 0;
   for (const range of parseConfirmedManualTagRanges(content)) {
-    if (range.start > cursor) container.appendText(content.slice(cursor, range.start));
-    container.createSpan({
-      cls: "doudou-confirmed-tag",
-      text: content.slice(range.start, range.end)
-    });
+    if (range.start > cursor) append(false, content.slice(cursor, range.start));
+    append(true, content.slice(range.start, range.end));
     cursor = range.end;
   }
-  if (cursor < content.length) container.appendText(content.slice(cursor));
+  if (cursor < content.length) append(false, content.slice(cursor));
+  if (preserveTrailingLine && content.endsWith("\n")) append(false, "\n");
+  return segments;
+}
+
+function matchesManualTagSegment(node: ChildNode, segment: ManualTagTextSegment): boolean {
+  if (segment.tag) {
+    return node.nodeType === 1 && (node as HTMLElement).classList.contains("doudou-confirmed-tag");
+  }
+  return node.nodeType === 3;
+}
+
+export function renderManualTagText(
+  container: HTMLElement,
+  content: string,
+  preserveTrailingLine = false
+): void {
+  const segments = manualTagTextSegments(content, preserveTrailingLine);
+  let current = container.firstChild;
+  for (const segment of segments) {
+    let node = current;
+    if (!node || !matchesManualTagSegment(node, segment)) {
+      node = segment.tag
+        ? container.ownerDocument.createElement("span")
+        : container.ownerDocument.createTextNode("");
+      if (segment.tag) (node as HTMLElement).classList.add("doudou-confirmed-tag");
+      if (current) container.replaceChild(node, current);
+      else container.appendChild(node);
+    }
+    if (node.textContent !== segment.text) node.textContent = segment.text;
+    current = node.nextSibling;
+  }
+  while (current) {
+    const next = current.nextSibling;
+    current.remove();
+    current = next;
+  }
 }
 
 export async function writeClipboardText(text: string): Promise<void> {

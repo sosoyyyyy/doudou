@@ -168,6 +168,8 @@
 .is-mobile .doudou-view {
   --doudou-mobile-navbar-clearance: calc(var(--navbar-height, var(--mobile-toolbar-height, 52px)) + max(var(--navbar-bottom-offset, var(--safe-area-inset-bottom, env(safe-area-inset-bottom))), 8px) + 8px);
 }
+.is-mobile .doudou-view .doudou-record-page.doudou-is-editing,
+.is-mobile .doudou-view .doudou-tag-editor-mirror { overflow-anchor: none; }
 .is-mobile .doudou-view > .doudou-main-shell > header.doudou-header { padding-top: 6px; }
 .is-mobile .doudou-view .doudou-record-header { padding-top: 8px; }
 .is-mobile .doudou-view .doudou-timeline,

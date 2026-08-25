@@ -51,6 +51,7 @@ import {
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
+import { protectRecordPageScrollDuringTextareaEdit } from "../src/ui/recordEditorScroll";
 import { createRecordTextareaEditor } from "../src/ui/recordTextareaEditor";
 import { registerViewportResizeLayout, type ViewportResizeSource } from "../src/ui/viewportLayout";
 import {
@@ -131,6 +132,7 @@ pluginStyle.textContent = pluginCss;
 document.head.appendChild(pluginStyle);
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
 const recordPageSource = readFileSync(new URL("../src/ui/RecordPage.ts", import.meta.url), "utf8");
+const recordEditorScrollSource = readFileSync(new URL("../src/ui/recordEditorScroll.ts", import.meta.url), "utf8");
 const recordTextareaEditorSource = readFileSync(new URL("../src/ui/recordTextareaEditor.ts", import.meta.url), "utf8");
 const doudouViewSource = readFileSync(new URL("../src/ui/DoudouView.ts", import.meta.url), "utf8");
 const viewportLayoutSource = readFileSync(new URL("../src/ui/viewportLayout.ts", import.meta.url), "utf8");
@@ -156,20 +158,67 @@ function mediaCssDeclarations(media: string, selector: string): string {
   return block.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
 }
 
-function simulateEditorInputWithoutOuterScroll(inputType: string): number {
+function createEditorScrollHarness(initialScrollTop = 72): {
+  outer: HTMLDivElement;
+  textarea: HTMLTextAreaElement;
+  cleanup: () => void;
+} {
   const outer = document.createElement("div");
+  outer.className = "doudou-record-page";
   const form = outer.createDiv();
   const textarea = createRecordTextareaEditor(form, "正文", []);
   document.body.appendChild(outer);
   textarea.focus();
-  outer.scrollTop = 72;
+  outer.scrollTop = initialScrollTop;
+  const removeProtection = protectRecordPageScrollDuringTextareaEdit(textarea, outer);
+  return {
+    outer,
+    textarea,
+    cleanup: () => {
+      removeProtection();
+      outer.remove();
+    }
+  };
+}
+
+async function waitForEditorScrollChecks(): Promise<void> {
+  await new Promise<void>((resolve) => viewerDom.window.requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => viewerDom.window.requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => viewerDom.window.setTimeout(resolve, 60));
+}
+
+async function withEditorScrollHarness(
+  run: (harness: ReturnType<typeof createEditorScrollHarness>) => Promise<void> | void,
+  initialScrollTop = 72
+): Promise<void> {
+  const harness = createEditorScrollHarness(initialScrollTop);
   try {
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("beforeinput", { bubbles: true, inputType }));
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType }));
-    return outer.scrollTop;
+    await run(harness);
   } finally {
-    outer.remove();
+    harness.cleanup();
   }
+}
+
+function beginTextareaEdit(textarea: HTMLTextAreaElement, inputType: string, isComposing = false): InputEvent {
+  const beforeInput = new viewerDom.window.InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    inputType,
+    isComposing
+  });
+  textarea.dispatchEvent(beforeInput);
+  return beforeInput;
+}
+
+function finishTextareaEdit(textarea: HTMLTextAreaElement, inputType: string, isComposing = false): InputEvent {
+  const input = new viewerDom.window.InputEvent("input", {
+    bubbles: true,
+    cancelable: true,
+    inputType,
+    isComposing
+  });
+  textarea.dispatchEvent(input);
+  return input;
 }
 
 function createViewportHarness(initialHeight = 700, rootTop = 80): {
@@ -354,23 +403,122 @@ test("editing header is normal-flow while the reading header remains sticky", ()
   assert.match(editorHeader, /top:\s*auto/);
 });
 
-test("insertText never writes the outer editor scrollTop", () => {
-  assert.equal(simulateEditorInputWithoutOuterScroll("insertText"), 72);
+test("record page is the editor form scroll container inside non-scrolling page shells", () => {
+  assert.match(cssDeclarations(".doudou-view"), /overflow:\s*hidden/);
+  assert.match(cssDeclarations(".doudou-main-shell, .doudou-pages, .doudou-page"), /overflow:\s*hidden/);
+  assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
+  assert.match(recordPageSource, /containerEl\.addClass\("doudou-record-page"\)/);
 });
 
-test("deleteContentBackward never writes the outer editor scrollTop", () => {
-  assert.equal(simulateEditorInputWithoutOuterScroll("deleteContentBackward"), 72);
+test("edit transactions restore only RecordPage for text, space, delete, Enter and paste", async () => {
+  await withEditorScrollHarness(async ({ outer, textarea }) => {
+    for (const inputType of [
+      "insertText",
+      "insertText",
+      "deleteContentBackward",
+      "insertLineBreak",
+      "insertFromPaste"
+    ]) {
+      const baseline = outer.scrollTop;
+      beginTextareaEdit(textarea, inputType);
+      outer.scrollTop = baseline + 90;
+      finishTextareaEdit(textarea, inputType);
+      assert.equal(outer.scrollTop, baseline);
+      outer.scrollTop = baseline + 110;
+      await waitForEditorScrollChecks();
+      assert.equal(outer.scrollTop, baseline);
+    }
+  });
 });
 
-test("insertLineBreak never writes the outer editor scrollTop", () => {
-  assert.equal(simulateEditorInputWithoutOuterScroll("insertLineBreak"), 72);
+test("scroll protection never writes textarea value, selection, identity or scrollTop", async () => {
+  await withEditorScrollHarness(async ({ outer, textarea }) => {
+    const identity = outer.querySelector("textarea");
+    textarea.value = "用户输入后的正文";
+    textarea.setSelectionRange(4, 4);
+    textarea.scrollTop = 38;
+    beginTextareaEdit(textarea, "insertText");
+    outer.scrollTop = 190;
+    finishTextareaEdit(textarea, "insertText");
+    await waitForEditorScrollChecks();
+    assert.equal(outer.querySelector("textarea"), identity);
+    assert.equal(textarea.value, "用户输入后的正文");
+    assert.equal(textarea.selectionStart, 4);
+    assert.equal(textarea.selectionEnd, 4);
+    assert.equal(textarea.scrollTop, 38);
+  });
 });
 
-test("the per-input iOS outer scroll correction is removed", () => {
+test("a manually chosen RecordPage scrollTop becomes the next edit baseline", async () => {
+  await withEditorScrollHarness(async ({ outer, textarea }) => {
+    beginTextareaEdit(textarea, "insertText");
+    outer.scrollTop = 220;
+    finishTextareaEdit(textarea, "insertText");
+    await waitForEditorScrollChecks();
+    assert.equal(outer.scrollTop, 72);
+
+    outer.scrollTop = 135;
+    beginTextareaEdit(textarea, "deleteContentBackward");
+    outer.scrollTop = 260;
+    finishTextareaEdit(textarea, "deleteContentBackward");
+    await waitForEditorScrollChecks();
+    assert.equal(outer.scrollTop, 135);
+  });
+});
+
+test("manual scroll intent, textarea blur and page blur cancel pending restoration", async () => {
+  await withEditorScrollHarness(async ({ outer, textarea }) => {
+    beginTextareaEdit(textarea, "insertText");
+    finishTextareaEdit(textarea, "insertText");
+    outer.dispatchEvent(new viewerDom.window.Event("touchstart", { bubbles: true }));
+    outer.scrollTop = 166;
+    await waitForEditorScrollChecks();
+    assert.equal(outer.scrollTop, 166);
+
+    beginTextareaEdit(textarea, "insertText");
+    finishTextareaEdit(textarea, "insertText");
+    textarea.blur();
+    outer.scrollTop = 188;
+    await waitForEditorScrollChecks();
+    assert.equal(outer.scrollTop, 188);
+
+    textarea.focus();
+    beginTextareaEdit(textarea, "insertText");
+    finishTextareaEdit(textarea, "insertText");
+    viewerDom.window.dispatchEvent(new viewerDom.window.Event("blur"));
+    outer.scrollTop = 204;
+    await waitForEditorScrollChecks();
+    assert.equal(outer.scrollTop, 204);
+  });
+});
+
+test("IME composition remains native while RecordPage post-edit scroll is restored", async () => {
+  await withEditorScrollHarness(async ({ outer, textarea }) => {
+    textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionstart", { bubbles: true }));
+    const beforeInput = beginTextareaEdit(textarea, "insertCompositionText", true);
+    textarea.value = "中文输入";
+    textarea.setSelectionRange(4, 4);
+    textarea.scrollTop = 24;
+    outer.scrollTop = 210;
+    const input = finishTextareaEdit(textarea, "insertCompositionText", true);
+    textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionend", { bubbles: true }));
+    await waitForEditorScrollChecks();
+    assert.equal(beforeInput.defaultPrevented, false);
+    assert.equal(input.defaultPrevented, false);
+    assert.equal(textarea.value, "中文输入");
+    assert.equal(textarea.selectionStart, 4);
+    assert.equal(textarea.selectionEnd, 4);
+    assert.equal(textarea.scrollTop, 24);
+    assert.equal(outer.scrollTop, 72);
+  });
+});
+
+test("RecordPage protection has no viewport, caret or scrollIntoView path", () => {
   assert.equal(existsSync(new URL("../src/ui/editorScroll.ts", import.meta.url)), false);
-  const editorSources = recordPageSource + recordTextareaEditorSource;
-  assert.doesNotMatch(editorSources, /stabilizeIosTextarea|beforeinput|requestAnimationFrame|visualViewport/);
-  assert.doesNotMatch(editorSources, /scrollTop|scrollIntoView|scrollTo|scrollBy/);
+  assert.doesNotMatch(recordEditorScrollSource, /visualViewport|scrollIntoView|\bscrollTo\b|\bscrollBy\b|preventDefault|textarea\.scrollTop|textarea\.value|setSelectionRange/);
+  assert.match(recordEditorScrollSource, /beforeinput/);
+  assert.match(recordEditorScrollSource, /requestAnimationFrame/);
+  assert.match(recordEditorScrollSource, /recordPage\.scrollTop/);
 });
 
 test("all platforms share one editor code path", () => {

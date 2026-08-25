@@ -559,29 +559,30 @@ test("empty and existing bodies load directly into the visible textarea", () => 
   assert.equal(existingForm.querySelector(".doudou-tag-editor-mirror"), null);
 });
 
-test("editor shell gives the textarea the remaining viewport height", () => {
+test("editor grid gives the textarea the remaining viewport height without percentages", () => {
+  const editingPageCss = cssDeclarations(".doudou-view .doudou-record-page.doudou-is-editing");
+  assert.match(editingPageCss, /display:\s*grid/);
+  assert.match(editingPageCss, /grid-template-rows:\s*minmax\(0, 1fr\)/);
   const shellCss = cssDeclarations(".doudou-view .doudou-editor-shell");
-  assert.match(shellCss, /display:\s*flex/);
-  assert.match(shellCss, /flex-direction:\s*column/);
-  assert.match(shellCss, /height:\s*100%/);
+  assert.match(shellCss, /display:\s*grid/);
+  assert.match(shellCss, /grid-template-rows:\s*auto minmax\(0, 1fr\)/);
   assert.match(shellCss, /min-height:\s*0/);
   assert.doesNotMatch(shellCss, /overflow:\s*(?:hidden|clip|auto|scroll)/);
   const editorCss = cssDeclarations(".doudou-view .doudou-editor");
-  assert.match(editorCss, /display:\s*flex/);
-  assert.match(editorCss, /flex:\s*1 1 0%/);
-  assert.match(editorCss, /flex-direction:\s*column/);
+  assert.match(editorCss, /display:\s*grid/);
+  assert.match(editorCss, /grid-template-rows:\s*auto minmax\(0, 1fr\) auto auto/);
   assert.match(editorCss, /min-height:\s*0/);
   const wrapperCss = cssDeclarations(".doudou-textarea-editor");
-  assert.match(wrapperCss, /flex:\s*1 1 0%/);
+  assert.match(wrapperCss, /display:\s*grid/);
+  assert.match(wrapperCss, /grid-template-rows:\s*minmax\(0, 1fr\)/);
   assert.match(wrapperCss, /min-height:\s*0/);
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
-  assert.match(textareaCss, /flex:\s*1 1 0%/);
-  assert.match(textareaCss, /height:\s*100%/);
+  assert.match(textareaCss, /height:\s*auto/);
   assert.match(textareaCss, /min-height:\s*0/);
   assert.match(textareaCss, /max-height:\s*none/);
   assert.match(textareaCss, /overflow-y:\s*auto/);
   assert.match(textareaCss, /resize:\s*none/);
-  assert.doesNotMatch(textareaCss, /300px|\b(?:vh|dvh|svh|lvh)\b/);
+  assert.doesNotMatch([editingPageCss, shellCss, editorCss, wrapperCss, textareaCss].join(";"), /height:\s*100%|300px|\b(?:vh|dvh|svh|lvh)\b/);
 });
 
 test("ordinary input never changes textarea geometry", async () => {
@@ -682,7 +683,7 @@ test("long content remains inside the flexible textarea scroller", () => {
   assert.ok(textarea.scrollHeight > textarea.clientHeight);
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
   assert.match(textareaCss, /overflow-y:\s*auto/);
-  assert.match(textareaCss, /height:\s*100%/);
+  assert.match(textareaCss, /height:\s*auto/);
 });
 
 test("editor contains no mirror or transparent overlay", () => {
@@ -741,10 +742,13 @@ test("active editor has no outer-scroll, caret or viewport correction code", () 
   assert.doesNotMatch(recordTextareaEditorSource, /addEventListener\("(?:beforeinput|input|composition)/);
 });
 
-test("editor header, title and bottom toolbar remain fixed flex siblings", () => {
-  assert.match(cssDeclarations(".doudou-view .doudou-record-header.doudou-editor-header"), /flex:\s*0 0 auto/);
-  assert.match(cssDeclarations(".doudou-view input.doudou-title-input"), /flex:\s*0 0 46px/);
-  assert.match(cssDeclarations(".doudou-view .doudou-editor-toolbar"), /flex:\s*0 0 44px/);
+test("editor header, title and bottom toolbar occupy automatic grid rows", () => {
+  assert.match(cssDeclarations(".doudou-view .doudou-editor-shell"), /grid-template-rows:\s*auto minmax\(0, 1fr\)/);
+  assert.match(cssDeclarations(".doudou-view .doudou-editor"), /grid-template-rows:\s*auto minmax\(0, 1fr\) auto auto/);
+  assert.match(cssDeclarations(".doudou-view input.doudou-title-input"), /min-height:\s*46px/);
+  assert.match(cssDeclarations(".doudou-view input.doudou-title-input"), /max-height:\s*46px/);
+  assert.match(cssDeclarations(".doudou-view .doudou-editor-toolbar"), /min-height:\s*44px/);
+  assert.match(cssDeclarations(".doudou-view .doudou-editor-toolbar"), /max-height:\s*44px/);
   assert.match(recordPageSource, /text: "‹ 返回"/);
   assert.match(recordPageSource, /text: "保存"/);
   assert.match(recordPageSource, /text: "图片"/);

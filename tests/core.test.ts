@@ -51,7 +51,7 @@ import {
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
-import { editorScrollTarget } from "../src/ui/editorScroll";
+import { stabilizeIosTextareaInput, textareaOuterScrollTarget } from "../src/ui/editorScroll";
 import {
   canShareImageFile,
   copyImageFileToClipboard,
@@ -128,6 +128,7 @@ const pluginStyle = document.createElement("style");
 pluginStyle.textContent = pluginCss;
 document.head.appendChild(pluginStyle);
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
+const editorScrollSource = readFileSync(new URL("../src/ui/editorScroll.ts", import.meta.url), "utf8");
 
 function cssDeclarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -148,6 +149,49 @@ function mediaCssDeclarations(media: string, selector: string): string {
   const block = pluginCss.slice(start + marker.length, end - 1);
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return block.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+}
+
+async function simulateIosEditorInput(
+  inputType: string,
+  initialScrollTop: number,
+  webkitScrollTop: number,
+  textareaBottom: number
+): Promise<number> {
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: { height: 400, offsetTop: 100 }
+  });
+  const outer = document.createElement("div");
+  const textarea = document.createElement("textarea");
+  Object.defineProperty(outer, "scrollHeight", { configurable: true, value: 1_000 });
+  Object.defineProperty(outer, "clientHeight", { configurable: true, value: 400 });
+  textarea.getBoundingClientRect = () => ({
+    top: textareaBottom - 220,
+    bottom: textareaBottom,
+    left: 0,
+    right: 320,
+    width: 320,
+    height: 220,
+    x: 0,
+    y: textareaBottom - 220,
+    toJSON: () => ({})
+  });
+  outer.appendChild(textarea);
+  document.body.appendChild(outer);
+  textarea.focus();
+  const cleanup = stabilizeIosTextareaInput(textarea, outer);
+  try {
+    outer.scrollTop = initialScrollTop;
+    textarea.dispatchEvent(new window.InputEvent("beforeinput", { bubbles: true, inputType }));
+    outer.scrollTop = webkitScrollTop;
+    textarea.dispatchEvent(new window.InputEvent("input", { bubbles: true, inputType }));
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    return outer.scrollTop;
+  } finally {
+    cleanup();
+    outer.remove();
+  }
 }
 
 function pointerEvent(type: string, x: number, y: number, pointerId = 1): PointerEvent {
@@ -288,34 +332,28 @@ test("folder and record navigation use sticky headers inside their real scroll c
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);
 });
 
-test("editor line break keeps the outer scroll position after textarea layout work", () => {
-  assert.equal(editorScrollTarget({
-    initialScrollTop: 180,
-    caretTop: 240,
-    caretBottom: 266,
-    viewportTop: 0,
-    viewportBottom: 520,
-    maxScrollTop: 900
-  }), 180);
+test("insertText keeps outer scrollTop when the textarea element is visible", async () => {
+  assert.equal(await simulateIosEditorInput("insertText", 180, 420, 480), 180);
 });
 
-test("editor line break does not add scroll while the caret remains visible", () => {
-  assert.equal(editorScrollTarget({
-    initialScrollTop: 72,
-    caretTop: 450,
-    caretBottom: 476,
-    viewportTop: 40,
-    viewportBottom: 500,
-    maxScrollTop: 900
-  }), 72);
+test("deleteContentBackward keeps outer scrollTop when the textarea element is visible", async () => {
+  assert.equal(await simulateIosEditorInput("deleteContentBackward", 72, 310, 476), 72);
 });
 
-test("editor line break scrolls only the missing distance when the keyboard covers the caret", () => {
-  assert.equal(editorScrollTarget({
+test("insertLineBreak keeps outer scrollTop when the textarea element is visible", async () => {
+  assert.equal(await simulateIosEditorInput("insertLineBreak", 72, 290, 492), 72);
+});
+
+test("textarea internal caret movement cannot affect the outer scroll decision", () => {
+  assert.doesNotMatch(editorScrollSource, /caret|selectionStart|selectionEnd|textarea\.scrollTop/);
+  assert.doesNotMatch(editorScrollSource, /scrollIntoView|scrollTo\(/);
+  assert.match(editorScrollSource, /if \(scrollContainer\.scrollTop !== target\) scrollContainer\.scrollTop = target/);
+});
+
+test("outer editor scrolls only enough to reveal the textarea element above the keyboard", () => {
+  assert.equal(textareaOuterScrollTarget({
     initialScrollTop: 72,
-    caretTop: 488,
-    caretBottom: 514,
-    viewportTop: 40,
+    textareaBottom: 514,
     viewportBottom: 500,
     maxScrollTop: 900
   }), 94);

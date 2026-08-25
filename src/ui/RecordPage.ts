@@ -39,7 +39,7 @@ import {
   hasSavableRecordDraft,
   type PendingFile
 } from "./fileDraft";
-import { stabilizeIosTextareaLineBreaks } from "./editorScroll";
+import { stabilizeIosTextareaInput } from "./editorScroll";
 
 function createManualTagEditor(
   form: HTMLElement,
@@ -297,7 +297,7 @@ export class RecordPage extends Component {
     const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
     const content = createManualTagEditor(form, record?.content ?? "", records);
-    if (Platform.isIosApp) this.editorScrollCleanup = stabilizeIosTextareaLineBreaks(content, this.containerEl);
+    if (Platform.isIosApp) this.editorScrollCleanup = stabilizeIosTextareaInput(content, this.containerEl);
     const imageInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
     const images = form.createDiv({ cls: "doudou-editor-images" });
     let editableImages: EditableImageItem[] = (record?.images ?? []).map((path, index) => ({

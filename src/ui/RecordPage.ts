@@ -32,7 +32,7 @@ import {
   hasSavableRecordDraft,
   type PendingFile
 } from "./fileDraft";
-import { createManualTagEditor } from "./manualTagEditor";
+import { createRecordTextareaEditor } from "./recordTextareaEditor";
 
 export interface RecordPageDependencies {
   repository: DoudouRepository;
@@ -174,7 +174,7 @@ export class RecordPage extends Component {
     const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } });
     const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
-    const content = createManualTagEditor(form, record?.content ?? "", records);
+    const content = createRecordTextareaEditor(form, record?.content ?? "", records);
     const imageInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
     const images = form.createDiv({ cls: "doudou-editor-images" });
     let editableImages: EditableImageItem[] = (record?.images ?? []).map((path, index) => ({

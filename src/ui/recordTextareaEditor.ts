@@ -6,8 +6,6 @@ import {
   manualTagSuggestions
 } from "../services/manualTags";
 import type { StoredDoudouRecord } from "../types";
-import { hideTagSuggestions } from "./tagSuggestionDom";
-import { renderManualTagText } from "./uiHelpers";
 
 export function resizeTextareaToContent(textarea: HTMLTextAreaElement): void {
   textarea.style.height = "auto";
@@ -15,18 +13,14 @@ export function resizeTextareaToContent(textarea: HTMLTextAreaElement): void {
   textarea.style.height = `${textarea.scrollHeight + borderHeight}px`;
 }
 
-export function createManualTagEditor(
+export function createRecordTextareaEditor(
   form: HTMLElement,
   initialValue: string,
   records: readonly StoredDoudouRecord[]
 ): HTMLTextAreaElement {
-  const wrapper = form.createDiv({ cls: "doudou-tag-editor" });
-  const mirror = wrapper.createDiv({
-    cls: "doudou-editor-content doudou-tag-editor-mirror",
-    attr: { "aria-hidden": "true" }
-  });
+  const wrapper = form.createDiv({ cls: "doudou-textarea-editor" });
   const textarea = wrapper.createEl("textarea", {
-    cls: "doudou-editor-content doudou-tag-editor-input",
+    cls: "doudou-editor-content",
     attr: {
       placeholder: "记下此刻……\n\n直接输入 #标签",
       "aria-label": "正文",
@@ -44,13 +38,11 @@ export function createManualTagEditor(
   let composing = false;
   let renderedSuggestionsKey: string | null = null;
 
-  const syncEditorSurface = (): void => {
-    renderManualTagText(mirror, textarea.value, true);
-    resizeTextareaToContent(textarea);
-  };
   const hideSuggestions = (): void => {
     renderedSuggestionsKey = null;
-    hideTagSuggestions(suggestions);
+    if (suggestions.hasClass("doudou-is-hidden")) return;
+    suggestions.empty();
+    suggestions.addClass("doudou-is-hidden");
   };
   const applySuggestion = (name: string): void => {
     const input = findManualTagInput(
@@ -62,7 +54,7 @@ export function createManualTagEditor(
     const completion = applyManualTagCompletion(textarea.value, input, name);
     textarea.value = completion.value;
     textarea.setSelectionRange(completion.selectionStart, completion.selectionEnd);
-    syncEditorSurface();
+    resizeTextareaToContent(textarea);
     hideSuggestions();
     textarea.focus({ preventScroll: true });
   };
@@ -106,7 +98,7 @@ export function createManualTagEditor(
   };
 
   textarea.addEventListener("input", () => {
-    syncEditorSurface();
+    resizeTextareaToContent(textarea);
     if (!composing) updateSuggestions();
   });
   textarea.addEventListener("select", updateSuggestions);
@@ -118,11 +110,11 @@ export function createManualTagEditor(
   });
   textarea.addEventListener("compositionend", () => {
     composing = false;
-    syncEditorSurface();
+    resizeTextareaToContent(textarea);
     updateSuggestions();
   });
   textarea.addEventListener("focus", updateSuggestions);
   textarea.addEventListener("blur", hideSuggestions);
-  syncEditorSurface();
+  resizeTextareaToContent(textarea);
   return textarea;
 }

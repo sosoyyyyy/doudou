@@ -7,16 +7,10 @@ import {
 } from "../services/manualTags";
 import type { StoredDoudouRecord } from "../types";
 
-function numericCssValue(value: string): number {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 export function createRecordTextareaEditor(
   form: HTMLElement,
   initialValue: string,
-  records: readonly StoredDoudouRecord[],
-  registerCleanup?: (cleanup: () => void) => void
+  records: readonly StoredDoudouRecord[]
 ): HTMLTextAreaElement {
   const wrapper = form.createDiv({ cls: "doudou-textarea-editor" });
   const textarea = wrapper.createEl("textarea", {
@@ -30,14 +24,6 @@ export function createRecordTextareaEditor(
     }
   });
   textarea.value = initialValue;
-  const measurement = wrapper.createEl("textarea", {
-    cls: "doudou-editor-content doudou-textarea-measure",
-    attr: {
-      "aria-hidden": "true",
-      tabindex: "-1",
-      readonly: "true"
-    }
-  });
   const suggestions = wrapper.createDiv({
     cls: "doudou-tag-suggestions doudou-is-hidden",
     attr: { role: "listbox", "aria-label": "用户标签建议" }
@@ -45,39 +31,6 @@ export function createRecordTextareaEditor(
   const options = collectConfirmedManualTagOptions(records);
   let composing = false;
   let renderedSuggestionsKey: string | null = null;
-  let measuredWidth = -1;
-
-  const resizeTextareaToContent = (): void => {
-    const computed = window.getComputedStyle(textarea);
-    const layoutWidth = textarea.getBoundingClientRect().width;
-    const computedWidth = numericCssValue(computed.width);
-    if (Math.abs(layoutWidth - measuredWidth) > 0.5) {
-      measurement.style.width = `${computedWidth || layoutWidth}px`;
-      measuredWidth = layoutWidth;
-    }
-    measurement.value = textarea.value;
-    const borderHeight = numericCssValue(computed.borderTopWidth) + numericCssValue(computed.borderBottomWidth);
-    const targetHeight = Math.ceil(Math.max(
-      numericCssValue(computed.minHeight),
-      measurement.scrollHeight + borderHeight
-    ));
-    const currentHeight = numericCssValue(textarea.style.height);
-    if (Math.abs(targetHeight - currentHeight) <= 0.5) return;
-    textarea.style.height = `${targetHeight}px`;
-  };
-
-  const resizeObserver = typeof ResizeObserver === "undefined"
-    ? null
-    : new ResizeObserver(() => {
-      const width = textarea.getBoundingClientRect().width;
-      if (Math.abs(width - measuredWidth) <= 0.5) return;
-      resizeTextareaToContent();
-    });
-  resizeObserver?.observe(textarea);
-  registerCleanup?.(() => {
-    resizeObserver?.disconnect();
-    measurement.remove();
-  });
 
   const hideSuggestions = (): void => {
     renderedSuggestionsKey = null;
@@ -95,7 +48,6 @@ export function createRecordTextareaEditor(
     const completion = applyManualTagCompletion(textarea.value, input, name);
     textarea.value = completion.value;
     textarea.setSelectionRange(completion.selectionStart, completion.selectionEnd);
-    resizeTextareaToContent();
     hideSuggestions();
     textarea.focus({ preventScroll: true });
   };
@@ -139,7 +91,6 @@ export function createRecordTextareaEditor(
   };
 
   textarea.addEventListener("input", () => {
-    resizeTextareaToContent();
     if (!composing) updateSuggestions();
   });
   textarea.addEventListener("select", updateSuggestions);
@@ -151,11 +102,9 @@ export function createRecordTextareaEditor(
   });
   textarea.addEventListener("compositionend", () => {
     composing = false;
-    resizeTextareaToContent();
     updateSuggestions();
   });
   textarea.addEventListener("focus", updateSuggestions);
   textarea.addEventListener("blur", hideSuggestions);
-  resizeTextareaToContent();
   return textarea;
 }

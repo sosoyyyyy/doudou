@@ -1,6 +1,6 @@
 {
   "name": "doudou",
-  "version": "0.5.6-beta.7",
+  "version": "0.5.6-beta.8",
   "description": "兜兜：带 AI 检索能力的图文备忘录与私人资料库",
   "main": "main.js",
   "scripts": {

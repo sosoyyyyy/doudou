@@ -102,12 +102,11 @@ export function manualTagSuggestions(
   options: readonly TagOption[],
   query: string,
   confirmedInDraft: ReadonlySet<string>,
-  limit = 8
+  limit = 50
 ): TagOption[] {
   const normalizedQuery = query.toLocaleLowerCase();
   return options
-    .filter((option) => !confirmedInDraft.has(option.name))
-    .map((option) => {
+    .map((option, index) => {
       const name = option.name.toLocaleLowerCase();
       const matchRank = normalizedQuery.length === 0
         ? 0
@@ -116,10 +115,10 @@ export function manualTagSuggestions(
           : name.includes(normalizedQuery)
             ? 1
             : 2;
-      return { option, matchRank };
+      return { option, matchRank, index };
     })
-    .filter(({ matchRank }) => matchRank < 2)
-    .sort((a, b) => a.matchRank - b.matchRank)
+    .filter(({ option }) => !confirmedInDraft.has(option.name))
+    .sort((a, b) => a.matchRank - b.matchRank || a.index - b.index)
     .slice(0, limit)
     .map(({ option }) => option);
 }

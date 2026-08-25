@@ -336,6 +336,8 @@ test("manual hashtags require an ordinary ASCII space and deduplicate", () => {
   assert.deepEqual(extractManualTags("#未完成\n#逗号， #句号。 #叹号！ #问号？ #顿号、 #tab\t#结尾"), []);
   assert.deepEqual(extractManualTags("# 今天的日记\n## 今天\n今天学了 C#\n#\n#正常 "), ["正常"]);
   assert.deepEqual(parseConfirmedManualTagRanges("前 #标签 后").map(({ name, start, end }) => ({ name, start, end })), [{ name: "标签", start: 2, end: 5 }]);
+  assert.deepEqual(parseConfirmedManualTagRanges("#标签"), []);
+  assert.deepEqual(parseConfirmedManualTagRanges("#标签\n"), []);
 });
 
 test("manual tag completion replaces only the caret fragment and appends confirmation space", () => {
@@ -360,8 +362,20 @@ test("manual tag suggestions use confirmed body tags only and never hidden AI ta
   ];
   const options = collectConfirmedManualTagOptions(records);
   assert.deepEqual(options.map(({ name, count }) => ({ name, count })), [{ name: "日记", count: 2 }, { name: "无畏契约", count: 1 }]);
-  assert.deepEqual(manualTagSuggestions(options, "无", new Set()).map((item) => item.name), ["无畏契约"]);
+  assert.deepEqual(manualTagSuggestions(options, "无", new Set()).map((item) => item.name), ["无畏契约", "日记"]);
   assert.deepEqual(manualTagSuggestions(options, "", new Set(["无畏契约"])).map((item) => item.name), ["日记"]);
+});
+
+test("manual tag suggestions promote prefix then contains matches without dropping history", () => {
+  const options = [
+    { name: "情感感悟", count: 4, lastUsed: "2026-08-25T00:00:00.000Z" },
+    { name: "小说", count: 3, lastUsed: "2026-08-24T00:00:00.000Z" },
+    { name: "祝福", count: 2, lastUsed: "2026-08-23T00:00:00.000Z" },
+    { name: "游戏抽象文案", count: 1, lastUsed: "2026-08-22T00:00:00.000Z" },
+    { name: "手游", count: 1, lastUsed: "2026-08-21T00:00:00.000Z" }
+  ];
+  assert.deepEqual(manualTagSuggestions(options, "", new Set()).map((item) => item.name), ["情感感悟", "小说", "祝福", "游戏抽象文案", "手游"]);
+  assert.deepEqual(manualTagSuggestions(options, "游", new Set()).map((item) => item.name), ["游戏抽象文案", "手游", "情感感悟", "小说", "祝福"]);
 });
 
 test("shared app header keeps a normal-flow flex slot on every page", () => {
@@ -649,10 +663,95 @@ test("tag suggestion completion keeps the fixed textarea geometry", () => {
     assert.ok(suggestion);
     suggestion.click();
     assert.equal(textarea.value, "#工作 ");
+    assert.equal(textarea.selectionStart, 4);
+    assert.equal(textarea.selectionEnd, 4);
+    assert.equal(document.activeElement, textarea);
+    assert.equal(form.querySelector<HTMLElement>(".doudou-tag-confirmation")?.textContent, "已确认 #工作");
     assert.equal(textarea.style.height, "");
   } finally {
     form.remove();
   }
+});
+
+test("ordinary space confirms a tag while missing space and Enter do not", () => {
+  const form = document.createElement("div");
+  document.body.appendChild(form);
+  try {
+    const textarea = createRecordTextareaEditor(form, "#标签", []);
+    const confirmation = form.querySelector<HTMLElement>(".doudou-tag-confirmation");
+    assert.ok(confirmation?.classList.contains("doudou-is-hidden"));
+    textarea.focus();
+    textarea.setSelectionRange(3, 3);
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertLineBreak", data: null }));
+    assert.ok(confirmation.classList.contains("doudou-is-hidden"));
+    textarea.value = "#标签 ";
+    textarea.setSelectionRange(4, 4);
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText", data: " " }));
+    assert.equal(confirmation.textContent, "已确认 #标签");
+    assert.equal(confirmation.classList.contains("doudou-is-hidden"), false);
+  } finally {
+    form.remove();
+  }
+});
+
+test("tag suggestion stays mounted through pointerdown and cannot click through to attachments", () => {
+  const record = stored({ content: "#游戏抽象文案 ", tags: ["游戏抽象文案"] });
+  const form = document.createElement("div");
+  document.body.appendChild(form);
+  try {
+    const textarea = createRecordTextareaEditor(form, "#游", [record]);
+    const addImage = form.createEl("button", { attr: { type: "button" } });
+    let addImageClicks = 0;
+    addImage.addEventListener("click", () => { addImageClicks += 1; });
+    textarea.focus();
+    textarea.setSelectionRange(2, 2);
+    const suggestion = form.querySelector<HTMLButtonElement>(".doudou-tag-suggestion");
+    assert.ok(suggestion);
+    const pointerdown = new viewerDom.window.MouseEvent("pointerdown", { bubbles: true, cancelable: true });
+    suggestion.dispatchEvent(pointerdown);
+    assert.equal(pointerdown.defaultPrevented, true);
+    assert.equal(suggestion.isConnected, true);
+    assert.equal(textarea.value, "#游");
+    suggestion.click();
+    assert.equal(textarea.value, "#游戏抽象文案 ");
+    assert.equal(addImageClicks, 0);
+    assert.equal(form.querySelector(".doudou-tag-suggestion"), null);
+  } finally {
+    form.remove();
+  }
+});
+
+test("IME composition keeps native text input and only updates suggestions after composition", () => {
+  const record = stored({ content: "#游戏抽象文案 ", tags: ["游戏抽象文案"] });
+  const form = document.createElement("div");
+  document.body.appendChild(form);
+  try {
+    const textarea = createRecordTextareaEditor(form, "#", [record]);
+    textarea.focus();
+    textarea.setSelectionRange(1, 1);
+    textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionstart", { bubbles: true }));
+    textarea.value = "#游";
+    textarea.setSelectionRange(2, 2);
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertCompositionText", data: "游", isComposing: true }));
+    assert.equal(form.querySelector(".doudou-tag-suggestion"), null);
+    textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionend", { bubbles: true, data: "游" }));
+    assert.equal(textarea.value, "#游");
+    assert.equal(form.querySelector<HTMLElement>(".doudou-tag-suggestion")?.textContent, "#游戏抽象文案");
+  } finally {
+    form.remove();
+  }
+});
+
+test("tag candidates are a single clipped overlay row above the mobile keyboard", () => {
+  const row = cssDeclarations(".doudou-tag-suggestions");
+  assert.match(row, /position:\s*absolute/);
+  assert.match(row, /flex-wrap:\s*nowrap/);
+  assert.match(row, /height:\s*52px/);
+  assert.match(row, /overflow:\s*hidden/);
+  assert.doesNotMatch(row, /overflow-[xy]:\s*(?:auto|scroll)/);
+  const mobileOverlay = cssDeclarations(".is-mobile .doudou-view.doudou-keyboard-open .doudou-tag-suggestions,\n.is-mobile .doudou-view.doudou-keyboard-open .doudou-tag-confirmation");
+  assert.match(mobileOverlay, /position:\s*fixed/);
+  assert.match(mobileOverlay, /--doudou-visual-viewport-height/);
 });
 
 test("long content remains inside the fixed textarea scroller", () => {

@@ -107,8 +107,10 @@
 .doudou-view input.doudou-title-input { min-height: 46px; font-size: 19px; font-weight: 680; }
 .doudou-textarea-editor { position: relative; width: 100%; min-width: 0; }
 .doudou-view textarea.doudou-editor-content { height: 300px; min-height: 300px; max-height: 300px; overflow-x: hidden; overflow-y: auto; resize: none; color: var(--text-normal); font-family: var(--font-text); font-size: var(--font-text-size); font-weight: 400; line-height: 1.65; letter-spacing: normal; overflow-wrap: break-word; white-space: pre-wrap; word-break: break-word; background: var(--doudou-surface); caret-color: var(--text-normal); -webkit-text-fill-color: initial; }
-.doudou-tag-suggestions { position: absolute; top: calc(100% + 6px); left: 0; z-index: 6; display: flex; flex-wrap: wrap; gap: 6px; width: min(100%, 520px); max-height: 132px; padding: 8px; overflow-x: hidden; overflow-y: auto; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); }
-.doudou-view button.doudou-tag-suggestion { display: inline-flex; align-items: center; width: auto; height: auto; min-height: 36px; max-height: none; margin: 0; padding: 6px 9px; overflow: visible; border: 0; border-radius: 8px; color: var(--doudou-tag-color); line-height: 1.3; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-tag-suggestions { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; display: flex; flex-wrap: nowrap; gap: 6px; width: min(100%, 520px); height: 52px; max-height: 52px; padding: 8px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); }
+.doudou-view button.doudou-tag-suggestion { display: inline-flex; flex: 0 0 auto; align-items: center; width: auto; height: auto; min-height: 36px; max-height: none; margin: 0; padding: 6px 9px; overflow: visible; border: 0; border-radius: 8px; color: var(--doudou-tag-color); line-height: 1.3; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view button.doudou-tag-suggestion.doudou-is-clipped { display: none; }
+.doudou-tag-confirmation { position: absolute; top: calc(100% + 6px); left: 0; z-index: 19; width: auto; max-width: 100%; min-height: 36px; padding: 8px 11px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--doudou-tag-color) 38%, var(--doudou-border)); border-radius: 10px; color: var(--doudou-tag-color); font-size: 13px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; background: var(--doudou-surface); box-shadow: var(--doudou-shadow); pointer-events: none; }
 .doudou-view .doudou-editor-folder select { min-height: 42px; appearance: auto; }
 .doudou-editor-folder { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
 .doudou-view input.doudou-file-input { position: absolute; width: 1px; height: 1px; min-height: 0; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); border: 0; opacity: 0; white-space: nowrap; }
@@ -178,6 +180,17 @@
 .is-mobile .doudou-view.doudou-keyboard-open .doudou-record-page {
   padding-bottom: 16px;
   scroll-padding-bottom: 16px;
+}
+.is-mobile .doudou-view.doudou-keyboard-open .doudou-tag-suggestions,
+.is-mobile .doudou-view.doudou-keyboard-open .doudou-tag-confirmation {
+  position: fixed;
+  top: auto;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  left: max(10px, env(safe-area-inset-left));
+  width: auto;
+  max-width: none;
+  max-height: min(52px, var(--doudou-visual-viewport-height));
 }
 @media (max-width: 430px) {
   .doudou-view > .doudou-main-shell > header.doudou-header { grid-template-columns: auto minmax(96px, 1fr) auto; gap: 5px; padding-inline: 8px; }

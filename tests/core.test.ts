@@ -52,6 +52,7 @@ import {
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
 import { createManualTagEditor } from "../src/ui/manualTagEditor";
+import { registerViewportResizeLayout, type ViewportResizeSource } from "../src/ui/viewportLayout";
 import {
   canShareImageFile,
   copyImageFileToClipboard,
@@ -130,6 +131,8 @@ document.head.appendChild(pluginStyle);
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
 const recordPageSource = readFileSync(new URL("../src/ui/RecordPage.ts", import.meta.url), "utf8");
 const manualTagEditorSource = readFileSync(new URL("../src/ui/manualTagEditor.ts", import.meta.url), "utf8");
+const doudouViewSource = readFileSync(new URL("../src/ui/DoudouView.ts", import.meta.url), "utf8");
+const viewportLayoutSource = readFileSync(new URL("../src/ui/viewportLayout.ts", import.meta.url), "utf8");
 
 function cssDeclarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -180,6 +183,41 @@ function mockTextareaScrollHeight(
   return () => {
     if (original) Object.defineProperty(prototype, "scrollHeight", original);
     else delete (prototype as Partial<HTMLTextAreaElement>).scrollHeight;
+  };
+}
+
+function createViewportHarness(initialHeight = 700, rootTop = 80): {
+  root: HTMLElement;
+  viewport: ViewportResizeSource;
+  setHeight: (height: number) => void;
+  setOffsetTop: (offsetTop: number) => void;
+  dispatch: (type: "resize" | "scroll") => void;
+} {
+  let height = initialHeight;
+  let offsetTop = 0;
+  const target = new viewerDom.window.EventTarget();
+  Object.defineProperties(target, {
+    height: { configurable: true, get: () => height },
+    offsetTop: { configurable: true, get: () => offsetTop }
+  });
+  const root = document.createElement("div");
+  root.getBoundingClientRect = () => ({
+    top: rootTop,
+    bottom: rootTop,
+    left: 0,
+    right: 320,
+    width: 320,
+    height: 0,
+    x: 0,
+    y: rootTop,
+    toJSON: () => ({})
+  });
+  return {
+    root,
+    viewport: target as ViewportResizeSource,
+    setHeight: (value) => { height = value; },
+    setOffsetTop: (value) => { offsetTop = value; },
+    dispatch: (type) => target.dispatchEvent(new viewerDom.window.Event(type))
   };
 }
 
@@ -481,6 +519,77 @@ test("textarea and mirror do not create nested vertical scrolling", () => {
   assert.match(textareaCss, /overflow:\s*hidden/);
   assert.match(textareaCss, /resize:\s*none/);
   assert.doesNotMatch(pluginCss, /doudou-is-editing|overflow-anchor/);
+});
+
+test("VisualViewport resize updates the root layout height", () => {
+  const harness = createViewportHarness();
+  const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
+    isMobile: true,
+    layoutViewportHeight: () => 800
+  });
+  try {
+    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), "620px");
+    harness.setHeight(500);
+    harness.dispatch("resize");
+    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), "420px");
+  } finally {
+    cleanup();
+  }
+});
+
+test("VisualViewport scroll and offsetTop changes never update root height", () => {
+  const harness = createViewportHarness();
+  const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
+    isMobile: true,
+    layoutViewportHeight: () => 800
+  });
+  try {
+    const initialHeight = harness.root.style.getPropertyValue("--doudou-visual-viewport-height");
+    harness.setOffsetTop(160);
+    harness.dispatch("scroll");
+    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), initialHeight);
+    assert.doesNotMatch(viewportLayoutSource, /offsetTop|pageTop|addEventListener\("scroll"/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("viewport height changes update keyboard-open without caret-pan input", () => {
+  const harness = createViewportHarness();
+  const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
+    isMobile: true,
+    layoutViewportHeight: () => 800
+  });
+  try {
+    assert.equal(harness.root.classList.contains("doudou-keyboard-open"), false);
+    harness.setHeight(600);
+    harness.dispatch("resize");
+    assert.equal(harness.root.classList.contains("doudou-keyboard-open"), true);
+    harness.setHeight(720);
+    harness.dispatch("resize");
+    assert.equal(harness.root.classList.contains("doudou-keyboard-open"), false);
+  } finally {
+    cleanup();
+  }
+});
+
+test("viewport resize listener is removed by cleanup", () => {
+  const harness = createViewportHarness();
+  const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
+    isMobile: true,
+    layoutViewportHeight: () => 800
+  });
+  const initialHeight = harness.root.style.getPropertyValue("--doudou-visual-viewport-height");
+  cleanup();
+  harness.setHeight(400);
+  harness.dispatch("resize");
+  assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), initialHeight);
+});
+
+test("editor input has no path to root viewport height correction", () => {
+  assert.doesNotMatch(viewportLayoutSource, /input|beforeinput|textarea|selection|caret/);
+  assert.doesNotMatch(doudouViewSource, /addEventListener\("scroll"|offsetTop|pageTop/);
+  assert.match(doudouViewSource, /registerViewportResizeLayout/);
 });
 
 test("mobile pages avoid duplicate top safe area and clear the host navbar", () => {

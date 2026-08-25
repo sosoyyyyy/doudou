@@ -13,6 +13,7 @@ import { LibraryPage } from "./LibraryPage";
 import { RecordPage } from "./RecordPage";
 import { findRemotelySaveStartSyncCommand, type RegisteredCommand } from "./remotelySave";
 import { AskDoudouModal, FolderManagerModal, FolderOrderModal } from "./ToolModals";
+import { registerViewportResizeLayout } from "./viewportLayout";
 
 export interface DoudouViewDependencies {
   repository: DoudouRepository;
@@ -51,5 +52,5 @@ export class DoudouView extends ItemView {
   private async refreshAll(): Promise<void> { this.dependencies.repository.invalidateCache(); await Promise.all([this.allPage.refresh(false), this.libraryPage.refresh(false), this.recordPage.refreshFolders()]); }
   private sync(button: HTMLButtonElement): void { const registry = (this.app as AppWithCommands).commands as CommandRegistry | undefined; if (!registry) return; const id = findRemotelySaveStartSyncCommand(registry.listCommands()); if (!id) return; button.disabled = true; button.addClass("doudou-is-sync-triggered"); try { registry.executeCommandById(id); } finally { window.setTimeout(() => { button.disabled = false; button.removeClass("doudou-is-sync-triggered"); }, 700); } }
   private registerRefresh(): void { const schedule = (path: string, oldPath?: string): void => { if (!this.dependencies.repository.isDoudouPath(path) && (!oldPath || !this.dependencies.repository.isDoudouPath(oldPath))) return; this.dependencies.repository.invalidateCache(); if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer); this.refreshTimer = window.setTimeout(() => { this.refreshTimer = null; void this.refreshAll(); }, VAULT_REFRESH_DEBOUNCE_MS); }; this.registerEvent(this.app.vault.on("create", (file) => schedule(file.path))); this.registerEvent(this.app.vault.on("modify", (file) => schedule(file.path))); this.registerEvent(this.app.vault.on("delete", (file) => schedule(file.path))); this.registerEvent(this.app.vault.on("rename", (file, oldPath) => schedule(file.path, oldPath))); }
-  private registerViewport(): void { const viewport = window.visualViewport; if (!viewport) return; const sync = (): void => { const top = this.rootEl.getBoundingClientRect().top; this.rootEl.style.setProperty("--doudou-visual-viewport-height", `${Math.max(0, viewport.offsetTop + viewport.height - top)}px`); this.rootEl.toggleClass("doudou-keyboard-open", Platform.isMobileApp && window.innerHeight - viewport.height > 120); }; viewport.addEventListener("resize", sync); viewport.addEventListener("scroll", sync); this.register(() => { viewport.removeEventListener("resize", sync); viewport.removeEventListener("scroll", sync); }); sync(); }
+  private registerViewport(): void { const viewport = window.visualViewport; if (!viewport) return; this.register(registerViewportResizeLayout(this.rootEl, viewport, { isMobile: Platform.isMobileApp, layoutViewportHeight: () => window.innerHeight })); }
 }

@@ -226,10 +226,12 @@ function createViewportHarness(initialHeight = 700, rootTop = 80): {
   viewport: ViewportResizeSource;
   setHeight: (height: number) => void;
   setOffsetTop: (offsetTop: number) => void;
+  setRootTop: (rootTop: number) => void;
   dispatch: (type: "resize" | "scroll") => void;
 } {
   let height = initialHeight;
   let offsetTop = 0;
+  let currentRootTop = rootTop;
   const target = new viewerDom.window.EventTarget();
   Object.defineProperties(target, {
     height: { configurable: true, get: () => height },
@@ -237,14 +239,14 @@ function createViewportHarness(initialHeight = 700, rootTop = 80): {
   });
   const root = document.createElement("div");
   root.getBoundingClientRect = () => ({
-    top: rootTop,
-    bottom: rootTop,
+    top: currentRootTop,
+    bottom: currentRootTop,
     left: 0,
     right: 320,
     width: 320,
     height: 0,
     x: 0,
-    y: rootTop,
+    y: currentRootTop,
     toJSON: () => ({})
   });
   return {
@@ -252,8 +254,13 @@ function createViewportHarness(initialHeight = 700, rootTop = 80): {
     viewport: target as ViewportResizeSource,
     setHeight: (value) => { height = value; },
     setOffsetTop: (value) => { offsetTop = value; },
+    setRootTop: (value) => { currentRootTop = value; },
     dispatch: (type) => target.dispatchEvent(new viewerDom.window.Event(type))
   };
+}
+
+async function waitForViewportFrame(): Promise<void> {
+  await new Promise<void>((resolve) => viewerDom.window.requestAnimationFrame(() => resolve()));
 }
 
 function pointerEvent(type: string, x: number, y: number, pointerId = 1): PointerEvent {
@@ -772,18 +779,55 @@ test("VisualViewport resize updates the root layout height", () => {
   }
 });
 
-test("VisualViewport scroll and offsetTop changes never update root height", () => {
+test("VisualViewport pan uses offsetTop in the same layout coordinate system", () => {
   const harness = createViewportHarness();
   const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
     isMobile: true,
     layoutViewportHeight: () => 800
   });
   try {
-    const initialHeight = harness.root.style.getPropertyValue("--doudou-visual-viewport-height");
+    harness.setHeight(400);
     harness.setOffsetTop(160);
     harness.dispatch("scroll");
-    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), initialHeight);
-    assert.doesNotMatch(viewportLayoutSource, /offsetTop|pageTop|addEventListener\("scroll"/);
+    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), "480px");
+    assert.match(viewportLayoutSource, /offsetTop/);
+    assert.doesNotMatch(viewportLayoutSource, /pageTop/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("root visual displacement during viewport pan does not move its layout anchor", () => {
+  const harness = createViewportHarness();
+  const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
+    isMobile: true,
+    layoutViewportHeight: () => 800
+  });
+  try {
+    harness.setHeight(400);
+    harness.setOffsetTop(160);
+    harness.setRootTop(-80);
+    harness.dispatch("scroll");
+    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), "480px");
+  } finally {
+    cleanup();
+  }
+});
+
+test("second animation frame replaces a transient resize height", async () => {
+  const harness = createViewportHarness();
+  const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
+    isMobile: true,
+    layoutViewportHeight: () => 800
+  });
+  try {
+    harness.setHeight(40);
+    harness.dispatch("resize");
+    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), "0px");
+    await waitForViewportFrame();
+    harness.setHeight(500);
+    await waitForViewportFrame();
+    assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), "420px");
   } finally {
     cleanup();
   }
@@ -808,7 +852,7 @@ test("viewport height changes update keyboard-open without caret-pan input", () 
   }
 });
 
-test("viewport resize listener is removed by cleanup", () => {
+test("viewport resize and scroll listeners plus pending frames are removed by cleanup", async () => {
   const harness = createViewportHarness();
   const cleanup = registerViewportResizeLayout(harness.root, harness.viewport, {
     isMobile: true,
@@ -817,13 +861,19 @@ test("viewport resize listener is removed by cleanup", () => {
   const initialHeight = harness.root.style.getPropertyValue("--doudou-visual-viewport-height");
   cleanup();
   harness.setHeight(400);
+  harness.setOffsetTop(120);
   harness.dispatch("resize");
+  harness.dispatch("scroll");
+  await waitForViewportFrame();
+  await waitForViewportFrame();
   assert.equal(harness.root.style.getPropertyValue("--doudou-visual-viewport-height"), initialHeight);
 });
 
 test("editor input has no path to root viewport height correction", () => {
   assert.doesNotMatch(viewportLayoutSource, /input|beforeinput|textarea|selection|caret/);
-  assert.doesNotMatch(doudouViewSource, /addEventListener\("scroll"|offsetTop|pageTop/);
+  assert.match(viewportLayoutSource, /addEventListener\("resize", syncUntilStable\)/);
+  assert.match(viewportLayoutSource, /addEventListener\("scroll", syncUntilStable\)/);
+  assert.match(viewportLayoutSource, /requestAnimationFrame/);
   assert.match(doudouViewSource, /registerViewportResizeLayout/);
 });
 

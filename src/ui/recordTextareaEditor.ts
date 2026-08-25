@@ -7,6 +7,15 @@ import {
 } from "../services/manualTags";
 import type { StoredDoudouRecord } from "../types";
 
+export function resizeRecordTextareaToContent(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = "auto";
+  const style = textarea.ownerDocument.defaultView?.getComputedStyle(textarea);
+  const borderHeight =
+    (Number.parseFloat(style?.borderTopWidth ?? "") || 0) +
+    (Number.parseFloat(style?.borderBottomWidth ?? "") || 0);
+  textarea.style.height = `${textarea.scrollHeight + borderHeight}px`;
+}
+
 export function createRecordTextareaEditor(
   form: HTMLElement,
   initialValue: string,
@@ -24,6 +33,7 @@ export function createRecordTextareaEditor(
     }
   });
   textarea.value = initialValue;
+  resizeRecordTextareaToContent(textarea);
   const suggestions = wrapper.createDiv({
     cls: "doudou-tag-suggestions doudou-is-hidden",
     attr: { role: "listbox", "aria-label": "用户标签建议" }
@@ -48,6 +58,7 @@ export function createRecordTextareaEditor(
     const completion = applyManualTagCompletion(textarea.value, input, name);
     textarea.value = completion.value;
     textarea.setSelectionRange(completion.selectionStart, completion.selectionEnd);
+    resizeRecordTextareaToContent(textarea);
     hideSuggestions();
     textarea.focus({ preventScroll: true });
   };
@@ -91,6 +102,7 @@ export function createRecordTextareaEditor(
   };
 
   textarea.addEventListener("input", () => {
+    resizeRecordTextareaToContent(textarea);
     if (!composing) updateSuggestions();
   });
   textarea.addEventListener("select", updateSuggestions);

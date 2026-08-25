@@ -51,7 +51,7 @@ import {
   type ClipboardItemLike
 } from "../src/ui/imageDraft";
 import { createPendingFiles, hasSavableRecordDraft } from "../src/ui/fileDraft";
-import { createRecordTextareaEditor } from "../src/ui/recordTextareaEditor";
+import { createRecordTextareaEditor, resizeRecordTextareaToContent } from "../src/ui/recordTextareaEditor";
 import { registerViewportResizeLayout, type ViewportResizeSource } from "../src/ui/viewportLayout";
 import {
   canShareImageFile,
@@ -170,16 +170,6 @@ function simulateEditorInputWithoutOuterScroll(inputType: string): number {
   } finally {
     outer.remove();
   }
-}
-
-async function countStyleMutations(element: HTMLElement, action: () => void): Promise<number> {
-  let count = 0;
-  const observer = new MutationObserver((records) => { count += records.length; });
-  observer.observe(element, { attributes: true, attributeFilter: ["style"] });
-  action();
-  await Promise.resolve();
-  observer.disconnect();
-  return count;
 }
 
 function createViewportHarness(initialHeight = 700, rootTop = 80): {
@@ -395,87 +385,103 @@ test("empty and existing bodies load directly into the visible textarea", () => 
   assert.ok(empty.matches("textarea.doudou-editor-content"));
   assert.equal(emptyForm.querySelector(".doudou-tag-editor-mirror"), null);
 
-  const existingForm = document.createElement("div");
-  const existing = createRecordTextareaEditor(existingForm, "已有正文 #生活 ", []);
-  assert.equal(existing.value, "已有正文 #生活 ");
-  assert.equal(existingForm.querySelector(".doudou-tag-editor-mirror"), null);
+  const prototype = viewerDom.window.HTMLTextAreaElement.prototype;
+  const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(prototype, "scrollHeight");
+  Object.defineProperty(prototype, "scrollHeight", { configurable: true, get: () => 640 });
+  try {
+    const existingForm = document.createElement("div");
+    const existing = createRecordTextareaEditor(existingForm, "已有正文 #生活 ", []);
+    assert.equal(existing.value, "已有正文 #生活 ");
+    assert.ok(Number.parseFloat(existing.style.height) >= 640);
+    assert.equal(existingForm.querySelector(".doudou-tag-editor-mirror"), null);
+  } finally {
+    if (scrollHeightDescriptor) Object.defineProperty(prototype, "scrollHeight", scrollHeightDescriptor);
+    else delete (prototype as unknown as { scrollHeight?: number }).scrollHeight;
+  }
 });
 
-test("textarea uses one fixed 300px geometry on every platform", () => {
+test("textarea keeps a 300px minimum and grows without internal scrolling", () => {
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
-  assert.match(textareaCss, /height:\s*300px/);
+  assert.match(textareaCss, /height:\s*auto/);
   assert.match(textareaCss, /min-height:\s*300px/);
-  assert.match(textareaCss, /max-height:\s*300px/);
+  assert.match(textareaCss, /max-height:\s*none/);
+  assert.match(textareaCss, /overflow-y:\s*hidden/);
   assert.match(textareaCss, /resize:\s*none/);
   assert.doesNotMatch(textareaCss, /\b(?:vh|dvh|svh|lvh)\b/);
 });
 
-test("ordinary input never changes textarea geometry", async () => {
+test("autosize helper grows and shrinks to the current scroll height", () => {
   const form = document.createElement("div");
   const textarea = createRecordTextareaEditor(form, "正文", []);
-  const mutations = await countStyleMutations(textarea, () => {
-    textarea.value += "字";
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
-  });
-  assert.equal(mutations, 0);
-  assert.equal(textarea.style.height, "");
+  let scrollHeight = 720;
+  Object.defineProperty(textarea, "scrollHeight", { configurable: true, get: () => scrollHeight });
+  resizeRecordTextareaToContent(textarea);
+  const grownHeight = Number.parseFloat(textarea.style.height);
+  assert.ok(grownHeight >= 720);
+  scrollHeight = 180;
+  resizeRecordTextareaToContent(textarea);
+  const shrunkHeight = Number.parseFloat(textarea.style.height);
+  assert.ok(shrunkHeight >= 180);
+  assert.ok(shrunkHeight < grownHeight);
 });
 
-test("Enter never changes textarea geometry", async () => {
+test("ordinary input and Enter synchronize textarea height", () => {
   const form = document.createElement("div");
   const textarea = createRecordTextareaEditor(form, "正文", []);
-  const mutations = await countStyleMutations(textarea, () => {
-    textarea.value += "\n";
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
-  });
-  assert.equal(mutations, 0);
-  assert.equal(textarea.style.height, "");
+  let scrollHeight = 360;
+  Object.defineProperty(textarea, "scrollHeight", { configurable: true, get: () => scrollHeight });
+  textarea.value += "字";
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
+  const inputHeight = Number.parseFloat(textarea.style.height);
+  assert.ok(inputHeight >= 360);
+  scrollHeight = 420;
+  textarea.value += "\n";
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
+  assert.ok(Number.parseFloat(textarea.style.height) > inputHeight);
 });
 
-test("pasting long text never changes textarea geometry", async () => {
+test("pasting long text expands the textarea", () => {
   const form = document.createElement("div");
   const textarea = createRecordTextareaEditor(form, "", []);
-  const mutations = await countStyleMutations(textarea, () => {
-    textarea.value = "粘贴的长正文\n".repeat(120);
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", {
-      bubbles: true,
-      inputType: "insertFromPaste"
-    }));
-  });
-  assert.equal(mutations, 0);
-  assert.equal(textarea.style.height, "");
+  Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 4_800 });
+  textarea.value = "粘贴的长正文\n".repeat(120);
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", {
+    bubbles: true,
+    inputType: "insertFromPaste"
+  }));
+  assert.ok(Number.parseFloat(textarea.style.height) >= 4_800);
 });
 
-test("IME composition keeps the value without changing textarea geometry", async () => {
+test("IME composition keeps the value and synchronizes textarea height", () => {
   const form = document.createElement("div");
   const textarea = createRecordTextareaEditor(form, "中文", []);
-  const mutations = await countStyleMutations(textarea, () => {
-    textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionstart", { bubbles: true }));
-    textarea.value = "中文输入完成";
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", {
-      bubbles: true,
-      inputType: "insertCompositionText",
-      isComposing: true
-    }));
-    textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionend", { bubbles: true }));
-  });
-  assert.equal(mutations, 0);
+  Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 390 });
+  textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionstart", { bubbles: true }));
+  textarea.value = "中文输入完成";
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", {
+    bubbles: true,
+    inputType: "insertCompositionText",
+    isComposing: true
+  }));
+  textarea.dispatchEvent(new viewerDom.window.CompositionEvent("compositionend", { bubbles: true }));
   assert.equal(textarea.value, "中文输入完成");
-  assert.equal(textarea.style.height, "");
+  assert.ok(Number.parseFloat(textarea.style.height) >= 390);
 });
 
-test("deleting a line never changes textarea geometry", async () => {
+test("deleting content shrinks the textarea", () => {
   const form = document.createElement("div");
   const textarea = createRecordTextareaEditor(form, "第一行\n第二行", []);
-  const mutations = await countStyleMutations(textarea, () => {
-    textarea.value = "缩短后的正文";
-    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
-  });
-  assert.equal(mutations, 0);
-  assert.equal(textarea.style.height, "");
+  let scrollHeight = 680;
+  Object.defineProperty(textarea, "scrollHeight", { configurable: true, get: () => scrollHeight });
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
+  const beforeDelete = Number.parseFloat(textarea.style.height);
+  scrollHeight = 220;
+  textarea.value = "缩短后的正文";
+  textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+  assert.ok(Number.parseFloat(textarea.style.height) < beforeDelete);
 });
 
-test("tag suggestion completion keeps the fixed textarea geometry", async () => {
+test("tag suggestion completion synchronizes textarea height", () => {
   const record: StoredDoudouRecord = {
     id: "tag-source",
     path: "兜兜/工作/2026/08/tag-source.md",
@@ -488,28 +494,28 @@ test("tag suggestion completion keeps the fixed textarea geometry", async () => 
   document.body.appendChild(form);
   try {
     const textarea = createRecordTextareaEditor(form, "#工", [record]);
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 340 });
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     textarea.focus();
     const suggestion = form.querySelector<HTMLButtonElement>(".doudou-tag-suggestion");
     assert.ok(suggestion);
-    const mutations = await countStyleMutations(textarea, () => suggestion.click());
+    suggestion.click();
     assert.equal(textarea.value, "#工作 ");
-    assert.equal(mutations, 0);
-    assert.equal(textarea.style.height, "");
+    assert.ok(Number.parseFloat(textarea.style.height) >= 340);
   } finally {
     form.remove();
   }
 });
 
-test("long content remains inside a vertically scrollable textarea", () => {
+test("long content expands instead of creating textarea scrolling", () => {
   const form = document.createElement("div");
   const textarea = createRecordTextareaEditor(form, "长正文\n".repeat(400), []);
-  Object.defineProperty(textarea, "clientHeight", { configurable: true, value: 300 });
   Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 12_000 });
-  assert.ok(textarea.scrollHeight > textarea.clientHeight);
+  resizeRecordTextareaToContent(textarea);
+  assert.ok(Number.parseFloat(textarea.style.height) >= 12_000);
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
-  assert.match(textareaCss, /overflow-y:\s*auto/);
-  assert.match(textareaCss, /height:\s*300px/);
+  assert.match(textareaCss, /overflow-y:\s*hidden/);
+  assert.doesNotMatch(textareaCss, /(?:^|;)\s*(?:height|max-height):\s*300px/);
 });
 
 test("ordinary text input leaves hidden tag suggestions unchanged", async () => {
@@ -544,17 +550,19 @@ test("editor contains no mirror or transparent overlay", () => {
   assert.doesNotMatch(pluginCss, /doudou-tag-editor-mirror|doudou-tag-editor-input|color:\s*transparent/);
 });
 
-test("editor has no measurement textarea or auto-grow observer", () => {
+test("editor autosizes directly without a measurement textarea or observer", () => {
   const form = document.createElement("div");
   createRecordTextareaEditor(form, "已有长正文", []);
   assert.equal(form.querySelector(".doudou-textarea-measure"), null);
-  assert.doesNotMatch(recordTextareaEditorSource, /ResizeObserver|scrollHeight|style\.height|measurement|resizeTextareaToContent/);
+  assert.match(recordTextareaEditorSource, /resizeRecordTextareaToContent/);
+  assert.match(recordTextareaEditorSource, /scrollHeight/);
+  assert.doesNotMatch(recordTextareaEditorSource, /ResizeObserver|measurement|doudou-textarea-measure/);
   assert.doesNotMatch(pluginCss, /doudou-textarea-measure/);
 });
 
-test("textarea owns long-body scrolling while the record page owns form scrolling", () => {
+test("record page is the only editor form scroll container", () => {
   const textareaCss = cssDeclarations(".doudou-view textarea.doudou-editor-content");
-  assert.match(textareaCss, /overflow-y:\s*auto/);
+  assert.match(textareaCss, /overflow-y:\s*hidden/);
   assert.match(textareaCss, /overflow-x:\s*hidden/);
   assert.match(textareaCss, /resize:\s*none/);
   assert.match(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-y:\s*auto/);

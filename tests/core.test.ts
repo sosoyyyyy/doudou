@@ -168,6 +168,21 @@ function simulateEditorInputWithoutOuterScroll(inputType: string): number {
   }
 }
 
+function mockTextareaScrollHeight(
+  readHeight: (textarea: HTMLTextAreaElement) => number
+): () => void {
+  const prototype = viewerDom.window.HTMLTextAreaElement.prototype;
+  const original = Object.getOwnPropertyDescriptor(prototype, "scrollHeight");
+  Object.defineProperty(prototype, "scrollHeight", {
+    configurable: true,
+    get(this: HTMLTextAreaElement): number { return readHeight(this); }
+  });
+  return () => {
+    if (original) Object.defineProperty(prototype, "scrollHeight", original);
+    else delete (prototype as Partial<HTMLTextAreaElement>).scrollHeight;
+  };
+}
+
 function pointerEvent(type: string, x: number, y: number, pointerId = 1): PointerEvent {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperties(event, {
@@ -323,6 +338,100 @@ test("the per-input iOS outer scroll correction is removed", () => {
   const editorSources = recordPageSource + manualTagEditorSource;
   assert.doesNotMatch(editorSources, /stabilizeIosTextarea|beforeinput|requestAnimationFrame|visualViewport/);
   assert.doesNotMatch(editorSources, /scrollContainer\.scrollTop|containerEl\.scrollTop/);
+  assert.doesNotMatch(manualTagEditorSource, /textarea\.scrollTop|mirror\.scrollTop|addEventListener\("scroll"/);
+});
+
+test("textarea auto-grows during initialization", () => {
+  const restore = mockTextareaScrollHeight(() => 240);
+  try {
+    const form = document.createElement("div");
+    const textarea = createManualTagEditor(form, "短正文", []);
+    assert.equal(textarea.style.height, "240px");
+  } finally {
+    restore();
+  }
+});
+
+test("ordinary input and Enter recalculate textarea height", () => {
+  let height = 220;
+  const restore = mockTextareaScrollHeight(() => height);
+  try {
+    const form = document.createElement("div");
+    const textarea = createManualTagEditor(form, "正文", []);
+    height = 840;
+    textarea.value = Array.from({ length: 30 }, (_, index) => `第 ${index + 1} 行`).join("\n");
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertText" }));
+    assert.equal(textarea.style.height, "840px");
+    height = 876;
+    textarea.value += "\n";
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
+    assert.equal(textarea.style.height, "876px");
+  } finally {
+    restore();
+  }
+});
+
+test("deleting text resets height to auto before shrinking", () => {
+  let height = 1_200;
+  let observedAutoHeight = false;
+  const restore = mockTextareaScrollHeight((textarea) => {
+    if (height === 220) observedAutoHeight = textarea.style.height === "auto";
+    return height;
+  });
+  try {
+    const form = document.createElement("div");
+    const textarea = createManualTagEditor(form, "很长的正文\n".repeat(50), []);
+    assert.equal(textarea.style.height, "1200px");
+    height = 220;
+    textarea.value = "缩短后的正文";
+    textarea.dispatchEvent(new viewerDom.window.InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    assert.ok(observedAutoHeight);
+    assert.equal(textarea.style.height, "220px");
+  } finally {
+    restore();
+  }
+});
+
+test("tag suggestion completion recalculates textarea height", () => {
+  let height = 220;
+  const restore = mockTextareaScrollHeight(() => height);
+  const record: StoredDoudouRecord = {
+    id: "tag-source",
+    path: "兜兜/工作/2026/08/tag-source.md",
+    content: "#工作 ",
+    created: "2026-08-25T00:00:00.000Z",
+    folder: "工作",
+    tags: ["工作"]
+  };
+  const form = document.createElement("div");
+  document.body.appendChild(form);
+  try {
+    const textarea = createManualTagEditor(form, "#工", [record]);
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    textarea.focus();
+    const suggestion = form.querySelector<HTMLButtonElement>(".doudou-tag-suggestion");
+    assert.ok(suggestion);
+    height = 260;
+    suggestion.click();
+    assert.equal(textarea.value, "#工作 ");
+    assert.equal(textarea.style.height, "260px");
+  } finally {
+    form.remove();
+    restore();
+  }
+});
+
+test("hundreds of lines grow without introducing an editor max height", () => {
+  const restore = mockTextareaScrollHeight(() => 12_000);
+  try {
+    const form = document.createElement("div");
+    const textarea = createManualTagEditor(form, "长正文\n".repeat(400), []);
+    assert.equal(textarea.style.height, "12000px");
+    const sharedSurface = cssDeclarations(".doudou-view .doudou-tag-editor .doudou-editor-content");
+    assert.doesNotMatch(sharedSurface, /max-height/);
+  } finally {
+    restore();
+  }
 });
 
 test("ordinary text input leaves hidden tag suggestions unchanged", async () => {
@@ -359,15 +468,19 @@ test("mirror input updates reuse DOM and stay outside wrapper flow", () => {
   assert.equal(mirror.firstChild, textNode);
   assert.equal(wrapper.childNodes.length, wrapperChildren);
   assert.match(cssDeclarations(".doudou-tag-editor"), /position:\s*relative/);
-  assert.match(cssDeclarations(".doudou-view .doudou-tag-editor-mirror"), /position:\s*absolute/);
+  const mirrorCss = cssDeclarations(".doudou-view .doudou-tag-editor-mirror");
+  assert.match(mirrorCss, /position:\s*absolute/);
+  assert.match(mirrorCss, /height:\s*100%/);
 });
 
-test("scroll anchoring is disabled only for the editing page and mirror", () => {
-  const mobileAnchors = cssDeclarations(".is-mobile .doudou-view .doudou-record-page.doudou-is-editing,\n.is-mobile .doudou-view .doudou-tag-editor-mirror");
-  assert.match(mobileAnchors, /overflow-anchor:\s*none/);
-  assert.doesNotMatch(cssDeclarations(".doudou-view .doudou-record-page"), /overflow-anchor/);
-  assert.doesNotMatch(cssDeclarations(".doudou-view .doudou-tag-editor-mirror"), /overflow-anchor/);
-  assert.doesNotMatch(cssDeclarations(".doudou-tag-editor"), /overflow-anchor/);
+test("textarea and mirror do not create nested vertical scrolling", () => {
+  const sharedSurface = cssDeclarations(".doudou-view .doudou-tag-editor .doudou-editor-content");
+  const textareaCss = cssDeclarations(".doudou-view textarea.doudou-tag-editor-input");
+  assert.match(sharedSurface, /overflow:\s*hidden/);
+  assert.doesNotMatch(sharedSurface, /overflow:\s*auto|overflow-y:\s*auto/);
+  assert.match(textareaCss, /overflow:\s*hidden/);
+  assert.match(textareaCss, /resize:\s*none/);
+  assert.doesNotMatch(pluginCss, /doudou-is-editing|overflow-anchor/);
 });
 
 test("mobile pages avoid duplicate top safe area and clear the host navbar", () => {

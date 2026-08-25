@@ -9,6 +9,12 @@ import type { StoredDoudouRecord } from "../types";
 import { hideTagSuggestions } from "./tagSuggestionDom";
 import { renderManualTagText } from "./uiHelpers";
 
+export function resizeTextareaToContent(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = "auto";
+  const borderHeight = Math.max(0, textarea.offsetHeight - textarea.clientHeight);
+  textarea.style.height = `${textarea.scrollHeight + borderHeight}px`;
+}
+
 export function createManualTagEditor(
   form: HTMLElement,
   initialValue: string,
@@ -38,10 +44,9 @@ export function createManualTagEditor(
   let composing = false;
   let renderedSuggestionsKey: string | null = null;
 
-  const syncMirror = (): void => {
+  const syncEditorSurface = (): void => {
     renderManualTagText(mirror, textarea.value, true);
-    mirror.scrollTop = textarea.scrollTop;
-    mirror.scrollLeft = textarea.scrollLeft;
+    resizeTextareaToContent(textarea);
   };
   const hideSuggestions = (): void => {
     renderedSuggestionsKey = null;
@@ -57,7 +62,7 @@ export function createManualTagEditor(
     const completion = applyManualTagCompletion(textarea.value, input, name);
     textarea.value = completion.value;
     textarea.setSelectionRange(completion.selectionStart, completion.selectionEnd);
-    syncMirror();
+    syncEditorSurface();
     hideSuggestions();
     textarea.focus({ preventScroll: true });
   };
@@ -101,27 +106,23 @@ export function createManualTagEditor(
   };
 
   textarea.addEventListener("input", () => {
-    syncMirror();
+    syncEditorSurface();
     if (!composing) updateSuggestions();
   });
   textarea.addEventListener("select", updateSuggestions);
   textarea.addEventListener("click", updateSuggestions);
   textarea.addEventListener("keyup", updateSuggestions);
-  textarea.addEventListener("scroll", () => {
-    mirror.scrollTop = textarea.scrollTop;
-    mirror.scrollLeft = textarea.scrollLeft;
-  }, { passive: true });
   textarea.addEventListener("compositionstart", () => {
     composing = true;
     hideSuggestions();
   });
   textarea.addEventListener("compositionend", () => {
     composing = false;
-    syncMirror();
+    syncEditorSurface();
     updateSuggestions();
   });
   textarea.addEventListener("focus", updateSuggestions);
   textarea.addEventListener("blur", hideSuggestions);
-  syncMirror();
+  syncEditorSurface();
   return textarea;
 }

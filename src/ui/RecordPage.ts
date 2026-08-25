@@ -52,8 +52,8 @@ export class RecordPage extends Component {
   private folderSelectEl: HTMLSelectElement | null = null;
   constructor(private readonly app: App, private readonly containerEl: HTMLElement, private readonly dependencies: RecordPageDependencies, private readonly goBack: () => void, private readonly changed: () => Promise<void>) { super(); }
   override onload(): void { this.containerEl.addClass("doudou-record-page"); }
-  override onunload(): void { this.containerEl.removeClass("doudou-is-editing"); this.gifPreviews.dispose(); releasePendingImages(this.pending); this.pendingFiles = []; this.containerEl.empty(); }
-  deactivate(): void { this.containerEl.removeClass("doudou-is-editing"); this.gifPreviews.clear(); }
+  override onunload(): void { this.gifPreviews.dispose(); releasePendingImages(this.pending); this.pendingFiles = []; this.containerEl.empty(); }
+  deactivate(): void { this.gifPreviews.clear(); }
   open(record: StoredDoudouRecord): void { this.record = record; this.renderRead(); }
   async create(defaultFolder?: string): Promise<void> { this.record = null; this.defaultFolder = defaultFolder; await this.renderEdit(true); }
 
@@ -66,7 +66,7 @@ export class RecordPage extends Component {
   }
 
   private renderRead(): void {
-    const record = this.record; if (!record) return; this.containerEl.removeClass("doudou-is-editing"); this.gifPreviews.clear(); this.folderSelectEl = null; this.containerEl.empty();
+    const record = this.record; if (!record) return; this.gifPreviews.clear(); this.folderSelectEl = null; this.containerEl.empty();
     const header = this.containerEl.createDiv({ cls: "doudou-record-header" });
     const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 返回", attr: { type: "button" } }); back.addEventListener("click", this.goBack);
     const tools = header.createDiv({ cls: "doudou-record-tools" });
@@ -162,7 +162,7 @@ export class RecordPage extends Component {
   }
 
   private async renderEdit(isNew: boolean): Promise<void> {
-    this.gifPreviews.clear(); releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty(); this.containerEl.addClass("doudou-is-editing");
+    this.gifPreviews.clear(); releasePendingImages(this.pending); this.pending = []; this.pendingFiles = []; this.containerEl.empty();
     const record = this.record;
     const [folders, records] = await Promise.all([
       this.dependencies.folderService.listFolders(),

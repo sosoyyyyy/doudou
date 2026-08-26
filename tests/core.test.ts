@@ -44,6 +44,7 @@ import { libraryCardContent, metaText, recordTitle, writeClipboardText } from ".
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
 import { loadFolderOrderState, type FolderOrderLoadState } from "../src/ui/folderOrderState";
 import { ImagePreviewModal } from "../src/ui/ImagePreviewModal";
+import { TagFilterModal } from "../src/ui/TagFilterModal";
 import { GifPreviewSession, isGifFile, isGifPath } from "../src/ui/gifPreview";
 import {
   imageFilesFromClipboardItems,
@@ -261,6 +262,24 @@ test("manual tag suggestions use confirmed body tags only and never hidden AI ta
   assert.deepEqual(manualTagSuggestions(options, "", new Set(["无畏契约"])).map((item) => item.name), ["日记"]);
 });
 
+test("opening the manual tag picker shows every existing visible tag in its current order", () => {
+  const records = Array.from({ length: 12 }, (_, index) => stored({
+    id: `tag-${index}`,
+    content: `#标签${index} `,
+    tags: [`标签${index}`],
+    aiTags: [`隐藏${index}`],
+    created: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`
+  }));
+  const options = collectConfirmedManualTagOptions(records);
+  assert.equal(options.length, 12);
+  assert.deepEqual(
+    manualTagSuggestions(options, "", new Set()).map((item) => item.name),
+    options.map((item) => item.name)
+  );
+  assert.equal(manualTagSuggestions(options, "标签", new Set()).length, 8);
+  assert.equal(options.some((item) => item.name.startsWith("隐藏")), false);
+});
+
 test("mobile manual tag suggestions are born in the editor header host without changing tag behavior", () => {
   const normalized = recordPageSource.replace(/\r\n/g, "\n");
   const tagEditor = normalized.slice(normalized.indexOf("function createManualTagEditor("), normalized.indexOf("\nexport interface RecordPageDependencies"));
@@ -437,7 +456,7 @@ test("mobile bottom clearance leaves the 0.5.4 scrolling, editor and top safe-ar
   assert.match(recordHeader, /padding:\s*max\(12px, env\(safe-area-inset-top\)\) 0 10px/);
   assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view > \.doudou-main-shell > header\.doudou-header/);
   assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view \.doudou-record-header\s*\{/);
-  assert.equal(createHash("sha256").update(doudouViewSource).digest("hex"), "3f1f863c09275596363514b070a55bf31d7b2ca1af17a23ea8eae08c7c8ed7a0");
+  assert.equal(createHash("sha256").update(doudouViewSource).digest("hex"), "bcb60c20c6362ab8f84ca8a87edaa38e539c476c9a7a4ca1c696bbf158696d40");
 });
 
 test("navigation labels change without changing internal page or virtual-folder identity", () => {
@@ -456,6 +475,77 @@ test("library home and overview search globally while a real folder stays scoped
   ];
   assert.deepEqual(filterRecords(records, { query: "无畏契约", folder: librarySearchFolder(null), tags: new Set() }).map((item) => item.id), ["life"]);
   assert.deepEqual(filterRecords(records, { query: "无畏契约", folder: librarySearchFolder("摘抄"), tags: new Set() }), []);
+});
+
+test("library visible tags deduplicate without including hidden AI tags", () => {
+  const options = collectTagOptions([
+    stored({ id: "new", content: "#情感感悟 #摘抄 ", tags: ["情感感悟", "摘抄"], aiTags: ["隐藏情绪"] }),
+    stored({ id: "old", content: "#情感感悟 ", tags: ["情感感悟"], aiTags: ["隐藏分类"] })
+  ]);
+  assert.deepEqual(new Set(options.map((item) => item.name)), new Set(["情感感悟", "摘抄"]));
+});
+
+test("library tag filters use AND for one, two and three tags and restore all when cleared", () => {
+  const records = [
+    stored({ id: "abc", tags: ["A", "B", "C"] }),
+    stored({ id: "ab", tags: ["A", "B"] }),
+    stored({ id: "a", tags: ["A"] }),
+    stored({ id: "b", tags: ["B"] })
+  ];
+  assert.deepEqual(filterRecords(records, { query: "", tags: new Set(["A"]) }).map((item) => item.id), ["abc", "ab", "a"]);
+  assert.deepEqual(filterRecords(records, { query: "", tags: new Set(["A", "B"]) }).map((item) => item.id), ["abc", "ab"]);
+  assert.deepEqual(filterRecords(records, { query: "", tags: new Set(["A", "B", "C"]) }).map((item) => item.id), ["abc"]);
+  assert.deepEqual(filterRecords(records, { query: "", tags: new Set(["A", "D"]) }), []);
+  assert.deepEqual(filterRecords(records, { query: "", tags: new Set() }).map((item) => item.id), ["abc", "ab", "a", "b"]);
+});
+
+test("library folder, search and tag filters compose without escaping the current scope", () => {
+  const records = [
+    stored({ id: "matching", folder: "日记", title: "夏日摘抄", tags: ["情感感悟", "摘抄"] }),
+    stored({ id: "wrong-query", folder: "日记", title: "冬日随笔", tags: ["情感感悟", "摘抄"] }),
+    stored({ id: "wrong-folder", folder: "工作", title: "夏日摘抄", tags: ["情感感悟", "摘抄"] }),
+    stored({ id: "missing-tag", folder: "日记", title: "夏日摘抄", tags: ["情感感悟"] })
+  ];
+  assert.deepEqual(filterRecords(records, {
+    query: "夏日",
+    folder: "日记",
+    tags: new Set(["情感感悟", "摘抄"])
+  }).map((item) => item.id), ["matching"]);
+});
+
+test("tag filter modal preserves selections and can clear them explicitly", () => {
+  const changes: string[][] = [];
+  const modal = new TagFilterModal({} as never, [
+    { name: "情感感悟", count: 2, lastUsed: "2026-08-20T00:00:00.000Z" },
+    { name: "摘抄", count: 1, lastUsed: "2026-08-19T00:00:00.000Z" }
+  ], new Set(["情感感悟", "摘抄"]), (selected) => changes.push([...selected]));
+  modal.open();
+  assert.equal(modal.contentEl.querySelectorAll(".doudou-tag-filter-chip.doudou-is-selected").length, 2);
+  const clear = [...modal.contentEl.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "清除筛选");
+  assert.ok(clear);
+  clear.click();
+  assert.deepEqual(changes.at(-1), []);
+  assert.equal(modal.contentEl.querySelectorAll(".doudou-tag-filter-chip.doudou-is-selected").length, 0);
+  modal.close();
+});
+
+test("library tag tool is placed before search and uses the existing tag icon system", () => {
+  const normalized = libraryPageSource.replace(/\r\n/g, "\n");
+  const homeHeader = normalized.slice(normalized.indexOf("private renderFolders(): void"), normalized.indexOf("private renderLibraryHomeContent(): void"));
+  assert.ok(homeHeader.indexOf("this.renderTagFilterButton(tools)") < homeHeader.indexOf("setIcon(search, \"search\")"));
+  assert.match(normalized, /setIcon\(button, "tags"\)/);
+  assert.match(normalized, /tags: this\.selectedTags/);
+});
+
+test("library tag filter reuses round tools and has a mobile-friendly independent scroll area", () => {
+  const activeTool = cssDeclarations(".doudou-view button.doudou-tag-filter-tool.doudou-is-active");
+  const list = cssDeclarations(".doudou-tag-filter-list");
+  assert.match(activeTool, /background:\s*var\(--doudou-blue-soft\)/);
+  assert.match(list, /max-height:\s*min\(55dvh, 440px\)/);
+  assert.match(list, /overflow-y:\s*auto/);
+  assert.match(list, /-webkit-overflow-scrolling:\s*touch/);
+  assert.doesNotMatch(list, /position:\s*(fixed|absolute)/);
 });
 
 test("library home search expands in place instead of navigating to overview", () => {

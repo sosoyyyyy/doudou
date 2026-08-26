@@ -45,6 +45,8 @@
 .doudou-empty-state::after { display: block; margin-top: 6px; font-size: 12px; content: attr(data-subtitle); }
 .doudou-library-heading, .doudou-folder-header, .doudou-record-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .doudou-library-heading h2, .doudou-folder-header h2, .doudou-record-header h2 { margin: 0; font-size: 24px; }
+.doudou-library-heading-tools { display: flex; justify-self: end; align-items: center; gap: 8px; }
+.doudou-view button.doudou-tag-filter-tool.doudou-is-active { border-color: color-mix(in srgb, var(--doudou-blue) 46%, var(--doudou-border)); background: var(--doudou-blue-soft); }
 .doudou-folder-list { margin-top: 16px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 16px; background: var(--doudou-surface); }
 .doudou-folder-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--doudou-border); }
 .doudou-folder-row:last-child { border-bottom: 0; }
@@ -60,9 +62,9 @@
 .doudou-view .doudou-folder-header button.doudou-back-button, .doudou-view .doudou-record-header button.doudou-back-button { margin: 0; padding-left: 0; }
 .doudou-view .doudou-library-body.doudou-is-folder-view { padding: 0 0 max(26px, env(safe-area-inset-bottom)); }
 .doudou-folder-sticky { position: sticky; top: 0; z-index: 4; padding: 12px clamp(12px, 4vw, 28px) 10px; border-bottom: 1px solid var(--doudou-border); background: var(--doudou-bg); }
-.doudou-folder-header { display: grid; grid-template-columns: minmax(74px, 1fr) minmax(0, 2fr) minmax(44px, 1fr); }
+.doudou-folder-header { display: grid; grid-template-columns: minmax(74px, 1fr) minmax(0, 2fr) minmax(80px, 1fr); }
 .doudou-folder-header h2 { min-width: 0; overflow: hidden; font-size: 20px !important; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-.doudou-folder-header > .doudou-round-tool { justify-self: end; }
+.doudou-folder-header > .doudou-library-heading-tools { justify-self: end; }
 .doudou-view .doudou-library-body.doudou-is-folder-view > .doudou-compact-list { padding: 12px clamp(12px, 4vw, 28px) 0; }
 .doudou-search-shell { display: flex; align-items: center; gap: 8px; margin: 14px 0; padding: 8px 12px; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
 .doudou-view .doudou-search-shell input { display: block; flex: 1 1 auto; width: auto; height: auto; min-width: 0; min-height: 34px; max-height: none; margin: 0; padding: 4px 0; border: 0; line-height: 1.4; background: transparent; box-shadow: none; appearance: none; }
@@ -152,6 +154,10 @@
 .doudou-danger-ghost-button { color: var(--text-error); background: transparent; }
 .doudou-modal-content { display: grid; gap: 12px; }
 .doudou-modal-content h2 { margin: 0; }
+.doudou-tag-filter-list { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; max-height: min(55dvh, 440px); padding: 2px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.doudou-modal button.doudou-tag-filter-chip { display: inline-flex; align-items: center; width: auto; height: auto; min-height: 40px; max-height: none; margin: 0; padding: 7px 11px; overflow: visible; border: 1px solid var(--doudou-border); border-radius: 10px; color: var(--doudou-tag-color); line-height: 1.3; white-space: nowrap; background: var(--doudou-surface); box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-modal button.doudou-tag-filter-chip.doudou-is-selected { border-color: color-mix(in srgb, var(--doudou-blue) 55%, var(--doudou-border)); background: var(--doudou-blue-soft); }
+.doudou-tag-filter-empty { width: 100%; padding: 28px 10px; color: var(--doudou-muted); text-align: center; }
 .doudou-folder-order-hint { color: var(--doudou-muted); font-size: 13px; line-height: 1.5; }
 .doudou-folder-order-list { display: grid; gap: 8px; max-height: min(55dvh, 460px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .doudou-folder-order-item { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; min-height: 48px; padding: 6px 7px 6px 10px; overflow: hidden; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); cursor: grab; touch-action: pan-y; }

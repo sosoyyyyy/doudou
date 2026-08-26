@@ -105,7 +105,7 @@ export function manualTagSuggestions(
   limit = 8
 ): TagOption[] {
   const normalizedQuery = query.toLocaleLowerCase();
-  return options
+  const matches = options
     .filter((option) => !confirmedInDraft.has(option.name))
     .map((option) => {
       const name = option.name.toLocaleLowerCase();
@@ -119,7 +119,7 @@ export function manualTagSuggestions(
       return { option, matchRank };
     })
     .filter(({ matchRank }) => matchRank < 2)
-    .sort((a, b) => a.matchRank - b.matchRank)
-    .slice(0, limit)
+    .sort((a, b) => a.matchRank - b.matchRank);
+  return (normalizedQuery.length === 0 ? matches : matches.slice(0, limit))
     .map(({ option }) => option);
 }

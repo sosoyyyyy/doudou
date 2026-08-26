@@ -1,4 +1,4 @@
-import { Component, setIcon } from "obsidian";
+import { App, Component, setIcon } from "obsidian";
 import type { ImageService } from "../attachments/ImageService";
 import {
   ALL_RECORDS_FOLDER,
@@ -7,12 +7,14 @@ import {
 } from "../constants";
 import type { DoudouRepository } from "../data/DoudouRepository";
 import type { FolderService } from "../services/FolderService";
-import { filterRecords, librarySearchFolder } from "../services/recordSearch";
+import { collectTagOptions, filterRecords, librarySearchFolder } from "../services/recordSearch";
 import type { FolderSummary, StoredDoudouRecord } from "../types";
 import { GifPreviewSession, isGifPath } from "./gifPreview";
 import { attachmentCountText, formatTime, libraryCardContent, recordTitle, renderManualTagText } from "./uiHelpers";
+import { TagFilterModal } from "./TagFilterModal";
 
 export interface LibraryPageDependencies {
+  app: App;
   repository: DoudouRepository;
   folderService: FolderService;
   imageService: ImageService;
@@ -29,6 +31,7 @@ export class LibraryPage extends Component {
   private currentFolder: string | null = null;
   private query = "";
   private searchExpanded = false;
+  private selectedTags = new Set<string>();
   private searchTimer: number | null = null;
   private version = 0;
   constructor(private readonly containerEl: HTMLElement, private readonly dependencies: LibraryPageDependencies) { super(); }
@@ -47,7 +50,9 @@ export class LibraryPage extends Component {
   private render(): void { this.gifPreviews.clear(); this.bodyEl.empty(); this.bodyEl.toggleClass("doudou-is-folder-view", this.currentFolder !== null); if (this.currentFolder === null) this.renderFolders(); else this.renderFolder(); this.bodyEl.createDiv({ cls: "doudou-mobile-bottom-spacer", attr: { "aria-hidden": "true" } }); }
   private renderFolders(): void {
     const header = this.bodyEl.createDiv({ cls: "doudou-library-heading" }); header.createEl("h2", { text: "资料" });
-    const search = header.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索全部资料" } }); setIcon(search, "search");
+    const tools = header.createDiv({ cls: "doudou-library-heading-tools" });
+    this.renderTagFilterButton(tools);
+    const search = tools.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索全部资料" } }); setIcon(search, "search");
     search.addEventListener("click", () => { this.searchExpanded = true; this.render(); });
     if (this.searchExpanded) {
       this.renderSearchShell(this.bodyEl, "搜索资料", () => {
@@ -63,7 +68,7 @@ export class LibraryPage extends Component {
     const content = this.bodyEl.querySelector<HTMLElement>(".doudou-library-home-content");
     if (!content) return;
     content.empty();
-    if (this.query.trim()) {
+    if (this.query.trim() || this.selectedTags.size > 0) {
       const results = content.createDiv({ cls: "doudou-compact-list doudou-library-search-results" });
       this.renderCards(results, undefined, true);
       return;
@@ -86,7 +91,9 @@ export class LibraryPage extends Component {
     const back = header.createEl("button", { cls: "doudou-back-button", text: "‹ 资料", attr: { type: "button" } });
     back.addEventListener("click", () => { this.currentFolder = null; this.query = ""; this.searchExpanded = false; this.render(); });
     header.createEl("h2", { text: this.currentFolder === ALL_RECORDS_FOLDER ? ALL_RECORDS_FOLDER_LABEL : this.currentFolder ?? ALL_RECORDS_FOLDER_LABEL });
-    const search = header.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索当前文件夹资料" } });
+    const tools = header.createDiv({ cls: "doudou-library-heading-tools" });
+    this.renderTagFilterButton(tools);
+    const search = tools.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索当前文件夹资料" } });
     setIcon(search, "search");
     search.addEventListener("click", () => { this.searchExpanded = true; this.render(); });
     if (this.searchExpanded) {
@@ -107,6 +114,26 @@ export class LibraryPage extends Component {
     input.addEventListener("input", () => { if (this.searchTimer !== null) window.clearTimeout(this.searchTimer); this.searchTimer = window.setTimeout(() => { this.query = input.value; onQueryChanged(); }, SEARCH_DEBOUNCE_MS); });
     input.focus({ preventScroll: true });
   }
+  private renderTagFilterButton(container: HTMLElement): void {
+    const button = container.createEl("button", {
+      cls: `doudou-round-tool doudou-tag-filter-tool${this.selectedTags.size > 0 ? " doudou-is-active" : ""}`,
+      attr: {
+        type: "button",
+        "aria-label": "按标签筛选资料",
+        "aria-pressed": String(this.selectedTags.size > 0)
+      }
+    });
+    setIcon(button, "tags");
+    button.addEventListener("click", () => new TagFilterModal(
+      this.dependencies.app,
+      collectTagOptions(this.records),
+      this.selectedTags,
+      (selected) => {
+        this.selectedTags = new Set(selected);
+        this.render();
+      }
+    ).open());
+  }
   private renderFolderCards(): void {
     const list = this.bodyEl.querySelector<HTMLElement>(".doudou-compact-list");
     if (!list) return;
@@ -115,7 +142,7 @@ export class LibraryPage extends Component {
   }
   private renderCards(list?: HTMLElement, folder?: string, showFolder = false): void {
     const target = list ?? this.bodyEl.querySelector<HTMLElement>(".doudou-compact-list"); if (!target) return; target.empty();
-    const records = filterRecords(this.records, { query: this.query, folder, tags: new Set() });
+    const records = filterRecords(this.records, { query: this.query, folder, tags: this.selectedTags });
     if (records.length === 0) { target.createDiv({ cls: "doudou-empty-state doudou-library-empty", text: "这里还空空的", attr: { "data-subtitle": "去记下点什么吧" } }); return; }
     for (const record of records) {
       const card = target.createEl("button", { cls: "doudou-compact-card", attr: { type: "button", "aria-label": `打开备忘录：${recordTitle(record)}` } }); const image = record.images?.[0];

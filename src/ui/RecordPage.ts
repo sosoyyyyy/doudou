@@ -484,12 +484,13 @@ export class RecordPage extends Component {
       if (!event.clipboardData?.getData("text/plain")) event.preventDefault();
     });
     const attachmentInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", multiple: "true", "aria-label": "选择普通文件附件" } });
-    const attachmentActions = form.createDiv({ cls: "doudou-attachment-actions" });
+    const editorTools = form.createDiv({ cls: "doudou-editor-tools" });
+    const attachmentActions = editorTools.createDiv({ cls: "doudou-attachment-actions" });
     const addImage = attachmentActions.createEl("button", { cls: "doudou-add-image-button", attr: { type: "button", "aria-label": "添加图片" } });
-    setIcon(addImage, "image-plus"); addImage.createSpan({ text: "添加图片" }); addImage.addEventListener("click", () => imageInput.click());
+    setIcon(addImage, "image-plus"); addImage.createSpan({ text: "图片" }); addImage.addEventListener("click", () => imageInput.click());
     const addFile = attachmentActions.createEl("button", { cls: "doudou-add-file-button", attr: { type: "button", "aria-label": "添加普通文件" } });
-    setIcon(addFile, "paperclip"); addFile.createSpan({ text: "添加文件" }); addFile.addEventListener("click", () => attachmentInput.click());
-    const fileArea = form.createDiv({ cls: "doudou-editor-files" });
+    setIcon(addFile, "paperclip"); addFile.createSpan({ text: "文件" }); addFile.addEventListener("click", () => attachmentInput.click());
+    const fileArea = editorTools.createDiv({ cls: "doudou-editor-files" });
     let retainedFiles = [...(record?.files ?? [])];
     const removedFiles = new Set<string>();
     const paintFiles = (): void => {
@@ -527,7 +528,7 @@ export class RecordPage extends Component {
       this.pendingFiles.push(...createPendingFiles(accepted));
       paintFiles();
     });
-    const folderRow = form.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } }); this.folderSelectEl = folder;
+    const folderRow = editorTools.createDiv({ cls: "doudou-editor-folder" }); folderRow.createSpan({ text: "文件夹" }); const folder = folderRow.createEl("select", { attr: { "aria-label": "所属文件夹" } }); this.folderSelectEl = folder;
     const names = folders.map((item) => item.name);
     const preferred = record?.folder ?? this.defaultFolder;
     this.populateFolderSelect(folder, names, preferred);

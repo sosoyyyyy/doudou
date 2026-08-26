@@ -292,6 +292,45 @@ test("mobile tag host uses existing header space without changing desktop sugges
   assert.match(cssDeclarations(".doudou-tag-suggestions"), /top:\s*calc\(100% \+ 6px\)/);
 });
 
+test("mobile editor tools place image file and folder controls in one overflow-safe row", () => {
+  const normalized = recordPageSource.replace(/\r\n/g, "\n");
+  const filePicker = normalized.slice(normalized.indexOf("    attachmentInput.addEventListener(\"change\""), normalized.indexOf("    const folderRow = editorTools.createDiv"));
+  const folderData = normalized.slice(normalized.indexOf("    const names = folders.map"), normalized.indexOf("    const status = form.createDiv"));
+
+  assert.match(recordPageSource, /const editorTools = form\.createDiv\(\{ cls: "doudou-editor-tools" \}\)/);
+  assert.match(recordPageSource, /const attachmentActions = editorTools\.createDiv\(\{ cls: "doudou-attachment-actions" \}\)/);
+  assert.match(recordPageSource, /const fileArea = editorTools\.createDiv\(\{ cls: "doudou-editor-files" \}\)/);
+  assert.match(recordPageSource, /const folderRow = editorTools\.createDiv\(\{ cls: "doudou-editor-folder" \}\)/);
+  assert.match(recordPageSource, /addImage\.createSpan\(\{ text: "图片" \}\)/);
+  assert.match(recordPageSource, /addFile\.createSpan\(\{ text: "文件" \}\)/);
+  assert.match(recordPageSource, /addImage\.addEventListener\("click", \(\) => imageInput\.click\(\)\)/);
+  assert.match(recordPageSource, /addFile\.addEventListener\("click", \(\) => attachmentInput\.click\(\)\)/);
+  assert.equal(createHash("sha256").update(filePicker).digest("hex"), "6a0fe990bac25b4b1fde54737c962271b3f50e1e686ceeb3ee0913b1fb01c392");
+  assert.equal(createHash("sha256").update(folderData).digest("hex"), "2be434cc589b973c1ebbdf8fc607371312e7b39a6cb98a8ff86172081fa00bfd");
+
+  const tools = cssDeclarations(".is-mobile .doudou-view .doudou-editor-tools");
+  assert.match(tools, /grid-template-columns:\s*auto auto minmax\(0, 1fr\)/);
+  assert.match(tools, /align-items:\s*center/);
+  assert.doesNotMatch(tools, /position:\s*(?:fixed|sticky|absolute)|overflow-x/);
+  assert.match(cssDeclarations(".is-mobile .doudou-view .doudou-editor-tools > .doudou-attachment-actions"), /display:\s*contents/);
+  const files = cssDeclarations(".is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-files");
+  assert.match(files, /grid-row:\s*2/);
+  assert.match(files, /grid-column:\s*1 \/ -1/);
+  assert.match(cssDeclarations(".is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-files:empty"), /display:\s*none/);
+  const buttons = cssDeclarations(".is-mobile .doudou-view .doudou-editor-tools button.doudou-add-file-button, .is-mobile .doudou-view .doudou-editor-tools button.doudou-add-image-button");
+  assert.match(buttons, /min-height:\s*44px/);
+  const folder = cssDeclarations(".is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-folder");
+  assert.match(folder, /grid-row:\s*1/);
+  assert.match(folder, /grid-column:\s*3/);
+  assert.match(folder, /grid-template-columns:\s*auto minmax\(0, 1fr\)/);
+  assert.match(folder, /min-width:\s*0/);
+  const select = cssDeclarations(".is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-folder select");
+  assert.match(select, /width:\s*100%/);
+  assert.match(select, /min-width:\s*0/);
+  assert.match(select, /max-width:\s*100%/);
+  assert.match(select, /min-height:\s*44px/);
+});
+
 test("shared app header keeps a normal-flow flex slot on every page", () => {
   const declarations = cssDeclarations(".doudou-view > .doudou-main-shell > header.doudou-header");
   assert.match(declarations, /position:\s*relative/);

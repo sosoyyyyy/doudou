@@ -102,6 +102,7 @@
 .doudou-view .doudou-file-card-meta { margin-top: 3px; color: var(--doudou-muted); font-size: 12px; line-height: 1.3; }
 .doudou-view .doudou-file-card-chevron { flex: 0 0 auto; color: var(--doudou-muted); font-size: 20px; }
 .doudou-view button.doudou-file-card-remove { display: inline-flex; flex: 0 0 36px; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 50%; color: var(--doudou-muted); font-size: 20px; line-height: 1; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
+.doudou-view .doudou-editor-tools { display: grid; gap: 12px; width: 100%; min-width: 0; }
 .doudou-view .doudou-attachment-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(100%, 380px); }
 .doudou-view button.doudou-add-file-button, .doudou-view button.doudou-add-image-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; height: auto; min-height: 42px; max-height: none; margin: 0; padding: 7px 12px; overflow: visible; border: 1px solid var(--doudou-border); border-radius: 11px; color: var(--doudou-blue-strong); font-size: 13px; line-height: normal; white-space: nowrap; background: var(--doudou-surface); box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-view .doudou-card-attachment-count { margin-top: 7px; color: var(--doudou-muted); font-size: 12px; }
@@ -121,6 +122,13 @@
 .doudou-view button.doudou-tag-suggestion { display: inline-flex; align-items: center; width: auto; height: auto; min-height: 36px; max-height: none; margin: 0; padding: 6px 9px; overflow: visible; border: 0; border-radius: 8px; color: var(--doudou-tag-color); line-height: 1.3; white-space: nowrap; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-view .doudou-editor-folder select { min-height: 42px; appearance: auto; }
 .doudou-editor-folder { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
+.is-mobile .doudou-view .doudou-editor-tools { grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 6px; }
+.is-mobile .doudou-view .doudou-editor-tools > .doudou-attachment-actions { display: contents; }
+.is-mobile .doudou-view .doudou-editor-tools button.doudou-add-file-button, .is-mobile .doudou-view .doudou-editor-tools button.doudou-add-image-button { min-height: 44px; padding-inline: 10px; }
+.is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-files { grid-row: 2; grid-column: 1 / -1; min-width: 0; }
+.is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-files:empty { display: none; }
+.is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-folder { grid-row: 1; grid-column: 3; grid-template-columns: auto minmax(0, 1fr); gap: 6px; min-width: 0; }
+.is-mobile .doudou-view .doudou-editor-tools > .doudou-editor-folder select { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; }
 .doudou-view input.doudou-file-input { position: absolute; width: 1px; height: 1px; min-height: 0; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); border: 0; opacity: 0; white-space: nowrap; }
 .doudou-view .doudou-editor-images { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; width: 100%; max-width: 400px; overflow: visible; }
 .doudou-editor-image { position: relative; width: 100%; height: auto; aspect-ratio: 1 / 1; overflow: hidden; border: 2px solid transparent; border-radius: 12px; cursor: grab; touch-action: pan-y; transition: border-color 140ms ease, opacity 140ms ease, transform 140ms ease; }

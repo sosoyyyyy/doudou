@@ -102,8 +102,13 @@
 .doudou-view .doudou-file-card-meta { margin-top: 3px; color: var(--doudou-muted); font-size: 12px; line-height: 1.3; }
 .doudou-view .doudou-file-card-chevron { flex: 0 0 auto; color: var(--doudou-muted); font-size: 20px; }
 .doudou-view button.doudou-file-card-remove { display: inline-flex; flex: 0 0 36px; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; max-height: none; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 50%; color: var(--doudou-muted); font-size: 20px; line-height: 1; background: transparent; box-shadow: none; appearance: none; touch-action: manipulation; }
-.doudou-view .doudou-editor-tools { display: grid; gap: 12px; width: 100%; min-width: 0; }
+.doudou-view .doudou-editor-tools { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 12px; width: 100%; min-width: 0; }
 .doudou-view .doudou-attachment-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(100%, 380px); }
+.doudou-view .doudou-editor-tools > .doudou-attachment-actions { display: contents; }
+.doudou-view .doudou-editor-tools > .doudou-editor-files { grid-row: 2; grid-column: 1 / -1; min-width: 0; }
+.doudou-view .doudou-editor-tools > .doudou-editor-files:empty { display: none; }
+.doudou-view .doudou-editor-tools > .doudou-editor-folder { grid-row: 1; grid-column: 3; min-width: 0; }
+.doudou-view .doudou-editor-tools > .doudou-editor-folder select { width: 100%; min-width: 0; max-width: 100%; }
 .doudou-view button.doudou-add-file-button, .doudou-view button.doudou-add-image-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; height: auto; min-height: 42px; max-height: none; margin: 0; padding: 7px 12px; overflow: visible; border: 1px solid var(--doudou-border); border-radius: 11px; color: var(--doudou-blue-strong); font-size: 13px; line-height: normal; white-space: nowrap; background: var(--doudou-surface); box-shadow: none; appearance: none; touch-action: manipulation; }
 .doudou-view .doudou-card-attachment-count { margin-top: 7px; color: var(--doudou-muted); font-size: 12px; }
 .doudou-editor { display: grid; gap: 12px; }

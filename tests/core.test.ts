@@ -293,7 +293,7 @@ test("mobile manual tag suggestions are born in the editor header host without c
   assert.match(recordPageSource, /createManualTagEditor\(form, record\?\.content \?\? "", records, suggestionsHost\)/);
   assert.match(recordPageSource, /const suggestions = \(suggestionsHost \?\? wrapper\)\.createDiv/);
   assert.doesNotMatch(tagEditor, /appendChild|insertBefore|replaceWith/);
-  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "f654e15ddd0b3aeafa36d98f1adb0d176fdc776a4df641d43a1b251cca3d407a");
+  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "fb951e5105415584a34db8cf2cae7da9b45a6a635a26612642aa7c41f1058578");
   assert.equal(createHash("sha256").update(textareaSetup).digest("hex"), "1fd0b6330f7f8749d4b2e66de059138ba985affe28dbe8eca87e704337039313");
   assert.equal(createHash("sha256").update(imagePicker).digest("hex"), "9ced02a5de7431ffd22b5381a5a6fe45131700cdca7118e59bc69362d3c06892");
 });
@@ -319,12 +319,11 @@ test("desktop and mobile tag suggestions wrap into bounded vertical scroll areas
   assert.match(suggestions, /overflow-y:\s*auto/);
   assert.match(suggestions, /pointer-events:\s*auto/);
   assert.match(cssDeclarations(".doudou-tag-suggestions"), /top:\s*calc\(100% \+ 6px\)/);
-  assert.match(recordPageSource, /button\.addEventListener\("pointerdown", \(event\) => \{\s*event\.preventDefault\(\);\s*\}\)/);
-  assert.doesNotMatch(recordPageSource, /button\.addEventListener\("pointerdown", \(event\) => \{[^}]*applySuggestion/);
+  assert.match(recordPageSource, /button\.addEventListener\("pointerdown", \(event\) => \{\s*event\.preventDefault\(\);\s*applySuggestion\(option\.name\);\s*\}\)/);
   assert.match(recordPageSource, /button\.addEventListener\("click", \(\) => applySuggestion\(option\.name\)\)/);
 });
 
-test("manual tag suggestion pointerdown preserves focus and click inserts exactly once", () => {
+test("manual tag suggestion restores beta.6 pointerdown insertion without double insertion", () => {
   const form = document.body.createDiv();
   const textarea = createManualTagEditor(form, "开头 #", [
     stored({ content: "#情感感悟 ", tags: ["情感感悟"] })
@@ -338,9 +337,6 @@ test("manual tag suggestion pointerdown preserves focus and click inserts exactl
   const pointerdown = new Event("pointerdown", { bubbles: true, cancelable: true });
   button.dispatchEvent(pointerdown);
   assert.equal(pointerdown.defaultPrevented, true);
-  assert.equal(textarea.value, "开头 #");
-
-  button.click();
   assert.equal(textarea.value, "开头 #情感感悟 ");
   assert.equal(textarea.selectionStart, textarea.value.length);
   assert.equal(textarea.selectionEnd, textarea.value.length);

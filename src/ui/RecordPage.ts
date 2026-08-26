@@ -123,6 +123,7 @@ export function createManualTagEditor(
       });
       button.addEventListener("pointerdown", (event) => {
         event.preventDefault();
+        applySuggestion(option.name);
       });
       button.addEventListener("click", () => applySuggestion(option.name));
     }

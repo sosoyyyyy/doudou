@@ -291,12 +291,12 @@ test("mobile manual tag suggestions are born in the editor header host without c
   assert.match(recordPageSource, /createManualTagEditor\(form, record\?\.content \?\? "", records, suggestionsHost\)/);
   assert.match(recordPageSource, /const suggestions = \(suggestionsHost \?\? wrapper\)\.createDiv/);
   assert.doesNotMatch(tagEditor, /appendChild|insertBefore|replaceWith/);
-  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "fb951e5105415584a34db8cf2cae7da9b45a6a635a26612642aa7c41f1058578");
+  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "4425f228b9124c3344b6dfd276c8bbeb226d76bc35e37f577eadaf5ba6effb0a");
   assert.equal(createHash("sha256").update(textareaSetup).digest("hex"), "1fd0b6330f7f8749d4b2e66de059138ba985affe28dbe8eca87e704337039313");
   assert.equal(createHash("sha256").update(imagePicker).digest("hex"), "9ced02a5de7431ffd22b5381a5a6fe45131700cdca7118e59bc69362d3c06892");
 });
 
-test("mobile tag host uses existing header space without changing desktop suggestion placement", () => {
+test("desktop and mobile tag suggestions wrap into bounded vertical scroll areas", () => {
   assert.match(cssDeclarations(".doudou-view .doudou-record-tag-suggestions-host"), /display:\s*none/);
   const host = cssDeclarations(".is-mobile .doudou-view .doudou-record-header > .doudou-record-tag-suggestions-host");
   assert.match(host, /position:\s*absolute/);
@@ -304,11 +304,21 @@ test("mobile tag host uses existing header space without changing desktop sugges
   assert.match(host, /height:\s*0/);
   assert.match(host, /pointer-events:\s*none/);
   assert.doesNotMatch(host, /position:\s*fixed|transform|margin|padding/);
+  const desktopSuggestions = cssDeclarations(".doudou-tag-suggestions");
+  assert.match(desktopSuggestions, /flex-wrap:\s*wrap/);
+  assert.match(desktopSuggestions, /max-height:\s*174px/);
+  assert.match(desktopSuggestions, /overflow-x:\s*hidden/);
+  assert.match(desktopSuggestions, /overflow-y:\s*auto/);
+  assert.match(desktopSuggestions, /touch-action:\s*pan-y/);
   const suggestions = cssDeclarations(".is-mobile .doudou-view .doudou-record-tag-suggestions-host > .doudou-tag-suggestions");
-  assert.match(suggestions, /flex-wrap:\s*nowrap/);
-  assert.match(suggestions, /overflow-x:\s*auto/);
+  assert.match(suggestions, /flex-wrap:\s*wrap/);
+  assert.match(suggestions, /max-height:\s*126px/);
+  assert.match(suggestions, /overflow-x:\s*hidden/);
+  assert.match(suggestions, /overflow-y:\s*auto/);
   assert.match(suggestions, /pointer-events:\s*auto/);
   assert.match(cssDeclarations(".doudou-tag-suggestions"), /top:\s*calc\(100% \+ 6px\)/);
+  assert.doesNotMatch(recordPageSource, /button\.addEventListener\("pointerdown"[\s\S]*applySuggestion/);
+  assert.match(recordPageSource, /button\.addEventListener\("click", \(\) => applySuggestion\(option\.name\)\)/);
 });
 
 test("desktop and mobile editor tools place image file and folder controls in one overflow-safe row", () => {
@@ -513,19 +523,59 @@ test("library folder, search and tag filters compose without escaping the curren
   }).map((item) => item.id), ["matching"]);
 });
 
-test("tag filter modal preserves selections and can clear them explicitly", () => {
-  const changes: string[][] = [];
+test("tag filter modal updates AND counts live and applies only through the view button", () => {
+  const records = [
+    stored({ id: "both", tags: ["小说", "情感感悟"] }),
+    stored({ id: "novel", tags: ["小说"] }),
+    stored({ id: "emotion", tags: ["情感感悟"] })
+  ];
+  const applied: string[][] = [];
   const modal = new TagFilterModal({} as never, [
     { name: "情感感悟", count: 2, lastUsed: "2026-08-20T00:00:00.000Z" },
-    { name: "摘抄", count: 1, lastUsed: "2026-08-19T00:00:00.000Z" }
-  ], new Set(["情感感悟", "摘抄"]), (selected) => changes.push([...selected]));
+    { name: "小说", count: 2, lastUsed: "2026-08-19T00:00:00.000Z" }
+  ], new Set(), (selected) => filterRecords(records, { query: "", tags: selected }).length,
+  (selected) => applied.push([...selected]));
   modal.open();
-  assert.equal(modal.contentEl.querySelectorAll(".doudou-tag-filter-chip.doudou-is-selected").length, 2);
+  const chip = (name: string): HTMLButtonElement => [...modal.contentEl.querySelectorAll<HTMLButtonElement>(".doudou-tag-filter-chip")]
+    .find((button) => button.textContent === `#${name}`)!;
+  const view = (): HTMLButtonElement => modal.contentEl.querySelector<HTMLButtonElement>(".doudou-tag-filter-view")!;
+  assert.equal(view().textContent, "查看 3 条资料");
+  chip("小说").click();
+  assert.equal(view().textContent, "查看 2 条资料");
+  chip("情感感悟").click();
+  assert.equal(view().textContent, "查看 1 条资料");
+  chip("小说").click();
+  assert.equal(view().textContent, "查看 2 条资料");
+  assert.deepEqual(applied, []);
+  view().click();
+  assert.deepEqual(applied, [["情感感悟"]]);
+});
+
+test("tag filter modal shows zero state and clear restores the current scoped count", () => {
+  const records = [
+    stored({ id: "matching", folder: "日记", title: "夏日", tags: ["A"] }),
+    stored({ id: "other-tag", folder: "日记", title: "夏日", tags: ["B"] }),
+    stored({ id: "other-query", folder: "日记", title: "冬日", tags: ["A", "B"] }),
+    stored({ id: "other-folder", folder: "工作", title: "夏日", tags: ["A", "B"] })
+  ];
+  const modal = new TagFilterModal({} as never, [
+    { name: "A", count: 3, lastUsed: "2026-08-20T00:00:00.000Z" },
+    { name: "B", count: 3, lastUsed: "2026-08-19T00:00:00.000Z" }
+  ], new Set(["A", "B"]), (selected) => filterRecords(records, {
+    query: "夏日",
+    folder: "日记",
+    tags: selected
+  }).length, () => assert.fail("zero results must not apply"));
+  modal.open();
+  const view = modal.contentEl.querySelector<HTMLButtonElement>(".doudou-tag-filter-view")!;
+  assert.equal(view.textContent, "暂无符合条件的资料");
+  assert.equal(view.disabled, true);
   const clear = [...modal.contentEl.querySelectorAll<HTMLButtonElement>("button")]
     .find((button) => button.textContent === "清除筛选");
   assert.ok(clear);
   clear.click();
-  assert.deepEqual(changes.at(-1), []);
+  assert.equal(view.textContent, "查看 2 条资料");
+  assert.equal(view.disabled, false);
   assert.equal(modal.contentEl.querySelectorAll(".doudou-tag-filter-chip.doudou-is-selected").length, 0);
   modal.close();
 });
@@ -536,16 +586,24 @@ test("library tag tool is placed before search and uses the existing tag icon sy
   assert.ok(homeHeader.indexOf("this.renderTagFilterButton(tools)") < homeHeader.indexOf("setIcon(search, \"search\")"));
   assert.match(normalized, /setIcon\(button, "tags"\)/);
   assert.match(normalized, /tags: this\.selectedTags/);
+  assert.match(normalized, /folder: librarySearchFolder\(this\.currentFolder\)/);
+  assert.match(normalized, /query: this\.query/);
 });
 
 test("library tag filter reuses round tools and has a mobile-friendly independent scroll area", () => {
   const activeTool = cssDeclarations(".doudou-view button.doudou-tag-filter-tool.doudou-is-active");
   const list = cssDeclarations(".doudou-tag-filter-list");
+  const modal = cssDeclarations(".doudou-modal.doudou-tag-filter-modal");
+  const actions = cssDeclarations(".doudou-tag-filter-modal .doudou-modal-actions");
   assert.match(activeTool, /background:\s*var\(--doudou-blue-soft\)/);
+  assert.match(modal, /width:\s*min\(520px, calc\(100vw - 24px\)\)/);
   assert.match(list, /max-height:\s*min\(55dvh, 440px\)/);
   assert.match(list, /overflow-y:\s*auto/);
   assert.match(list, /-webkit-overflow-scrolling:\s*touch/);
+  assert.match(list, /touch-action:\s*pan-y/);
   assert.doesNotMatch(list, /position:\s*(fixed|absolute)/);
+  assert.match(actions, /justify-content:\s*space-between/);
+  assert.match(pluginCss, /\.doudou-modal\.doudou-tag-filter-modal button\.doudou-tag-filter-view\s*\{[^}]*background:\s*var\(--doudou-blue\)/);
 });
 
 test("library home search expands in place instead of navigating to overview", () => {

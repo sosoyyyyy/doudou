@@ -8,7 +8,8 @@ export class TagFilterModal extends Modal {
     app: App,
     private readonly options: readonly TagOption[],
     selected: ReadonlySet<string>,
-    private readonly onChanged: (selected: ReadonlySet<string>) => void
+    private readonly resultCount: (selected: ReadonlySet<string>) => number,
+    private readonly onApply: (selected: ReadonlySet<string>) => void
   ) {
     super(app);
     this.selected = new Set(selected);
@@ -27,6 +28,10 @@ export class TagFilterModal extends Modal {
       cls: "doudou-secondary-button",
       text: "清除筛选",
       attr: { type: "button" }
+    });
+    const view = actions.createEl("button", {
+      cls: "doudou-primary-button doudou-tag-filter-view",
+      attr: { type: "button", "aria-live": "polite" }
     });
 
     const paint = (): void => {
@@ -47,17 +52,23 @@ export class TagFilterModal extends Modal {
         button.addEventListener("click", () => {
           if (this.selected.has(option.name)) this.selected.delete(option.name);
           else this.selected.add(option.name);
-          this.onChanged(new Set(this.selected));
           paint();
         });
       }
       clear.disabled = this.selected.size === 0;
+      const count = this.resultCount(this.selected);
+      view.disabled = count === 0;
+      view.setText(count === 0 ? "暂无符合条件的资料" : `查看 ${count} 条资料`);
     };
 
     clear.addEventListener("click", () => {
       this.selected.clear();
-      this.onChanged(new Set());
       paint();
+    });
+    view.addEventListener("click", () => {
+      if (this.resultCount(this.selected) === 0) return;
+      this.onApply(new Set(this.selected));
+      this.close();
     });
     paint();
   }

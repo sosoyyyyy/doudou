@@ -121,10 +121,6 @@ function createManualTagEditor(
         text: `#${option.name}`,
         attr: { type: "button", role: "option" }
       });
-      button.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        applySuggestion(option.name);
-      });
       button.addEventListener("click", () => applySuggestion(option.name));
     }
   };

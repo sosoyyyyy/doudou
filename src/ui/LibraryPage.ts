@@ -128,6 +128,11 @@ export class LibraryPage extends Component {
       this.dependencies.app,
       collectTagOptions(this.records),
       this.selectedTags,
+      (selected) => filterRecords(this.records, {
+        query: this.query,
+        folder: librarySearchFolder(this.currentFolder),
+        tags: selected
+      }).length,
       (selected) => {
         this.selectedTags = new Set(selected);
         this.render();

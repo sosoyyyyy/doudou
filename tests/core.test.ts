@@ -261,6 +261,37 @@ test("manual tag suggestions use confirmed body tags only and never hidden AI ta
   assert.deepEqual(manualTagSuggestions(options, "", new Set(["无畏契约"])).map((item) => item.name), ["日记"]);
 });
 
+test("mobile manual tag suggestions are born in the editor header host without changing tag behavior", () => {
+  const normalized = recordPageSource.replace(/\r\n/g, "\n");
+  const tagEditor = normalized.slice(normalized.indexOf("function createManualTagEditor("), normalized.indexOf("\nexport interface RecordPageDependencies"));
+  const tagBehavior = normalized.slice(normalized.indexOf("  const options = collectConfirmedManualTagOptions(records);"), normalized.indexOf("\n}\n\nexport interface RecordPageDependencies"));
+  const textareaSetup = normalized.slice(normalized.indexOf("  const wrapper = form.createDiv"), normalized.indexOf("  const suggestions = (suggestionsHost ?? wrapper).createDiv"));
+  const imagePicker = normalized.slice(normalized.indexOf("    const imageInput = form.createEl"), normalized.indexOf("    const attachmentInput = form.createEl"));
+
+  assert.match(recordPageSource, /const suggestionsHost = Platform\.isMobileApp[\s\S]*header\.createDiv\(\{ cls: "doudou-record-tag-suggestions-host"/);
+  assert.match(recordPageSource, /createManualTagEditor\(form, record\?\.content \?\? "", records, suggestionsHost\)/);
+  assert.match(recordPageSource, /const suggestions = \(suggestionsHost \?\? wrapper\)\.createDiv/);
+  assert.doesNotMatch(tagEditor, /appendChild|insertBefore|replaceWith/);
+  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "fb951e5105415584a34db8cf2cae7da9b45a6a635a26612642aa7c41f1058578");
+  assert.equal(createHash("sha256").update(textareaSetup).digest("hex"), "1fd0b6330f7f8749d4b2e66de059138ba985affe28dbe8eca87e704337039313");
+  assert.equal(createHash("sha256").update(imagePicker).digest("hex"), "9ced02a5de7431ffd22b5381a5a6fe45131700cdca7118e59bc69362d3c06892");
+});
+
+test("mobile tag host uses existing header space without changing desktop suggestion placement", () => {
+  assert.match(cssDeclarations(".doudou-view .doudou-record-tag-suggestions-host"), /display:\s*none/);
+  const host = cssDeclarations(".is-mobile .doudou-view .doudou-record-header > .doudou-record-tag-suggestions-host");
+  assert.match(host, /position:\s*absolute/);
+  assert.match(host, /top:\s*0/);
+  assert.match(host, /height:\s*0/);
+  assert.match(host, /pointer-events:\s*none/);
+  assert.doesNotMatch(host, /position:\s*fixed|transform|margin|padding/);
+  const suggestions = cssDeclarations(".is-mobile .doudou-view .doudou-record-tag-suggestions-host > .doudou-tag-suggestions");
+  assert.match(suggestions, /flex-wrap:\s*nowrap/);
+  assert.match(suggestions, /overflow-x:\s*auto/);
+  assert.match(suggestions, /pointer-events:\s*auto/);
+  assert.match(cssDeclarations(".doudou-tag-suggestions"), /top:\s*calc\(100% \+ 6px\)/);
+});
+
 test("shared app header keeps a normal-flow flex slot on every page", () => {
   const declarations = cssDeclarations(".doudou-view > .doudou-main-shell > header.doudou-header");
   assert.match(declarations, /position:\s*relative/);
@@ -343,7 +374,7 @@ test("mobile bottom clearance leaves the 0.5.4 scrolling, editor and top safe-ar
   assert.match(appHeader, /padding:\s*max\(6px, env\(safe-area-inset-top\)\) 10px 7px/);
   assert.match(recordHeader, /padding:\s*max\(12px, env\(safe-area-inset-top\)\) 0 10px/);
   assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view > \.doudou-main-shell > header\.doudou-header/);
-  assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view \.doudou-record-header/);
+  assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view \.doudou-record-header\s*\{/);
   assert.equal(createHash("sha256").update(doudouViewSource).digest("hex"), "3f1f863c09275596363514b070a55bf31d7b2ca1af17a23ea8eae08c7c8ed7a0");
 });
 

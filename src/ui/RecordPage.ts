@@ -43,7 +43,8 @@ import {
 function createManualTagEditor(
   form: HTMLElement,
   initialValue: string,
-  records: readonly StoredDoudouRecord[]
+  records: readonly StoredDoudouRecord[],
+  suggestionsHost?: HTMLElement
 ): HTMLTextAreaElement {
   const wrapper = form.createDiv({ cls: "doudou-tag-editor" });
   const mirror = wrapper.createDiv({
@@ -61,7 +62,7 @@ function createManualTagEditor(
     }
   });
   textarea.value = initialValue;
-  const suggestions = wrapper.createDiv({
+  const suggestions = (suggestionsHost ?? wrapper).createDiv({
     cls: "doudou-tag-suggestions doudou-is-hidden",
     attr: { role: "listbox", "aria-label": "用户标签建议" }
   });
@@ -289,13 +290,17 @@ export class RecordPage extends Component {
       this.dependencies.folderService.listFolders(),
       this.dependencies.repository.loadAll()
     ]);
-    const header = this.containerEl.createDiv({ cls: "doudou-record-header doudou-editor-header" }); header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
+    const header = this.containerEl.createDiv({ cls: "doudou-record-header doudou-editor-header" });
+    const suggestionsHost = Platform.isMobileApp
+      ? header.createDiv({ cls: "doudou-record-tag-suggestions-host" })
+      : undefined;
+    header.createEl("h2", { text: isNew ? "新建备忘录" : "编辑备忘录" });
     const actions = header.createDiv({ cls: "doudou-editor-actions" });
     const cancel = actions.createEl("button", { cls: "doudou-secondary-button", text: "取消", attr: { type: "button" } });
     const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } });
     const form = this.containerEl.createDiv({ cls: "doudou-editor" });
     const title = form.createEl("input", { cls: "doudou-title-input", attr: { type: "text", placeholder: "标题（可选）", "aria-label": "标题" } }); title.value = record?.title ?? "";
-    const content = createManualTagEditor(form, record?.content ?? "", records);
+    const content = createManualTagEditor(form, record?.content ?? "", records, suggestionsHost);
     const imageInput = form.createEl("input", { cls: "doudou-file-input", attr: { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif", multiple: "true" } });
     const images = form.createDiv({ cls: "doudou-editor-images" });
     let editableImages: EditableImageItem[] = (record?.images ?? []).map((path, index) => ({

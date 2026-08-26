@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { File as NodeFile } from "node:buffer";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -127,6 +128,7 @@ const pluginStyle = document.createElement("style");
 pluginStyle.textContent = pluginCss;
 document.head.appendChild(pluginStyle);
 const allPageSource = readFileSync(new URL("../src/ui/AllPage.ts", import.meta.url), "utf8");
+const doudouViewSource = readFileSync(new URL("../src/ui/DoudouView.ts", import.meta.url), "utf8");
 const libraryPageSource = readFileSync(new URL("../src/ui/LibraryPage.ts", import.meta.url), "utf8");
 const recordPageSource = readFileSync(new URL("../src/ui/RecordPage.ts", import.meta.url), "utf8");
 
@@ -313,6 +315,15 @@ test("mobile bottom spacer is hidden on desktop and sized only by bottom clearan
   assert.match(mobileSpacer, /pointer-events:\s*none/);
 });
 
+test("only a focused RecordPage editor hides its immediately adjacent mobile spacer", () => {
+  const selector = ".is-mobile .doudou-view .doudou-record-page > .doudou-editor:focus-within + .doudou-mobile-bottom-spacer";
+  assert.match(cssDeclarations(selector), /display:\s*none/);
+  assert.equal(pluginCss.match(/:focus-within\s*\+\s*\.doudou-mobile-bottom-spacer/g)?.length, 1);
+  assert.doesNotMatch(pluginCss, /\.doudou-timeline[^{}]*:focus-within|\.doudou-library-body[^{}]*:focus-within/);
+  assert.doesNotMatch(pluginCss, /\.doudou-record-article:focus-within/);
+  assert.match(recordPageSource, /const form = this\.containerEl\.createDiv\(\{ cls: "doudou-editor" \}\);[\s\S]*this\.containerEl\.createDiv\(\{ cls: "doudou-mobile-bottom-spacer"/);
+});
+
 test("mobile bottom clearance leaves the 0.5.4 scrolling, editor and top safe-area rules unchanged", () => {
   const recordPage = cssDeclarations(".doudou-view .doudou-record-page");
   assert.match(recordPage, /overflow-y:\s*auto/);
@@ -333,6 +344,7 @@ test("mobile bottom clearance leaves the 0.5.4 scrolling, editor and top safe-ar
   assert.match(recordHeader, /padding:\s*max\(12px, env\(safe-area-inset-top\)\) 0 10px/);
   assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view > \.doudou-main-shell > header\.doudou-header/);
   assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view \.doudou-record-header/);
+  assert.equal(createHash("sha256").update(doudouViewSource).digest("hex"), "3f1f863c09275596363514b070a55bf31d7b2ca1af17a23ea8eae08c7c8ed7a0");
 });
 
 test("navigation labels change without changing internal page or virtual-folder identity", () => {

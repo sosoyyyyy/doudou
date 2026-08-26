@@ -40,7 +40,7 @@ import {
   type PendingFile
 } from "./fileDraft";
 
-function createManualTagEditor(
+export function createManualTagEditor(
   form: HTMLElement,
   initialValue: string,
   records: readonly StoredDoudouRecord[],
@@ -120,6 +120,9 @@ function createManualTagEditor(
         cls: "doudou-tag-suggestion",
         text: `#${option.name}`,
         attr: { type: "button", role: "option" }
+      });
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
       });
       button.addEventListener("click", () => applySuggestion(option.name));
     }

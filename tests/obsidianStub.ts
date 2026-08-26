@@ -4,6 +4,11 @@ export class TFile {
 
 export class Vault {}
 
+export class Component {
+  addChild<T>(child: T): T { return child; }
+  register(_callback: () => void): void {}
+}
+
 class FakeMenuItem {
   setTitle(): this { return this; }
   setIcon(): this { return this; }

@@ -44,6 +44,7 @@ import { libraryCardContent, metaText, recordTitle, writeClipboardText } from ".
 import { findRemotelySaveStartSyncCommand } from "../src/ui/remotelySave";
 import { loadFolderOrderState, type FolderOrderLoadState } from "../src/ui/folderOrderState";
 import { ImagePreviewModal } from "../src/ui/ImagePreviewModal";
+import { createManualTagEditor } from "../src/ui/RecordPage";
 import { TagFilterModal } from "../src/ui/TagFilterModal";
 import { GifPreviewSession, isGifFile, isGifPath } from "../src/ui/gifPreview";
 import {
@@ -120,6 +121,7 @@ Object.assign(viewerDom.window.HTMLElement.prototype, {
     for (const name of Array.isArray(classes) ? classes : [classes]) this.classList.toggle(name, value);
   },
   hasClass(this: HTMLElement, name: string): boolean { return this.classList.contains(name); },
+  appendText(this: HTMLElement, value: string): void { this.append(document.createTextNode(value)); },
   setText(this: HTMLElement, value: string): void { this.textContent = value; },
   empty(this: HTMLElement): void { this.replaceChildren(); }
 });
@@ -291,7 +293,7 @@ test("mobile manual tag suggestions are born in the editor header host without c
   assert.match(recordPageSource, /createManualTagEditor\(form, record\?\.content \?\? "", records, suggestionsHost\)/);
   assert.match(recordPageSource, /const suggestions = \(suggestionsHost \?\? wrapper\)\.createDiv/);
   assert.doesNotMatch(tagEditor, /appendChild|insertBefore|replaceWith/);
-  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "4425f228b9124c3344b6dfd276c8bbeb226d76bc35e37f577eadaf5ba6effb0a");
+  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "f654e15ddd0b3aeafa36d98f1adb0d176fdc776a4df641d43a1b251cca3d407a");
   assert.equal(createHash("sha256").update(textareaSetup).digest("hex"), "1fd0b6330f7f8749d4b2e66de059138ba985affe28dbe8eca87e704337039313");
   assert.equal(createHash("sha256").update(imagePicker).digest("hex"), "9ced02a5de7431ffd22b5381a5a6fe45131700cdca7118e59bc69362d3c06892");
 });
@@ -317,8 +319,37 @@ test("desktop and mobile tag suggestions wrap into bounded vertical scroll areas
   assert.match(suggestions, /overflow-y:\s*auto/);
   assert.match(suggestions, /pointer-events:\s*auto/);
   assert.match(cssDeclarations(".doudou-tag-suggestions"), /top:\s*calc\(100% \+ 6px\)/);
-  assert.doesNotMatch(recordPageSource, /button\.addEventListener\("pointerdown"[\s\S]*applySuggestion/);
+  assert.match(recordPageSource, /button\.addEventListener\("pointerdown", \(event\) => \{\s*event\.preventDefault\(\);\s*\}\)/);
+  assert.doesNotMatch(recordPageSource, /button\.addEventListener\("pointerdown", \(event\) => \{[^}]*applySuggestion/);
   assert.match(recordPageSource, /button\.addEventListener\("click", \(\) => applySuggestion\(option\.name\)\)/);
+});
+
+test("manual tag suggestion pointerdown preserves focus and click inserts exactly once", () => {
+  const form = document.body.createDiv();
+  const textarea = createManualTagEditor(form, "开头 #", [
+    stored({ content: "#情感感悟 ", tags: ["情感感悟"] })
+  ]);
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  const button = form.querySelector<HTMLButtonElement>(".doudou-tag-suggestion");
+  assert.ok(button);
+
+  const pointerdown = new Event("pointerdown", { bubbles: true, cancelable: true });
+  button.dispatchEvent(pointerdown);
+  assert.equal(pointerdown.defaultPrevented, true);
+  assert.equal(textarea.value, "开头 #");
+
+  button.click();
+  assert.equal(textarea.value, "开头 #情感感悟 ");
+  assert.equal(textarea.selectionStart, textarea.value.length);
+  assert.equal(textarea.selectionEnd, textarea.value.length);
+  assert.equal(document.activeElement, textarea);
+  assert.equal(form.querySelector(".doudou-tag-suggestion"), null);
+
+  button.click();
+  assert.equal(textarea.value, "开头 #情感感悟 ");
+  form.remove();
 });
 
 test("desktop and mobile editor tools place image file and folder controls in one overflow-safe row", () => {

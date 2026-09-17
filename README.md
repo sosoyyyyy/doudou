@@ -1,4 +1,4 @@
-# 兜兜（doudou）0.5.3
+# 兜兜（doudou）0.5.7
 
 兜兜是一款带 AI 检索能力的图文备忘录 / 私人资料库 Obsidian 插件。Markdown 是唯一真实数据源；界面围绕“全部负责翻看、资料负责整理和查找、兜负责 AI 检索”组织。
 
@@ -9,9 +9,11 @@
 - 顶部 `＋` 新建备忘录，支持可选标题、正文、多图和所属文件夹。
 - 新建和编辑支持自定义“添加图片”按钮，也可在正文中直接粘贴剪贴板图片；已有图片和新增图片统一进入保存前预览区并支持自定义排序。
 - 支持 PDF、Office、压缩包及其他普通文件附件；单文件上限 50 MB，与图片共用 `兜兜/assets/YYYY/MM/`，不解析或上传文件内容。
-- 完整备忘录按标题、信息、正文、图片、文件附件的顺序阅读；图片使用统一三列方形缩略图，并按保存顺序显示全部图片。
+- 完整备忘录按标题、信息、正文、图片、文件附件的顺序阅读；单图按原始比例预览，双图两列，三张及以上使用三列缩略图，并按保存顺序显示全部图片。
 - 点击完整页图片查看完整原图；桌面端支持原图复制、下载和在 Obsidian 中打开，移动端优先使用系统文件分享并提供下载 fallback。
-- 正文中的 `#标签` 会原样保留，并在保存时提取到 `tags`；中文、英文、数字和混合标签均受支持。
+- 正文中的 `#标签` 以普通半角空格确认，原文保留，保存时去重提取到 `tags`；中文、英文、数字和混合标签均受支持。
+- 编辑时提供已有手动标签建议，支持多行排列与滚动；手机端按下插入、抬手后收起面板并恢复正文焦点，避免点击穿透。
+- 资料页支持手动标签筛选，多选标签按 AND 匹配，并与当前文件夹及搜索条件共同生效；AI 隐藏标签不会出现在建议或筛选界面。
 - 点击任意卡片或 AI 来源进入同一套完整备忘录页面，默认阅读、图片完整显示，并可编辑、复制全文或删除。
 - 顶部“兜”打开临时 AI 检索工具，回答只基于真实记录，不持久化问答。
 - 顶部同步按钮继续调用 Remotely Save 的“开始同步”命令。
@@ -53,7 +55,7 @@ files: ["兜兜/assets/2026/08/example-id-file-01-报价表.xlsx"]
 7cm 亚克力立牌还是准备卖 13.9。
 ```
 
-读取时优先使用 `folder`，缺失时兼容旧 `category`。早期 `兜兜/YYYY/MM/*.md` 继续读取且不会在启动时批量迁移；只有用户真正编辑保存时才迁移到指定文件夹。修改文件夹只移动 Markdown，图片路径保持不变。
+读取时优先使用 `folder`，缺失时兼容旧 `category`。早期 `兜兜/YYYY/MM/*.md` 继续读取且不会在启动时批量迁移；只有用户真正编辑保存时才迁移到指定文件夹。修改文件夹只移动 Markdown，图片与普通附件路径保持不变。
 
 ## 项目结构
 
@@ -67,7 +69,8 @@ src/services/RecordService.ts   Markdown 与附件事务协调
 src/services/recordSearch.ts    title/content/folder/tags/ai_tags 搜索与 AI 候选评分
 src/ai/                         DeepSeek、hidden tags 与问兜兜
 src/ui/AllPage.ts               手记式全部时间流
-src/ui/LibraryPage.ts           文件夹首页、文件夹内容和搜索
+src/ui/LibraryPage.ts           文件夹首页、文件夹内容、搜索与标签筛选
+src/ui/TagFilterModal.ts        手动标签 AND 筛选与匹配数量
 src/ui/RecordPage.ts            完整阅读、新建和编辑页面
 src/ui/ToolModals.ts            问兜兜与文件夹管理临时工具
 styles.css                      移动端优先的蓝白界面
@@ -92,8 +95,8 @@ git diff --check
 3. 输入 `https://github.com/sosoyyyyy/doudou`。
 4. 安装后在第三方插件列表中启用“兜兜”。
 
-Release 必须包含 `main.js`、`manifest.json`、`styles.css`。正式版 `0.5.3` 将文件夹顺序保存在 Vault API 可稳定访问的 `兜兜/doudou.json`，修复“调整顺序”弹窗无法加载资料文件夹的问题。
+当前正式版为 [0.5.7](https://github.com/sosoyyyyy/doudou/releases/tag/0.5.7)，基于已通过真机测试的 `0.5.7-beta.10` 发布，功能逻辑保持一致。Release 提供 BRAT 所需的 `main.js`、`manifest.json`、`styles.css`，可通过 BRAT 安装或更新。历史正式版与 beta Release 均保留。
 
 ## 隐私与 AI
 
-Markdown 和图片只保存在用户自己的 Vault。DeepSeek API Key 仅保存在兜兜自己的插件设置中，不会上传到 GitHub。`ai_tags` 只参与本地搜索和问兜兜检索，不在普通 UI 中展示；问答不会写入资料。
+Markdown、图片和普通附件保存在用户自己的 Vault。DeepSeek API Key 仅保存在兜兜自己的插件设置中，不会上传到 GitHub。`ai_tags` 只参与本地搜索和问兜兜检索，不在普通 UI 中展示；问答不会写入资料。

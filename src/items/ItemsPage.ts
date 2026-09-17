@@ -5,6 +5,7 @@ import { blankItem, itemMetrics, matchesItem, type Item } from "./model";
 export class ItemsPage extends Component {
   private body!: HTMLElement;
   private listEl!: HTMLElement;
+  private countEl!: HTMLElement;
   private query = "";
   private screen: "list" | "detail" | "edit" = "list";
   private selected?: string;
@@ -30,12 +31,12 @@ export class ItemsPage extends Component {
   home(): void {
     this.screen = "list"; this.selected = undefined;
     const body = this.reset(); body.addClass("doudou-items-home");
-    body.createEl("h2", { text: "小物库" });
+    const heading = body.createDiv({ cls: "doudou-items-heading" });
+    heading.createEl("h2", { text: "小物库" });
+    this.countEl = heading.createSpan({ cls: "doudou-items-count", attr: { "aria-live": "polite" } });
     const toolbar = body.createDiv({ cls: "doudou-items-toolbar" });
     const search = toolbar.createEl("input", { attr: { type: "search", placeholder: "搜索名称或备注", "aria-label": "搜索小物库" } }); search.value = this.query;
     search.addEventListener("input", () => { this.query = search.value; void this.refresh(); });
-    const add = this.button(toolbar, "+ 新增", () => this.create());
-    add.addClass("doudou-items-add"); add.setAttribute("aria-label", "新增物品");
     this.listEl = body.createDiv({ cls: "doudou-items-list", attr: { "aria-live": "polite" } }); void this.refresh();
   }
   create(): void { if (this.screen === "edit") return; this.edit(blankItem()); }
@@ -50,6 +51,7 @@ export class ItemsPage extends Component {
         if (item) this.detail(item); else this.home(); return;
       }
       this.listEl.empty();
+      this.countEl.setText(`${items.length} 件`);
       const matches = items.filter(item => matchesItem(item, this.query));
       if (!matches.length) this.listEl.createEl("p", { cls: "doudou-items-empty", text: this.query ? "没有找到，换个词试试。" : "还空着呢。先收进一件喜欢的物品吧。" });
       for (const item of matches) {
@@ -78,10 +80,10 @@ export class ItemsPage extends Component {
     const metrics = itemMetrics(item);
     if (metrics.days !== undefined) {
       const days = info.createSpan({ cls: "doudou-item-metric" });
-      days.appendText("拥有 "); days.createEl("b", { text: String(metrics.days) }); days.appendText(" 天");
+      days.appendText("已经陪你 "); days.createEl("b", { text: String(metrics.days) }); days.appendText(" 天");
     }
     if (metrics.daily !== undefined) {
-      const daily = info.createSpan({ cls: "doudou-item-metric" });
+      const daily = info.createSpan({ cls: "doudou-item-metric doudou-item-daily" });
       daily.createEl("b", { text: `¥${metrics.daily.toFixed(2)}` }); daily.appendText(" / 天");
     }
     if (item.status === "retired" || metrics.days === undefined) {
@@ -91,7 +93,7 @@ export class ItemsPage extends Component {
   private summary(item: Item): string {
     if (item.kind === "stock") return `库存 · ${item.quantity} 件`;
     const metrics = itemMetrics(item);
-    return [item.status === "active" ? "使用中" : "已退役", metrics.days === undefined ? undefined : `拥有 ${metrics.days} 天`, metrics.daily === undefined ? undefined : `¥${metrics.daily.toFixed(2)}/天`].filter(Boolean).join(" · ");
+    return [item.status === "active" ? "使用中" : "已退役", metrics.days === undefined ? undefined : `已经陪你 ${metrics.days} 天`, metrics.daily === undefined ? undefined : `¥${metrics.daily.toFixed(2)}/天`].filter(Boolean).join(" · ");
   }
   private stockControls(parent: HTMLElement, item: Item): void {
     const controls = parent.createDiv({ cls: "doudou-item-stepper", attr: { role: "group", "aria-label": `${item.name} 数量调节` } });
@@ -129,9 +131,16 @@ export class ItemsPage extends Component {
   }
   private edit(original: Item): void {
     this.screen = "edit"; const body = this.reset();
+    body.addClass("doudou-items-edit-shell");
     const draft = { ...original, photos: [...original.photos] }; const pending: File[] = [];
-    body.createEl("h2", { text: original.revision ? "编辑物品" : "收进小物库" });
-    const form = body.createEl("form");
+    const header = body.createDiv({ cls: "doudou-record-header doudou-editor-header doudou-items-editor-header" });
+    header.createEl("h2", { text: original.revision ? "编辑物品" : "收进小物库" });
+    const actions = header.createDiv({ cls: "doudou-editor-actions" });
+    const cancel = this.button(actions, "取消", () => original.revision ? this.detail(original) : this.home());
+    cancel.addClass("doudou-secondary-button");
+    const save = actions.createEl("button", { cls: "doudou-primary-button", text: "保存", attr: { type: "button" } });
+    const form = body.createEl("form", { cls: "doudou-items-editor-form" });
+    save.addEventListener("click", () => form.requestSubmit());
     const field = (title: string, type: string, value: string): HTMLInputElement => {
       const label = form.createEl("label", { text: title }); const input = label.createEl("input", { attr: { type } }); input.value = value; return input;
     };
@@ -158,13 +167,10 @@ export class ItemsPage extends Component {
     }; renderPhotos();
     const picker = field("添加照片", "file", ""); picker.accept = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/avif"; picker.multiple = true;
     picker.addEventListener("change", () => { pending.push(...Array.from(picker.files ?? [])); picker.value = ""; renderPhotos(); });
-    const actions = form.createDiv({ cls: "doudou-items-actions" });
-    const save = actions.createEl("button", { text: "保存", attr: { type: "submit" } });
-    this.button(actions, "取消", () => original.revision ? this.detail(original) : this.home());
     form.addEventListener("submit", event => {
-      event.preventDefault(); if (this.busy) return; this.busy = true; save.disabled = true;
+      event.preventDefault(); if (this.busy) return; this.busy = true; save.disabled = true; cancel.disabled = true;
       const next: Item = { ...draft, kind: kind.value as Item["kind"], name: name.value, notes: notes.value, purchased: purchased.value || undefined, price: price.value === "" ? undefined : Number(price.value), status: status.value as Item["status"], retired: status.value === "retired" ? retired.value || undefined : undefined, quantity: quantity.value === "" ? 0 : Number(quantity.value) };
-      void this.service.save(next, pending).then(item => this.detail(item)).catch(error => new Notice(error instanceof Error ? error.message : "保存失败，草稿已保留")).finally(() => { this.busy = false; save.disabled = false; });
+      void this.service.save(next, pending).then(item => this.detail(item)).catch(error => new Notice(error instanceof Error ? error.message : "保存失败，草稿已保留")).finally(() => { this.busy = false; save.disabled = false; cancel.disabled = false; });
     });
   }
 }

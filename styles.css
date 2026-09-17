@@ -248,10 +248,9 @@
 
 /* Compact home hierarchy; controls look quiet while retaining touch-sized targets. */
 .doudou-view .doudou-items-body.doudou-items-home { padding-top: 14px; }
-.doudou-view .doudou-items-home h2 { margin-top: 0; margin-bottom: 10px; font-size: 20px; line-height: 1.4; }
+.doudou-view .doudou-items-home h2 { margin-top: 0; margin-bottom: 0; font-size: 20px; line-height: 1.4; }
 .doudou-view .doudou-items-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; }
 .doudou-view .doudou-items-toolbar input { flex: 1; width: 0; min-width: 0; margin: 0; padding: 9px 12px; font-size: 14px; }
-.doudou-view .doudou-items-toolbar button.doudou-items-add { flex: 0 0 auto; padding: 8px 12px; white-space: nowrap; font-size: 14px; color: var(--doudou-blue-strong); border-color: transparent; background: var(--doudou-blue-soft); }
 .doudou-view .doudou-item-copy { display: block; flex: 1; min-width: 0; }
 .doudou-view .doudou-item-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; line-height: 1.5; }
 .doudou-view .doudou-item-info { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; min-width: 0; margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--doudou-muted); }
@@ -265,3 +264,18 @@
 .doudou-view .doudou-item-stepper button:active { color: var(--doudou-blue-strong); background: var(--doudou-blue-soft); }
 .doudou-view .doudou-item-stepper button:disabled { opacity: .3; }
 .doudou-view .doudou-items-page button:focus-visible { outline: 2px solid var(--doudou-blue); outline-offset: -2px; }
+
+.doudou-view .doudou-items-heading { display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px; }
+.doudou-view .doudou-items-count { color: var(--doudou-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
+.doudou-view .doudou-item-info { column-gap: 12px; row-gap: 3px; margin-top: 5px; }
+.doudou-view .doudou-item-daily, .doudou-view .doudou-item-daily b { color: var(--doudou-muted); font-weight: 400; }
+/* Keep the editor toolbar outside the scrolling form, inside the existing viewport shell. */
+.doudou-view .doudou-items-body.doudou-items-edit-shell { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; background: var(--doudou-bg); }
+.doudou-view .doudou-items-edit-shell > .doudou-items-editor-header { position: relative; top: auto; flex: 0 0 auto; width: min(calc(100% - 32px), 780px); margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 0 10px; overflow: visible; }
+.doudou-view .doudou-items-editor-header h2 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; line-height: 1.4; }
+.doudou-view .doudou-items-editor-header button.doudou-primary-button, .doudou-view .doudou-items-editor-header button.doudou-secondary-button { min-height: 44px; padding: 7px 12px; white-space: nowrap; line-height: 1.4; }
+.doudou-view .doudou-items-editor-header button.doudou-primary-button { color: white; background: var(--doudou-blue); border: 1px solid var(--doudou-blue); }
+.doudou-view .doudou-items-editor-header button.doudou-secondary-button { color: var(--doudou-blue-strong); background: var(--doudou-surface); border: 1px solid var(--doudou-border); }
+.doudou-view .doudou-items-edit-shell > form.doudou-items-editor-form { display: block; flex: 1 1 auto; width: 100%; max-width: none; height: auto; min-height: 0; min-width: 0; margin: 0; padding: 0 clamp(16px, 4vw, 28px) max(30px, var(--doudou-mobile-bottom-clearance, env(safe-area-inset-bottom))); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; line-height: 1.5; white-space: normal; }
+.doudou-view .doudou-items-editor-form > * { max-width: 780px; margin-inline: auto; }
+.is-mobile .doudou-view .doudou-items-editor-form:focus-within { padding-bottom: max(24px, env(safe-area-inset-bottom)); }

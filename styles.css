@@ -271,9 +271,9 @@
 .doudou-view .doudou-item-daily, .doudou-view .doudou-item-daily b { color: var(--doudou-muted); font-weight: 400; }
 /* Keep the editor toolbar outside the scrolling form, inside the existing viewport shell. */
 .doudou-view .doudou-items-body.doudou-items-edit-shell { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; background: var(--doudou-bg); }
-.doudou-view .doudou-items-edit-shell > .doudou-items-editor-header { position: relative; top: auto; flex: 0 0 auto; width: min(calc(100% - 32px), 780px); margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 0 10px; overflow: visible; }
-.doudou-view .doudou-items-editor-header h2 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; line-height: 1.4; }
-.doudou-view .doudou-items-editor-header button.doudou-primary-button, .doudou-view .doudou-items-editor-header button.doudou-secondary-button { min-height: 44px; padding: 7px 12px; white-space: nowrap; line-height: 1.4; }
+.doudou-view .doudou-items-edit-shell > .doudou-items-editor-header { position: relative; top: auto; flex: 0 0 auto; width: min(calc(100% - 32px), 780px); margin: 0 auto; padding: 3px 0 5px; overflow: visible; }
+.doudou-view .doudou-items-editor-header h2 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; line-height: 1.4; }
+.doudou-view .doudou-items-editor-header button.doudou-primary-button, .doudou-view .doudou-items-editor-header button.doudou-secondary-button { min-height: 44px; padding: 5px 10px; font-size: 14px; white-space: nowrap; line-height: 1.4; }
 .doudou-view .doudou-items-editor-header button.doudou-primary-button { color: white; background: var(--doudou-blue); border: 1px solid var(--doudou-blue); }
 .doudou-view .doudou-items-editor-header button.doudou-secondary-button { color: var(--doudou-blue-strong); background: var(--doudou-surface); border: 1px solid var(--doudou-border); }
 .doudou-view .doudou-items-edit-shell > form.doudou-items-editor-form { display: block; flex: 1 1 auto; width: 100%; max-width: none; height: auto; min-height: 0; min-width: 0; margin: 0; padding: 0 clamp(16px, 4vw, 28px) max(30px, var(--doudou-mobile-bottom-clearance, env(safe-area-inset-bottom))); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; line-height: 1.5; white-space: normal; }
@@ -299,6 +299,13 @@
 .doudou-view .doudou-item-stepper-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-variant-numeric: tabular-nums; }
 .doudou-view .doudou-items-list > .doudou-items-empty { grid-column: 1 / -1; }
 .doudou-view .doudou-item-purchase-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-.doudou-view .doudou-items-editor-form label { min-width: 0; margin-top: 10px; margin-bottom: 10px; font-size: 13px; }
+.doudou-view .doudou-items-editor-form label { min-width: 0; margin-top: 8px; margin-bottom: 8px; font-size: 13px; }
 .doudou-view .doudou-items-editor-form input, .doudou-view .doudou-items-editor-form select, .doudou-view .doudou-items-editor-form textarea { margin-top: 4px; padding: 8px 10px; font-size: 16px; line-height: 1.35; }
 .doudou-view .doudou-items-editor-form textarea { min-height: 82px; }
+
+/* The global header above this editor already owns the top safe-area inset. */
+.doudou-view .doudou-item-segments { display: flex; align-items: center; gap: 3px; width: 100%; min-width: 0; margin-top: 6px; margin-bottom: 8px; padding: 2px; overflow: hidden; border-radius: 10px; background: var(--doudou-blue-soft); line-height: 1.4; white-space: normal; }
+.doudou-view .doudou-item-segments button { display: inline-flex; flex: 1 1 0; align-items: center; justify-content: center; width: auto; min-width: 0; height: 44px; min-height: 44px; max-height: none; margin: 0; padding: 5px 8px; overflow: hidden; border: 0; border-radius: 8px; appearance: none; box-shadow: none; background: transparent; color: var(--doudou-muted); font-size: 14px; line-height: 1.4; white-space: nowrap; }
+.doudou-view .doudou-item-segments button[aria-pressed="true"] { background: var(--doudou-surface); color: var(--doudou-blue-strong); font-weight: 600; }
+.doudou-view .doudou-items-editor-form button.doudou-item-add-photo { display: inline-flex; width: auto; min-height: 44px; margin: 8px 0; padding: 7px 12px; border: 1px dashed var(--doudou-border); border-radius: 10px; color: var(--doudou-blue-strong); font-size: 14px; background: var(--doudou-surface); }
+.doudou-view .doudou-items-editor-form .doudou-items-photos:empty { display: none; }

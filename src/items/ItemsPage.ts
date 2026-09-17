@@ -166,8 +166,21 @@ export class ItemsPage extends Component {
     const field = (title: string, type: string, value: string): HTMLInputElement => {
       const label = form.createEl("label", { text: title }); const input = label.createEl("input", { attr: { type } }); input.value = value; return input;
     };
-    const kindLabel = form.createEl("label", { text: "物品类型" }); const kind = kindLabel.createEl("select");
-    kind.createEl("option", { text: "单件物品", value: "single" }); kind.createEl("option", { text: "库存物品", value: "stock" }); kind.value = draft.kind;
+    const kind = { value: draft.kind };
+    const status = { value: original.revision ? draft.status : "active" as Item["status"] };
+    const segment = <T extends string>(label: string, options: readonly (readonly [T, string])[], current: T, select: (value: T) => void): HTMLElement => {
+      const group = form.createDiv({ cls: "doudou-item-segments", attr: { role: "group", "aria-label": label } });
+      for (const [value, text] of options) {
+        const button = group.createEl("button", { text, attr: { type: "button", "aria-pressed": String(value === current) } });
+        button.addEventListener("click", () => {
+          if (this.busy) return;
+          for (const entry of Array.from(group.querySelectorAll("button"))) entry.setAttribute("aria-pressed", String(entry === button));
+          select(value);
+        });
+      }
+      return group;
+    };
+    segment("物品类型", [["single", "单件"], ["stock", "库存"]] as const, kind.value, value => { kind.value = value; updateVisibility(); });
     const name = field("名称（必填）", "text", draft.name); name.required = true;
     const purchased = field("购买日期", "text", draft.purchased ?? "");
     purchased.inputMode = "numeric"; purchased.placeholder = "例如 20260620"; purchased.maxLength = 10;
@@ -177,17 +190,17 @@ export class ItemsPage extends Component {
     price.inputMode = "decimal";
     const purchaseRow = form.createDiv({ cls: "doudou-item-purchase-row" });
     purchaseRow.append(purchased.parentElement!, price.parentElement!);
-    const statusLabel = form.createEl("label", { text: "状态" }); const status = statusLabel.createEl("select");
-    status.createEl("option", { text: "使用中", value: "active" }); status.createEl("option", { text: "已退役", value: "retired" }); status.value = draft.status;
+    const statusGroup = segment("物品状态", [["active", "使用中"], ["retired", "已退役"]] as const, status.value, value => { status.value = value; updateVisibility(); });
     const retired = field("退役日期", "date", draft.retired ?? "");
     const quantity = field("数量", "number", String(draft.quantity)); quantity.min = "0"; quantity.step = "1";
     const updateVisibility = (): void => {
       purchaseRow.hidden = kind.value !== "single";
       if (kind.value !== "single") purchased.setCustomValidity("");
-      [purchased, price, status].forEach(input => { input.parentElement!.hidden = kind.value !== "single"; input.disabled = kind.value !== "single"; });
-      retired.parentElement!.hidden = kind.value !== "single" || status.value !== "retired"; retired.disabled = retired.parentElement!.hidden;
+      [purchased, price].forEach(input => { input.parentElement!.hidden = kind.value !== "single"; input.disabled = kind.value !== "single"; });
+      statusGroup.hidden = !original.revision || kind.value !== "single";
+      retired.parentElement!.hidden = statusGroup.hidden || status.value !== "retired"; retired.disabled = retired.parentElement!.hidden;
       quantity.parentElement!.hidden = kind.value !== "stock"; quantity.disabled = kind.value !== "stock";
-    }; kind.addEventListener("change", updateVisibility); status.addEventListener("change", updateVisibility); updateVisibility();
+    }; updateVisibility();
     const notes = form.createEl("label", { text: "备注" }).createEl("textarea"); notes.value = draft.notes; notes.rows = 3;
     const photos = form.createDiv({ cls: "doudou-items-photos" });
     const renderPhotos = (): void => {
@@ -195,7 +208,12 @@ export class ItemsPage extends Component {
       draft.photos.forEach(path => { const tile = photos.createDiv(); this.photo(tile, this.service.resource(path), draft.name); this.button(tile, "移除照片", () => { draft.photos = draft.photos.filter(p => p !== path); renderPhotos(); }); });
       pending.forEach((file, index) => { const tile = photos.createDiv(); const url = URL.createObjectURL(file); this.urls.push(url); this.photo(tile, url, file.name); this.button(tile, "移除照片", () => { pending.splice(index, 1); renderPhotos(); }); });
     }; renderPhotos();
-    const picker = field("添加照片", "file", ""); picker.accept = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/avif"; picker.multiple = true;
+    const picker = form.createEl("input", { attr: { type: "file", hidden: "", "aria-label": "选择照片" } });
+    picker.accept = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/avif"; picker.multiple = true;
+    const photoActions = form.createDiv({ cls: "doudou-item-photo-actions" });
+    const addPhoto = photoActions.createEl("button", { cls: "doudou-item-add-photo", text: "＋ 添加照片", attr: { type: "button" } });
+    // Keep the native picker call in the trusted click event for mobile browsers.
+    addPhoto.addEventListener("click", () => { if (!this.busy) picker.click(); });
     picker.addEventListener("change", () => { pending.push(...Array.from(picker.files ?? [])); picker.value = ""; renderPhotos(); });
     form.addEventListener("submit", event => {
       event.preventDefault(); if (this.busy) return;

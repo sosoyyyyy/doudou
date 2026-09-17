@@ -1854,7 +1854,7 @@ test("items editor saves a stock item, searches notes and cancels without writin
   assert.ok(save); assert.equal(form.contains(save), false);
   save.click(); await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal((await service.list()).length, 0, "top save must retain native required-field validation");
-  const kind = form.querySelector("select")!; kind.value = "stock"; kind.dispatchEvent(new Event("change"));
+  (form.querySelector('[aria-label="物品类型"] button:last-child') as HTMLButtonElement).click();
   (form.querySelector('input[type="text"]') as HTMLInputElement).value = "测试电池";
   (form.querySelector("textarea") as HTMLTextAreaElement).value = "抽屉里的备用";
   save.click();
@@ -1929,4 +1929,42 @@ test("item filter buttons compose with search and survive opening and returning"
   assert.equal(root.querySelector('.doudou-items-filters [aria-pressed="true"]')?.textContent, "库存");
   assert.equal(root.querySelector('.doudou-items-count')?.textContent, "3 件");
   page.onunload(); root.remove();
+});
+
+test("item editor segments show only relevant fields and preserve retirement editing", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); page.create();
+  assert.equal(root.querySelector("select"), null);
+  assert.equal(root.querySelector('[aria-label="物品类型"] [aria-pressed="true"]')?.textContent, "单件");
+  assert.equal((root.querySelector('[aria-label="物品状态"]') as HTMLElement).hidden, true);
+  (root.querySelector('input[type="text"]') as HTMLInputElement).value = "测试物品";
+  (root.querySelector('.doudou-primary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal((await service.list())[0].status, "active");
+  ([...root.querySelectorAll("button")].find(b => b.textContent === "编辑") as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
+  const statuses = root.querySelector('[aria-label="物品状态"]') as HTMLElement;
+  assert.equal(statuses.hidden, false);
+  const date = root.querySelector('input[type="date"]') as HTMLInputElement;
+  assert.equal(date.disabled, true);
+  (statuses.querySelector('button:last-child') as HTMLButtonElement).click(); assert.equal(date.disabled, false); date.value = "2026-09-18";
+  (root.querySelector('[aria-label="物品类型"] button:last-child') as HTMLButtonElement).click();
+  assert.equal(statuses.hidden, true); assert.equal(date.disabled, true);
+  assert.equal((root.querySelector('.doudou-item-purchase-row') as HTMLElement).hidden, true);
+  (root.querySelector('[aria-label="物品类型"] button:first-child') as HTMLButtonElement).click();
+  assert.equal(statuses.hidden, false); assert.equal(date.value, "2026-09-18");
+  (root.querySelector('.doudou-primary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal((await service.list())[0].status, "retired"); assert.equal((await service.list())[0].retired, "2026-09-18");
+  page.onunload(); root.remove();
+});
+
+test("custom item photo button opens native picker synchronously and cancellation keeps pending files out of Vault", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); page.create();
+  const picker = root.querySelector('input[type="file"]') as HTMLInputElement;
+  assert.equal(picker.hidden, true);
+  let clicks = 0; picker.addEventListener("click", event => { event.preventDefault(); clicks++; });
+  (root.querySelector('.doudou-item-add-photo') as HTMLButtonElement).click(); assert.equal(clicks, 1);
+  Object.defineProperty(picker, "files", { value: [new File(["photo"], "example.png", { type: "image/png" })] }); picker.dispatchEvent(new Event("change"));
+  assert.equal(root.querySelectorAll('.doudou-items-photos img').length, 1); assert.equal(vault.files.size, 0);
+  (root.querySelector('.doudou-secondary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(vault.files.size, 0); page.onunload(); root.remove();
 });

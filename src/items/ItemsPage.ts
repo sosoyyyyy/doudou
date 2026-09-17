@@ -14,9 +14,10 @@ export class ItemsPage extends Component {
   private urls: string[] = [];
   private generation = 0;
   private busy = false;
+  private searchTimer?: ReturnType<typeof setTimeout>;
   constructor(private readonly container: HTMLElement, private readonly service: ItemService) { super(); }
   override onload(): void { this.container.addClass("doudou-items-page"); this.home(); }
-  override onunload(): void { this.releaseUrls(); this.generation++; }
+  override onunload(): void { this.releaseUrls(); this.generation++; if (this.searchTimer) clearTimeout(this.searchTimer); }
   private releaseUrls(): void { this.urls.forEach(url => URL.revokeObjectURL(url)); this.urls = []; }
   private reset(): HTMLElement {
     this.releaseUrls(); this.generation++; this.container.empty();
@@ -38,7 +39,11 @@ export class ItemsPage extends Component {
     this.countEl = heading.createSpan({ cls: "doudou-items-count", attr: { "aria-live": "polite" } });
     const toolbar = body.createDiv({ cls: "doudou-items-toolbar" });
     const search = toolbar.createEl("input", { attr: { type: "search", placeholder: "搜索名称或备注", "aria-label": "搜索小物库" } }); search.value = this.query;
-    search.addEventListener("input", () => { this.query = search.value; void this.refresh(); });
+    search.addEventListener("input", () => {
+      this.query = search.value;
+      if (this.searchTimer) clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => { this.searchTimer = undefined; void this.refresh(); }, 250);
+    });
     const filters = body.createDiv({ cls: "doudou-items-filters", attr: { role: "group", "aria-label": "物品筛选" } });
     for (const [value, label] of [["all", "全部"], ["active", "使用中"], ["stock", "库存"], ["restock", "待补货"], ["history", "历史"]] as const) {
       const button = this.button(filters, label, async () => {

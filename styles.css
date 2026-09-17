@@ -301,8 +301,8 @@
 .theme-dark .doudou-view .doudou-item-badge-restock { color: #f4d088; background: #594421; }
 .doudou-view .doudou-item-date { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--doudou-muted); font-size: 11px; line-height: 1.4; }
 .doudou-view .doudou-item-side { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; justify-content: space-between; align-self: stretch; min-width: 54px; }
-.doudou-view .doudou-item-side .doudou-item-stepper { margin-right: -4px; }
-.doudou-view .doudou-item-stepper-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-variant-numeric: tabular-nums; }
+.doudou-view .doudou-item-side .doudou-item-stepper { margin-right: 0; overflow: visible; }
+.doudou-view .doudou-item-stepper-value { min-width: 2ch; width: auto; overflow: visible; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
 .doudou-view .doudou-items-list > .doudou-items-empty { grid-column: 1 / -1; }
 .doudou-view .doudou-item-purchase-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .doudou-view .doudou-items-editor-form label { min-width: 0; margin-top: 8px; margin-bottom: 8px; font-size: 13px; }

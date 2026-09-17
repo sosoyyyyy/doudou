@@ -4,6 +4,7 @@ import { ItemRepository } from "../src/items/ItemRepository";
 import { ItemService } from "../src/items/ItemService";
 import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore } from "../src/items/model";
 import { ItemsPage } from "../src/items/ItemsPage";
+import { matchesItemFilter, normalizeItemDateInput, isValidItemDateInput } from "../src/items/itemPresentation";
 import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -1878,5 +1879,54 @@ test("items editor saves a stock item, searches notes and cancels without writin
   assert.equal((root.querySelector('button[aria-label="测试电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
   page.create(); const cancel = [...root.querySelectorAll("button")].find(b => b.textContent === "取消")!; cancel.click();
   await new Promise(resolve => setTimeout(resolve, 20)); assert.equal((await service.list()).length, 1);
+  page.onunload(); root.remove();
+});
+
+test("item filters distinguish single status from stock without changing data", () => {
+  const item = { ...blankItem(), name: "测试" };
+  const retired = { ...item, status: "retired" as const };
+  const stock = { ...retired, kind: "stock" as const };
+  assert.equal(matchesItemFilter(item, "active"), true);
+  assert.equal(matchesItemFilter(retired, "retired"), true);
+  assert.equal(matchesItemFilter(stock, "retired"), false);
+  assert.equal(matchesItemFilter(stock, "active"), false);
+  assert.equal(matchesItemFilter(stock, "stock"), true);
+  assert.equal(matchesItemFilter(retired, "all"), true);
+});
+
+test("numeric purchase dates normalize but never silently repair invalid calendar dates", () => {
+  assert.equal(normalizeItemDateInput(" 20260620 "), "2026-06-20");
+  assert.equal(normalizeItemDateInput("2026-06-20"), "2026-06-20");
+  for (const date of ["", "20240229", "2026-06-20"]) assert.equal(isValidItemDateInput(date), true);
+  for (const date of ["20260229", "20260431", "20261301", "20260020", "202606", "2026/06/20", "abc"]) assert.equal(isValidItemDateInput(date), false);
+});
+
+test("purchase date blur and top save keep ISO storage and reject invalid input", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const root = document.createElement("div"); document.body.append(root);
+  const page = new ItemsPage(root, service); page.onload(); page.create();
+  (root.querySelector('input[type="text"]') as HTMLInputElement).value = "杯子";
+  const date = root.querySelector('input[inputmode="numeric"]') as HTMLInputElement;
+  const save = root.querySelector('.doudou-primary-button') as HTMLButtonElement;
+  date.value = "20260229"; date.dispatchEvent(new Event("blur"));
+  assert.equal(date.value, "2026-02-29"); save.click();
+  await new Promise(resolve => setTimeout(resolve, 10)); assert.equal((await service.list()).length, 0);
+  date.value = "20240229"; date.dispatchEvent(new Event("input")); save.click();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal((await service.list())[0].purchased, "2024-02-29");
+  page.onunload(); root.remove();
+});
+
+test("item filter buttons compose with search and survive opening and returning", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  for (const fields of [{ name: "相机", notes: "旅行" }, { name: "旧相机", notes: "旅行", status: "retired" as const }, { name: "电池", notes: "旅行", kind: "stock" as const }]) await service.save({ ...blankItem(), ...fields });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); await page.refresh();
+  const search = root.querySelector('input[type="search"]') as HTMLInputElement; search.value = "旅行"; search.dispatchEvent(new Event("input")); await page.refresh();
+  const stock = [...root.querySelectorAll('.doudou-items-filters button')].find(b => b.textContent === "库存") as HTMLButtonElement; stock.click();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(root.querySelectorAll('.doudou-item-card').length, 1); assert.equal(root.querySelector('.doudou-item-name')?.textContent, "电池");
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10)); page.home(); await page.refresh();
+  assert.equal(root.querySelector('.doudou-items-filters [aria-pressed="true"]')?.textContent, "库存");
+  assert.equal(root.querySelector('.doudou-items-count')?.textContent, "3 件");
   page.onunload(); root.remove();
 });

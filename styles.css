@@ -227,9 +227,9 @@
 .doudou-view .doudou-items-page textarea { resize: vertical; }
 .doudou-view .doudou-items-page label { display: block; margin: 16px 0; color: var(--doudou-muted); font-size: 14px; }
 .doudou-view .doudou-items-page [hidden] { display: none !important; }
-.doudou-view .doudou-items-list { display: grid; gap: 8px; }
-.doudou-view .doudou-item-card { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; min-height: 78px; margin: 0; padding: 8px 10px; overflow: hidden; line-height: 1.4; white-space: normal; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
-.doudou-view .doudou-items-page button.doudou-item-open { flex: 1; justify-content: flex-start; min-width: 0; min-height: 60px; border: 0; border-radius: 0; padding: 0; text-align: left; gap: 10px; background: transparent; }
+.doudou-view .doudou-items-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.doudou-view .doudou-item-card { display: flex; flex-direction: column; align-items: stretch; gap: 0; width: 100%; height: 180px; min-width: 0; min-height: 180px; margin: 0; padding: 10px 10px 0; overflow: hidden; line-height: 1.4; white-space: normal; border: 1px solid var(--doudou-border); border-radius: 14px; background: var(--doudou-surface); }
+.doudou-view .doudou-items-page button.doudou-item-open { display: flex; flex-direction: column; flex: 1 1 auto; align-items: stretch; justify-content: flex-start; width: 100%; min-width: 0; min-height: 0; height: auto; border: 0; border-radius: 0; padding: 0; text-align: left; gap: 8px; background: transparent; overflow: hidden; }
 .doudou-view .doudou-item-open img { display: block; width: 48px; height: 48px; margin: 0; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
 .doudou-view .doudou-item-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
 .doudou-view .doudou-items-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -251,10 +251,10 @@
 .doudou-view .doudou-items-home h2 { margin-top: 0; margin-bottom: 0; font-size: 20px; line-height: 1.4; }
 .doudou-view .doudou-items-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; }
 .doudou-view .doudou-items-toolbar input { flex: 1; width: 0; min-width: 0; margin: 0; padding: 9px 12px; font-size: 14px; }
-.doudou-view .doudou-item-copy { display: block; flex: 1; min-width: 0; }
+.doudou-view .doudou-item-copy { display: block; min-width: 0; width: 100%; }
 .doudou-view .doudou-item-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; line-height: 1.5; }
 .doudou-view .doudou-item-info { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; min-width: 0; margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--doudou-muted); }
-.doudou-view .doudou-item-metric { white-space: nowrap; }
+.doudou-view .doudou-item-metric { display: block; flex-basis: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doudou-view .doudou-item-metric b { color: var(--text-normal); font-weight: 600; font-variant-numeric: tabular-nums; }
 .doudou-view .doudou-item-info:has(.doudou-item-quantity) { column-gap: 4px; }
 .doudou-view .doudou-item-info .doudou-item-quantity { color: var(--text-normal); font-size: 18px; font-weight: 650; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -279,3 +279,26 @@
 .doudou-view .doudou-items-edit-shell > form.doudou-items-editor-form { display: block; flex: 1 1 auto; width: 100%; max-width: none; height: auto; min-height: 0; min-width: 0; margin: 0; padding: 0 clamp(16px, 4vw, 28px) max(30px, var(--doudou-mobile-bottom-clearance, env(safe-area-inset-bottom))); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; line-height: 1.5; white-space: normal; }
 .doudou-view .doudou-items-editor-form > * { max-width: 780px; margin-inline: auto; }
 .is-mobile .doudou-view .doudou-items-editor-form:focus-within { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+
+.doudou-view .doudou-items-home > * { max-width: 680px; }
+.doudou-view .doudou-items-filters { display: flex; gap: 6px; margin-top: -6px; margin-bottom: 10px; min-width: 0; }
+.doudou-view .doudou-items-filters button { flex: 1; min-width: 0; min-height: 44px; padding: 6px 4px; font-size: 13px; border: 0; border-radius: 10px; white-space: nowrap; background: transparent; color: var(--doudou-muted); }
+.doudou-view .doudou-items-filters button.doudou-is-selected { color: var(--doudou-blue-strong); background: var(--doudou-blue-soft); font-weight: 600; }
+.doudou-view .doudou-item-top { position: relative; display: block; width: 100%; height: 48px; flex: 0 0 48px; }
+.doudou-view .doudou-item-initial { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 8px; background: color-mix(in srgb, var(--doudou-surface) 80%, #cfb78c); color: var(--doudou-muted); font-size: 23px; line-height: 1; }
+.doudou-view .doudou-item-badge { position: absolute; top: 0; right: 0; display: inline-block; padding: 2px 5px; border-radius: 5px; font-size: 10px; line-height: 1.5; white-space: nowrap; }
+.doudou-view .doudou-item-badge-active { color: #26714e; background: #e4f2e9; }
+.doudou-view .doudou-item-badge-retired { color: #a13e43; background: #fbe9e9; }
+.doudou-view .doudou-item-badge-stock { color: #326baf; background: #e5effc; }
+.theme-dark .doudou-view .doudou-item-badge-active { color: #a2dbba; background: #224838; }
+.theme-dark .doudou-view .doudou-item-badge-retired { color: #f0abb0; background: #512d34; }
+.theme-dark .doudou-view .doudou-item-badge-stock { color: #a6c9f6; background: #253e5e; }
+.doudou-view .doudou-item-footer { display: flex; flex: 0 0 44px; align-items: center; width: 100%; min-width: 0; height: 44px; margin-top: auto; border-top: 1px solid var(--doudou-border); }
+.doudou-view .doudou-item-footer button.doudou-item-purchased { display: block; width: 100%; min-width: 0; min-height: 44px; padding: 0; border: 0; border-radius: 0; overflow: hidden; text-overflow: ellipsis; color: var(--doudou-muted); font-size: 11px; text-align: left; white-space: nowrap; background: transparent; }
+.doudou-view .doudou-item-footer .doudou-item-stepper { width: 100%; justify-content: space-between; }
+.doudou-view .doudou-item-stepper-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-variant-numeric: tabular-nums; }
+.doudou-view .doudou-items-list > .doudou-items-empty { grid-column: 1 / -1; }
+.doudou-view .doudou-item-purchase-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.doudou-view .doudou-items-editor-form label { min-width: 0; margin-top: 10px; margin-bottom: 10px; font-size: 13px; }
+.doudou-view .doudou-items-editor-form input, .doudou-view .doudou-items-editor-form select, .doudou-view .doudou-items-editor-form textarea { margin-top: 4px; padding: 8px 10px; font-size: 16px; line-height: 1.35; }
+.doudou-view .doudou-items-editor-form textarea { min-height: 82px; }

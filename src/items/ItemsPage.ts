@@ -77,7 +77,7 @@ export class ItemsPage extends Component {
         const card = this.listEl.createDiv({ cls: "doudou-item-card" });
         const open = this.button(card, "", () => this.detail(item)); open.addClass("doudou-item-open");
         const visual = open.createSpan({ cls: "doudou-item-visual" });
-        const placeholder = visual.createSpan({ cls: "doudou-item-initial", text: Array.from(item.name.trim())[0] ?? "·", attr: { "aria-hidden": "true" } });
+        const placeholder = visual.createSpan({ cls: "doudou-item-initial", text: item.cover || Array.from(item.name.trim())[0] || "·", attr: { "aria-hidden": "true" } });
         const source = item.photos[0] ? this.service.resource(item.photos[0]) : "";
         if (source) {
           placeholder.hidden = true;
@@ -92,7 +92,7 @@ export class ItemsPage extends Component {
         const state = itemDisplayState(item);
         const label = state === "history" ? item.kind === "single" ? "已退役" : "不再买" : state === "restock" ? "待补货" : state === "active" ? "使用中" : "库存";
         side.createSpan({ cls: `doudou-item-badge doudou-item-badge-${state}`, text: label });
-        if (item.kind === "stock") this.stockControls(side, item);
+        if (item.kind === "stock") this.stockControls(side, item, false);
       }
     } catch (error) {
       if (generation !== this.generation) return;
@@ -117,10 +117,10 @@ export class ItemsPage extends Component {
     const metrics = itemMetrics(item);
     return [item.status === "active" ? "使用中" : "已退役", metrics.days === undefined ? undefined : `已经陪你 ${metrics.days} 天`, metrics.daily === undefined ? undefined : `¥${metrics.daily.toFixed(2)}/天`].filter(Boolean).join(" · ");
   }
-  private stockControls(parent: HTMLElement, item: Item): void {
+  private stockControls(parent: HTMLElement, item: Item, showValue = true): void {
     const controls = parent.createDiv({ cls: "doudou-item-stepper", attr: { role: "group", "aria-label": `${item.name} 数量调节` } });
     const minus = this.button(controls, "−", async () => { await this.service.adjust(item.id, -1); await this.refresh(); }); minus.disabled = item.quantity === 0; minus.setAttribute("aria-label", `${item.name} 减少 1 件`);
-    controls.createSpan({ cls: "doudou-item-stepper-value", text: String(item.quantity), attr: { "aria-label": `数量 ${item.quantity}` } });
+    if (showValue) controls.createSpan({ cls: "doudou-item-stepper-value", text: String(item.quantity), attr: { "aria-label": `数量 ${item.quantity}` } });
     this.button(controls, "+", async () => { await this.service.adjust(item.id, 1); await this.refresh(); }).setAttribute("aria-label", `${item.name} 增加 1 件`);
   }
   private detail(item: Item): void {
@@ -183,6 +183,8 @@ export class ItemsPage extends Component {
     };
     segment("物品类型", [["single", "单件"], ["stock", "库存"]] as const, kind.value, value => { kind.value = value; updateVisibility(); });
     const name = field("名称（必填）", "text", draft.name); name.required = true;
+    const cover = field("封面字（可选）", "text", draft.cover ?? ""); cover.maxLength = 2; cover.placeholder = "默认使用名称首字";
+    cover.addEventListener("input", () => { const chars = Array.from(cover.value); cover.value = chars[0] ?? ""; });
     const purchased = field("购买日期", "text", draft.purchased ?? "");
     purchased.inputMode = "numeric"; purchased.placeholder = "例如 20260620"; purchased.maxLength = 10;
     purchased.addEventListener("blur", () => { purchased.value = normalizeItemDateInput(purchased.value); });
@@ -226,7 +228,7 @@ export class ItemsPage extends Component {
         purchased.setCustomValidity("请输入有效日期，例如 20260620 或 2026-06-20"); purchased.reportValidity(); return;
       }
       this.busy = true; save.disabled = true; cancel.disabled = true;
-      const next: Item = { ...draft, kind: kind.value as Item["kind"], name: name.value, notes: notes.value, purchased: kind.value === "single" ? purchased.value || undefined : draft.purchased, price: kind.value === "single" ? (price.value === "" ? undefined : Number(price.value)) : draft.price, status: status.value as Item["status"], retired: status.value === "retired" ? retired.value || undefined : undefined, quantity: quantity.value === "" ? 0 : Number(quantity.value), noRestock: kind.value === "stock" ? restock.value === "stop" : undefined };
+      const next: Item = { ...draft, kind: kind.value as Item["kind"], name: name.value, cover: cover.value || undefined, notes: notes.value, purchased: kind.value === "single" ? purchased.value || undefined : draft.purchased, price: kind.value === "single" ? (price.value === "" ? undefined : Number(price.value)) : draft.price, status: status.value as Item["status"], retired: status.value === "retired" ? retired.value || undefined : undefined, quantity: quantity.value === "" ? 0 : Number(quantity.value), noRestock: kind.value === "stock" ? restock.value === "stop" : undefined };
       void this.service.save(next, pending).then(item => this.detail(item)).catch(error => new Notice(error instanceof Error ? error.message : "保存失败，草稿已保留")).finally(() => { this.busy = false; save.disabled = false; cancel.disabled = false; });
     });
   }

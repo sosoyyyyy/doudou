@@ -4,7 +4,7 @@ export const ITEM_ASSETS = `${ITEMS_ROOT}/assets`;
 export interface Item {
   id: string; kind: "single" | "stock"; name: string; notes: string; photos: string[];
   purchased?: string; price?: number; status: "active" | "retired"; retired?: string;
-  quantity: number; noRestock?: boolean; revision: number; created: string; updated: string; importKey?: string;
+  quantity: number; noRestock?: boolean; cover?: string; revision: number; created: string; updated: string; importKey?: string;
 }
 export interface ItemStore { schemaVersion: 1; items: Item[]; importedKeys: string[] }
 export function validDate(value: string): boolean {
@@ -14,6 +14,7 @@ export function validateItem(item: Item): void {
   if (!item || typeof item.id !== "string" || !item.id || typeof item.name !== "string" || !item.name.trim() || typeof item.notes !== "string" || !["single", "stock"].includes(item.kind) || !["active", "retired"].includes(item.status)) throw new Error("请填写物品名称并选择有效类型和状态");
   if (!Number.isSafeInteger(item.quantity) || item.quantity < 0 || !Number.isSafeInteger(item.revision) || item.revision < 0) throw new Error("数量必须是非负整数");
   if (item.noRestock !== undefined && typeof item.noRestock !== "boolean") throw new Error("补货状态无效");
+  if (item.cover !== undefined && (typeof item.cover !== "string" || Array.from(item.cover).length > 1)) throw new Error("封面字只能是一个字符");
   if (typeof item.created !== "string" || typeof item.updated !== "string" || !Number.isFinite(Date.parse(item.created)) || !Number.isFinite(Date.parse(item.updated))) throw new Error("物品时间戳无效");
   if (item.price !== undefined && (!Number.isFinite(item.price) || item.price < 0)) throw new Error("购买价格必须是非负数字");
   for (const date of [item.purchased, item.retired]) if (date !== undefined && !validDate(date)) throw new Error("日期格式不正确");

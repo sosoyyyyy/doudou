@@ -228,7 +228,7 @@
 .doudou-view .doudou-items-page label { display: block; margin: 16px 0; color: var(--doudou-muted); font-size: 14px; }
 .doudou-view .doudou-items-page [hidden] { display: none !important; }
 .doudou-view .doudou-items-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
-.doudou-view .doudou-item-card { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; min-height: 82px; margin: 0; padding: 8px 9px; overflow: hidden; line-height: 1.4; white-space: normal; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
+.doudou-view .doudou-item-card { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; min-height: 68px; margin: 0; padding: 6px 9px; overflow: hidden; line-height: 1.4; white-space: normal; border: 1px solid var(--doudou-border); border-radius: 12px; background: var(--doudou-surface); }
 .doudou-view .doudou-items-page button.doudou-item-open { display: flex; flex: 1 1 auto; align-items: center; justify-content: flex-start; width: 0; min-width: 0; min-height: 56px; height: auto; border: 0; border-radius: 0; padding: 0; text-align: left; gap: 10px; background: transparent; overflow: hidden; }
 .doudou-view .doudou-item-open img { display: block; width: 48px; height: 48px; margin: 0; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
 .doudou-view .doudou-item-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -288,8 +288,9 @@
 .theme-dark .doudou-view .doudou-items-filters button.doudou-item-filter-stock.doudou-is-selected { color: #a6c9f6; background: #253e5e; }
 .theme-dark .doudou-view .doudou-items-filters button.doudou-item-filter-restock.doudou-is-selected { color: #f4d088; background: #594421; }
 .theme-dark .doudou-view .doudou-items-filters button.doudou-item-filter-history.doudou-is-selected { color: #f0abb0; background: #512d34; }
-.doudou-view .doudou-item-visual { position: relative; display: block; width: 48px; height: 48px; flex: 0 0 48px; }
-.doudou-view .doudou-item-initial { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 8px; background: color-mix(in srgb, var(--doudou-surface) 80%, #cfb78c); color: var(--doudou-muted); font-size: 23px; line-height: 1; }
+.doudou-view .doudou-item-visual { position: relative; display: block; width: 36px; height: 36px; flex: 0 0 36px; }
+.doudou-view .doudou-item-open img, .doudou-view .doudou-item-initial { width: 36px; height: 36px; }
+.doudou-view .doudou-item-initial { display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #edf4fb; color: #5f7892; font-size: 17px; line-height: 1; }
 .doudou-view .doudou-item-badge { display: inline-block; padding: 2px 5px; border-radius: 5px; font-size: 10px; line-height: 1.5; white-space: nowrap; }
 .doudou-view .doudou-item-badge-active { color: #26714e; background: #e4f2e9; }
 .doudou-view .doudou-item-badge-history { color: #a13e43; background: #fbe9e9; }

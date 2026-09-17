@@ -1877,21 +1877,45 @@ test("items editor saves a stock item, searches notes and cancels without writin
   }
   assert.equal((await service.list())[0].quantity, 0);
   assert.equal((root.querySelector('button[aria-label="测试电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
+  assert.equal(root.querySelector('.doudou-item-badge')?.textContent, "待补货");
   page.create(); const cancel = [...root.querySelectorAll("button")].find(b => b.textContent === "取消")!; cancel.click();
   await new Promise(resolve => setTimeout(resolve, 20)); assert.equal((await service.list()).length, 1);
   page.onunload(); root.remove();
 });
 
-test("item filters distinguish single status from stock without changing data", () => {
+test("item filters derive restock and history while preserving old stock data", () => {
   const item = { ...blankItem(), name: "测试" };
   const retired = { ...item, status: "retired" as const };
   const stock = { ...retired, kind: "stock" as const };
   assert.equal(matchesItemFilter(item, "active"), true);
-  assert.equal(matchesItemFilter(retired, "retired"), true);
-  assert.equal(matchesItemFilter(stock, "retired"), false);
+  assert.equal(matchesItemFilter(retired, "history"), true);
+  assert.equal(matchesItemFilter(stock, "history"), false);
   assert.equal(matchesItemFilter(stock, "active"), false);
   assert.equal(matchesItemFilter(stock, "stock"), true);
+  assert.equal(matchesItemFilter({ ...stock, quantity: 0 }, "restock"), true);
+  assert.equal(matchesItemFilter({ ...stock, quantity: 0, noRestock: true }, "history"), true);
+  assert.equal(matchesItemFilter({ ...stock, quantity: 2, noRestock: true }, "stock"), false);
   assert.equal(matchesItemFilter(retired, "all"), true);
+});
+
+test("stock no-restock choice survives saving and quantity changes", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const saved = await service.save({ ...blankItem(), name: "旧电池", kind: "stock", quantity: 1, notes: "备用" });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
+  ([...root.querySelectorAll("button")].find(b => b.textContent === "编辑") as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
+  const restock = root.querySelector('[aria-label="补货计划"]') as HTMLElement;
+  assert.equal(restock.hidden, false);
+  (restock.querySelector('button:last-child') as HTMLButtonElement).click();
+  (root.querySelector('.doudou-primary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal((await service.list())[0].noRestock, true);
+  await service.adjust(saved.id, -1);
+  page.home(); await page.refresh();
+  assert.equal(root.querySelector('.doudou-item-badge')?.textContent, "不再买");
+  assert.equal((root.querySelector('button[aria-label="旧电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
+  assert.equal(root.querySelector('.doudou-item-name')?.textContent, "旧电池");
+  assert.equal((await service.list())[0].notes, "备用");
+  page.onunload(); root.remove();
 });
 
 test("numeric purchase dates normalize but never silently repair invalid calendar dates", () => {

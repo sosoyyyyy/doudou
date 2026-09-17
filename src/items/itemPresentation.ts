@@ -1,8 +1,14 @@
 import { validDate, type Item } from "./model";
 
-export type ItemFilter = "all" | "active" | "stock" | "retired";
+export type ItemFilter = "all" | "active" | "stock" | "restock" | "history";
+export type ItemDisplayState = Exclude<ItemFilter, "all">;
+export function itemDisplayState(item: Item): ItemDisplayState {
+  if (item.kind === "single") return item.status === "retired" ? "history" : "active";
+  if (item.noRestock) return "history";
+  return item.quantity === 0 ? "restock" : "stock";
+}
 export function matchesItemFilter(item: Item, filter: ItemFilter): boolean {
-  return filter === "all" || (filter === "stock" ? item.kind === "stock" : item.kind === "single" && item.status === filter);
+  return filter === "all" || itemDisplayState(item) === filter;
 }
 /** UI-only formatting; persisted dates retain the existing ISO date format. */
 export function normalizeItemDateInput(value: string): string {

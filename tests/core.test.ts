@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
-import { File as NodeFile } from "node:buffer";
 import { createHash } from "node:crypto";
+import { ItemRepository } from "../src/items/ItemRepository";
+import { ItemService } from "../src/items/ItemService";
+import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore } from "../src/items/model";
+import { parseItemImport } from "../src/items/itemImport";
+import { ItemsPage } from "../src/items/ItemsPage";
+import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -93,6 +98,7 @@ for (const key of ["window", "document", "navigator", "HTMLElement", "Element", 
 }
 
 interface ObsidianElementOptions {
+  value?: string;
   cls?: string;
   text?: string;
   attr?: Record<string, string>;
@@ -102,6 +108,7 @@ function applyElementOptions(element: HTMLElement, options?: ObsidianElementOpti
   if (!options) return;
   if (options.cls) element.className = options.cls;
   if (options.text !== undefined) element.textContent = options.text;
+  if (options.value !== undefined) element.setAttribute("value", options.value);
   for (const [name, value] of Object.entries(options.attr ?? {})) element.setAttribute(name, value);
 }
 
@@ -201,6 +208,7 @@ class FakeVault {
   async readBinary(file: TFile): Promise<ArrayBuffer> { const content = this.binaries.get(file.path); if (!content) throw new Error("Missing fake binary"); return content.slice(0); }
   async cachedRead(file: TFile): Promise<string> { const entry = this.files.get(file.path); if (!entry) throw new Error("Missing fake file"); return entry.content; }
   async read(file: TFile): Promise<string> { return this.cachedRead(file); }
+  async process(file: TFile, callback: (content: string) => string): Promise<string> { const content = callback(await this.read(file)); await this.modify(file, content); return content; }
   async modify(file: TFile, content: string): Promise<void> { if (this.failNextModify) { this.failNextModify = false; throw new Error("modify failed"); } this.files.set(file.path, { file, content }); this.writeCounts.set(file.path, (this.writeCounts.get(file.path) ?? 0) + 1); }
   async rename(item: TFile | { path: string }, path: string): Promise<void> {
     if (this.failNextRename) { this.failNextRename = false; throw new Error("rename failed"); }
@@ -522,7 +530,10 @@ test("mobile bottom clearance leaves the 0.5.4 scrolling, editor and top safe-ar
   assert.match(recordHeader, /padding:\s*max\(12px, env\(safe-area-inset-top\)\) 0 10px/);
   assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view > \.doudou-main-shell > header\.doudou-header/);
   assert.doesNotMatch(pluginCss, /\.is-mobile \.doudou-view \.doudou-record-header\s*\{/);
-  assert.equal(createHash("sha256").update(doudouViewSource).digest("hex"), "bcb60c20c6362ab8f84ca8a87edaa38e539c476c9a7a4ca1c696bbf158696d40");
+  assert.match(doudouViewSource, /viewport\.offsetTop \+ viewport\.height - top/);
+  assert.match(doudouViewSource, /viewport\.addEventListener\("resize", sync\)/);
+  assert.match(doudouViewSource, /viewport\.removeEventListener\("resize", sync\)/);
+  assert.match(doudouViewSource, /viewport\.removeEventListener\("scroll", sync\)/);
 });
 
 test("navigation labels change without changing internal page or virtual-folder identity", () => {
@@ -1774,4 +1785,80 @@ test("clipboard preserves full text exactly", async () => {
 
 test("Remotely Save lookup selects only its start-sync command", () => {
   assert.equal(findRemotelySaveStartSyncCommand([{ id: "other:start-sync", name: "Other Start sync" }, { id: "remotely-save:start-sync", name: "Remotely Save: Start sync" }]), "remotely-save:start-sync");
+});
+
+test("items stay outside ordinary record scanning and folder management", async () => {
+  assert.equal(isDoudouRecordPath("兜兜/小物库/2026/09/example.md"), false);
+  assert.throws(() => normalizeFolderName("小物库"));
+  const vault = new FakeVault(); vault.folders.add("兜兜/小物库"); vault.folders.add("兜兜/生活");
+  const repo = new DoudouRepository(vault as unknown as Vault);
+  assert.deepEqual((await repo.listFolders()).map(f => f.name), ["生活"]);
+  assert.equal(repo.isDoudouPath(ITEMS_PATH), false);
+});
+
+test("item dates compute without writes, respect retirement, zero and missing values", () => {
+  const item = { ...blankItem(), name: "杯子", purchased: "2024-02-28", price: 100 };
+  assert.deepEqual(itemMetrics(item, new Date(2024, 2, 1)), { days: 2, daily: 50 });
+  assert.deepEqual(itemMetrics({ ...item, status: "retired", retired: "2024-02-29" }), { days: 1, daily: 100 });
+  assert.deepEqual(itemMetrics({ ...item, status: "retired" }), {});
+  assert.deepEqual(itemMetrics({ ...item, price: 0 }, new Date(2024, 1, 28)), { days: 1, daily: 0 });
+  assert.deepEqual(itemMetrics({ ...item, purchased: undefined }), {});
+  assert.equal(matchesItem({ ...item, notes: "生日 Gift" }, "gift"), true);
+});
+
+test("item service serializes inventory writes and rejects stale edits, deletion and malformed stores", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const saved = await service.save({ ...blankItem(), name: "电池", kind: "stock", quantity: 0 });
+  await Promise.all(Array.from({ length: 20 }, () => service.adjust(saved.id, 1)));
+  assert.equal((await service.list())[0].quantity, 20);
+  await assert.rejects(service.save({ ...saved, name: "旧编辑" }), /更新/);
+  await assert.rejects(service.delete(saved), /变化/);
+  const current = (await service.list())[0]; await service.delete(current);
+  await assert.rejects(service.save(current)); assert.equal((await service.list()).length, 0);
+  await vault.modify(vault.getAbstractFileByPath(ITEMS_PATH) as TFile, "broken-json");
+  await assert.rejects(service.save({ ...blankItem(), name: "不能覆盖" }));
+  assert.equal(await vault.read(vault.getAbstractFileByPath(ITEMS_PATH) as TFile), "broken-json");
+});
+
+test("item photos only commit in isolated assets and old photos survive failed saves", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const item = await service.save({ ...blankItem(), name: "相机" }, [new File(["photo"], "camera.jpg")]);
+  assert.ok(item.photos[0].startsWith(`${ITEM_ASSETS}/`));
+  const original = item.photos[0]; vault.failNextModify = true;
+  await assert.rejects(service.save({ ...item, photos: [] }, [new File(["new"], "new.png")]));
+  assert.ok(vault.getAbstractFileByPath(original));
+  assert.equal(vault.binaries.size, 1);
+  assert.deepEqual((await service.list())[0].photos, [original]);
+  const saved = await service.save({ ...item, photos: [] });
+  assert.equal(vault.getAbstractFileByPath(original), null);
+  await assert.rejects(service.save({ ...saved, photos: ["兜兜/assets/private.jpg"] }));
+});
+
+test("import validates every row before committing and is idempotent even after deletion", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const source = { format: "doudou-items-import-v1", items: [{ key: "fixture-row-1", name: "测试物品", purchased: "2020-06-01", price: 0, notes: "原文", status: "retired", retired: "2021-06-01" }] };
+  const items = parseItemImport(JSON.stringify(source)); assert.equal(vault.files.size, 0);
+  assert.equal(await service.import(items), 1); assert.equal(await service.import(items), 0);
+  await service.delete((await service.list())[0]); assert.equal(await service.import(items), 0);
+  assert.throws(() => parseItemImport(JSON.stringify({ ...source, items: [...source.items, { key: "bad", name: "bad", purchased: "2024-02-30" }] })));
+  assert.throws(() => decodeStore(JSON.stringify({ schemaVersion: 2, items: [], importedKeys: [] })));
+});
+
+test("items editor saves a stock item, searches notes and cancels without writing", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const root = document.createElement("div"); document.body.append(root);
+  const page = new ItemsPage(root, service); page.onload(); page.create();
+  const form = root.querySelector("form")!;
+  const kind = form.querySelector("select")!; kind.value = "stock"; kind.dispatchEvent(new Event("change"));
+  (form.querySelector('input[type="text"]') as HTMLInputElement).value = "测试电池";
+  (form.querySelector("textarea") as HTMLTextAreaElement).value = "抽屉里的备用";
+  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal((await service.list())[0].kind, "stock"); assert.match(root.textContent!, /库存 · 1 件/);
+  page.home(); await page.refresh();
+  const search = root.querySelector('input[type="search"]') as HTMLInputElement; search.value = "备用"; search.dispatchEvent(new Event("input")); await page.refresh();
+  assert.match(root.textContent!, /测试电池/);
+  page.create(); const cancel = [...root.querySelectorAll("button")].find(b => b.textContent === "取消")!; cancel.click();
+  await new Promise(resolve => setTimeout(resolve, 20)); assert.equal((await service.list()).length, 1);
+  page.onunload(); root.remove();
 });

@@ -1,3 +1,5 @@
+import { ItemRepository } from "./src/items/ItemRepository";
+import { ItemService } from "./src/items/ItemService";
 import { Plugin, WorkspaceLeaf } from "obsidian";
 import { AiTagService } from "./src/ai/AiTagService";
 import { AskDoudouService } from "./src/ai/AskDoudouService";
@@ -36,6 +38,7 @@ export default class DoudouPlugin extends Plugin {
 
   override async onload(): Promise<void> {
     this.settings = normalizeSettings(await this.loadData());
+    const itemService = new ItemService(new ItemRepository(this.app.vault));
     const repository = new DoudouRepository(this.app.vault);
     const imageService = new ImageService(this.app.vault);
     const fileService = new FileService(this.app.vault);
@@ -61,6 +64,7 @@ export default class DoudouPlugin extends Plugin {
     this.registerView(
       DOUDOU_VIEW_TYPE,
       (leaf: WorkspaceLeaf) => new DoudouView(leaf, {
+        itemService,
         repository,
         folderService,
         recordService,

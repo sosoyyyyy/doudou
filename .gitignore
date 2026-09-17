@@ -14,3 +14,4 @@ coverage/
 .tmp/
 test-vault/
 /兜兜/
+/private-imports/

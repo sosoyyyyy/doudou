@@ -15,7 +15,7 @@ export interface StoredDoudouRecord extends DoudouRecord {
   path: string;
 }
 
-export type DoudouPage = "all" | "library";
+export type DoudouPage = "all" | "library" | "items";
 
 export interface LibraryFilters {
   query: string;

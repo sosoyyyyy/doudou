@@ -30,7 +30,7 @@ export interface RecordChanges {
 export function normalizeFolderName(value: string): string {
   const name = value.trim();
   if (
-    !name || name === ALL_RECORDS_FOLDER || name.toLocaleLowerCase() === "assets" ||
+    !name || name === "小物库" || name === ALL_RECORDS_FOLDER || name.toLocaleLowerCase() === "assets" ||
     /[\\/:*?"<>|]/.test(name) || name === "." || name === ".." ||
     /^\d{4}$/.test(name)
   ) throw new Error("Invalid folder name");
@@ -59,7 +59,7 @@ export function isDoudouRecordPath(path: string): boolean {
   const assetsPrefix = `${normalizePath(DOUDOU_ASSETS_FOLDER)}/`;
   if (
     !normalized.startsWith(rootPrefix) ||
-    normalized.startsWith(assetsPrefix) ||
+    normalized.startsWith(assetsPrefix) || normalized.startsWith("兜兜/小物库/") ||
     !normalized.toLocaleLowerCase().endsWith(".md")
   ) {
     return false;
@@ -220,7 +220,7 @@ export class DoudouRepository {
       if (!normalized.startsWith(rootPrefix)) continue;
       const relative = normalized.slice(rootPrefix.length);
       if (
-        !relative || relative.includes("/") ||
+        !relative || relative === "小物库" || relative.includes("/") ||
         relative.toLocaleLowerCase() === "assets" ||
         relative === ALL_RECORDS_FOLDER || /^\d{4}$/.test(relative)
       ) continue;
@@ -283,7 +283,7 @@ export class DoudouRepository {
   isDoudouPath(path: string): boolean {
     const normalized = normalizePath(path);
     const root = normalizePath(DOUDOU_DATA_FOLDER);
-    return normalized === root || normalized.startsWith(`${root}/`);
+    return (normalized === root || normalized.startsWith(`${root}/`)) && normalized !== "兜兜/小物库" && !normalized.startsWith("兜兜/小物库/");
   }
 
   private async readAll(): Promise<StoredDoudouRecord[]> {

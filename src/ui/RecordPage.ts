@@ -68,6 +68,7 @@ export function createManualTagEditor(
   });
   const options = collectConfirmedManualTagOptions(records);
   let composing = false;
+  let selectingSuggestion = false;
 
   const syncMirror = (): void => {
     renderManualTagText(mirror, textarea.value);
@@ -76,6 +77,7 @@ export function createManualTagEditor(
     mirror.scrollLeft = textarea.scrollLeft;
   };
   const hideSuggestions = (): void => {
+    if (selectingSuggestion) return;
     suggestions.empty();
     suggestions.addClass("doudou-is-hidden");
   };
@@ -90,10 +92,13 @@ export function createManualTagEditor(
     textarea.value = completion.value;
     textarea.setSelectionRange(completion.selectionStart, completion.selectionEnd);
     syncMirror();
+  };
+  const finishSuggestion = (): void => {
     hideSuggestions();
     textarea.focus({ preventScroll: true });
   };
   const updateSuggestions = (): void => {
+    if (selectingSuggestion) return;
     if (composing || document.activeElement !== textarea) {
       hideSuggestions();
       return;
@@ -123,9 +128,47 @@ export function createManualTagEditor(
       });
       button.addEventListener("pointerdown", (event) => {
         event.preventDefault();
+        event.stopPropagation();
+        if (selectingSuggestion) return;
+        selectingSuggestion = true;
         applySuggestion(option.name);
+        const doc = button.ownerDocument;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const cleanupClick = (): void => {
+          clearTimeout(timer);
+          doc.removeEventListener("click", swallowClick, true);
+          doc.removeEventListener("pointerdown", cleanupClick, true);
+        };
+        const swallowClick = (click: MouseEvent): void => {
+          // Keyboard activation remains available; only swallow this gesture's click.
+          if (click.detail === 0) return;
+          click.preventDefault();
+          click.stopImmediatePropagation();
+          cleanupClick();
+        };
+        const end = (endEvent: PointerEvent): void => {
+          if (endEvent.pointerId !== event.pointerId) return;
+          endEvent.preventDefault();
+          endEvent.stopPropagation();
+          doc.removeEventListener("pointerup", end, true);
+          doc.removeEventListener("pointercancel", end, true);
+          selectingSuggestion = false;
+          // Guard retargeted compatibility clicks after removing the pressed button.
+          doc.addEventListener("pointerdown", cleanupClick, true);
+          timer = setTimeout(cleanupClick, 700);
+          finishSuggestion();
+        };
+        doc.addEventListener("click", swallowClick, true);
+        doc.addEventListener("pointerup", end, true);
+        doc.addEventListener("pointercancel", end, true);
       });
-      button.addEventListener("click", () => applySuggestion(option.name));
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!button.isConnected || selectingSuggestion) return;
+        applySuggestion(option.name);
+        finishSuggestion();
+      });
     }
   };
 

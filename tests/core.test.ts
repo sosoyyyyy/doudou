@@ -285,7 +285,6 @@ test("opening the manual tag picker shows every existing visible tag in its curr
 test("mobile manual tag suggestions are born in the editor header host without changing tag behavior", () => {
   const normalized = recordPageSource.replace(/\r\n/g, "\n");
   const tagEditor = normalized.slice(normalized.indexOf("function createManualTagEditor("), normalized.indexOf("\nexport interface RecordPageDependencies"));
-  const tagBehavior = normalized.slice(normalized.indexOf("  const options = collectConfirmedManualTagOptions(records);"), normalized.indexOf("\n}\n\nexport interface RecordPageDependencies"));
   const textareaSetup = normalized.slice(normalized.indexOf("  const wrapper = form.createDiv"), normalized.indexOf("  const suggestions = (suggestionsHost ?? wrapper).createDiv"));
   const imagePicker = normalized.slice(normalized.indexOf("    const imageInput = form.createEl"), normalized.indexOf("    const attachmentInput = form.createEl"));
 
@@ -293,7 +292,6 @@ test("mobile manual tag suggestions are born in the editor header host without c
   assert.match(recordPageSource, /createManualTagEditor\(form, record\?\.content \?\? "", records, suggestionsHost\)/);
   assert.match(recordPageSource, /const suggestions = \(suggestionsHost \?\? wrapper\)\.createDiv/);
   assert.doesNotMatch(tagEditor, /appendChild|insertBefore|replaceWith/);
-  assert.equal(createHash("sha256").update(tagBehavior).digest("hex"), "fb951e5105415584a34db8cf2cae7da9b45a6a635a26612642aa7c41f1058578");
   assert.equal(createHash("sha256").update(textareaSetup).digest("hex"), "1fd0b6330f7f8749d4b2e66de059138ba985affe28dbe8eca87e704337039313");
   assert.equal(createHash("sha256").update(imagePicker).digest("hex"), "9ced02a5de7431ffd22b5381a5a6fe45131700cdca7118e59bc69362d3c06892");
 });
@@ -319,11 +317,9 @@ test("desktop and mobile tag suggestions wrap into bounded vertical scroll areas
   assert.match(suggestions, /overflow-y:\s*auto/);
   assert.match(suggestions, /pointer-events:\s*auto/);
   assert.match(cssDeclarations(".doudou-tag-suggestions"), /top:\s*calc\(100% \+ 6px\)/);
-  assert.match(recordPageSource, /button\.addEventListener\("pointerdown", \(event\) => \{\s*event\.preventDefault\(\);\s*applySuggestion\(option\.name\);\s*\}\)/);
-  assert.match(recordPageSource, /button\.addEventListener\("click", \(\) => applySuggestion\(option\.name\)\)/);
 });
 
-test("manual tag suggestion restores beta.6 pointerdown insertion without double insertion", () => {
+test("manual tag suggestion stays until pointerup and swallows retargeted clicks", () => {
   const form = document.body.createDiv();
   const textarea = createManualTagEditor(form, "开头 #", [
     stored({ content: "#情感感悟 ", tags: ["情感感悟"] })
@@ -341,11 +337,44 @@ test("manual tag suggestion restores beta.6 pointerdown insertion without double
   assert.equal(textarea.selectionStart, textarea.value.length);
   assert.equal(textarea.selectionEnd, textarea.value.length);
   assert.equal(document.activeElement, textarea);
+  assert.equal(form.querySelector(".doudou-tag-suggestion"), button);
+  textarea.dispatchEvent(new Event("select"));
+  textarea.dispatchEvent(new Event("blur"));
+  assert.equal(form.querySelector(".doudou-tag-suggestion"), button);
+  const pointerup = new Event("pointerup", { bubbles: true, cancelable: true });
+  button.dispatchEvent(pointerup);
+  assert.equal(pointerup.defaultPrevented, true);
   assert.equal(form.querySelector(".doudou-tag-suggestion"), null);
+  assert.equal(document.activeElement, textarea);
+  const behind = form.createEl("button");
+  let clicks = 0;
+  behind.addEventListener("click", () => clicks++);
+  const click = new window.MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+  behind.dispatchEvent(click);
+  assert.equal(click.defaultPrevented, true);
+  assert.equal(clicks, 0);
+  behind.click();
+  assert.equal(clicks, 1);
 
   button.click();
   assert.equal(textarea.value, "开头 #情感感悟 ");
   form.remove();
+});
+
+test("tag suggestion click fallback supports desktop and keyboard activation", () => {
+  for (const detail of [0, 1]) {
+    const form = document.body.createDiv();
+    const textarea = createManualTagEditor(form, "#", [stored({ content: "#工作 ", tags: ["工作"] })]);
+    textarea.focus();
+    textarea.setSelectionRange(1, 1);
+    textarea.dispatchEvent(new Event("input"));
+    const button = form.querySelector<HTMLButtonElement>(".doudou-tag-suggestion")!;
+    button.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true, detail }));
+    assert.equal(textarea.value, "#工作 ");
+    assert.equal(document.activeElement, textarea);
+    assert.equal(form.querySelector(".doudou-tag-suggestion"), null);
+    form.remove();
+  }
 });
 
 test("desktop and mobile editor tools place image file and folder controls in one overflow-safe row", () => {

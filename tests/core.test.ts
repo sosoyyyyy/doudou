@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { ItemRepository } from "../src/items/ItemRepository";
 import { ItemService } from "../src/items/ItemService";
 import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore } from "../src/items/model";
-import { parseItemImport } from "../src/items/itemImport";
 import { ItemsPage } from "../src/items/ItemsPage";
 import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
@@ -1834,13 +1833,14 @@ test("item photos only commit in isolated assets and old photos survive failed s
   await assert.rejects(service.save({ ...saved, photos: ["兜兜/assets/private.jpg"] }));
 });
 
-test("import validates every row before committing and is idempotent even after deletion", async () => {
+test("beta.1 item data remains readable and retains compatibility fields on edit", async () => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
-  const source = { format: "doudou-items-import-v1", items: [{ key: "fixture-row-1", name: "测试物品", purchased: "2020-06-01", price: 0, notes: "原文", status: "retired", retired: "2021-06-01" }] };
-  const items = parseItemImport(JSON.stringify(source)); assert.equal(vault.files.size, 0);
-  assert.equal(await service.import(items), 1); assert.equal(await service.import(items), 0);
-  await service.delete((await service.list())[0]); assert.equal(await service.import(items), 0);
-  assert.throws(() => parseItemImport(JSON.stringify({ ...source, items: [...source.items, { key: "bad", name: "bad", purchased: "2024-02-30" }] })));
+  const item = { ...blankItem(), name: "旧物品", revision: 1, importKey: "old-key" };
+  await vault.create(ITEMS_PATH, JSON.stringify({ schemaVersion: 1, items: [item], importedKeys: ["old-key"] }));
+  const loaded = (await service.list())[0]; assert.deepEqual(loaded, item);
+  await service.save({ ...loaded, notes: "更新备注" });
+  const stored = decodeStore(await vault.read(vault.getAbstractFileByPath(ITEMS_PATH) as TFile));
+  assert.deepEqual(stored.importedKeys, ["old-key"]); assert.equal(stored.items[0].importKey, "old-key");
   assert.throws(() => decodeStore(JSON.stringify({ schemaVersion: 2, items: [], importedKeys: [] })));
 });
 
@@ -1858,6 +1858,18 @@ test("items editor saves a stock item, searches notes and cancels without writin
   page.home(); await page.refresh();
   const search = root.querySelector('input[type="search"]') as HTMLInputElement; search.value = "备用"; search.dispatchEvent(new Event("input")); await page.refresh();
   assert.match(root.textContent!, /测试电池/);
+  assert.equal(root.textContent!.includes("导入"), false);
+  const plus = root.querySelector('button[aria-label="测试电池 增加 1 件"]') as HTMLButtonElement;
+  plus.click(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal((await service.list())[0].quantity, 2);
+  assert.equal(root.querySelector(".doudou-item-quantity")?.textContent, "2");
+  assert.ok(root.querySelector('input[type="search"]'), "quantity controls must not open the item");
+  for (let index = 0; index < 2; index++) {
+    (root.querySelector('button[aria-label="测试电池 减少 1 件"]') as HTMLButtonElement).click();
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.equal((await service.list())[0].quantity, 0);
+  assert.equal((root.querySelector('button[aria-label="测试电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
   page.create(); const cancel = [...root.querySelectorAll("button")].find(b => b.textContent === "取消")!; cancel.click();
   await new Promise(resolve => setTimeout(resolve, 20)); assert.equal((await service.list()).length, 1);
   page.onunload(); root.remove();

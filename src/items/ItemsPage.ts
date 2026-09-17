@@ -1,13 +1,12 @@
 import { Component, Notice } from "obsidian";
 import { ItemService } from "./ItemService";
 import { blankItem, itemMetrics, matchesItem, type Item } from "./model";
-import { parseItemImport } from "./itemImport";
 
 export class ItemsPage extends Component {
   private body!: HTMLElement;
   private listEl!: HTMLElement;
   private query = "";
-  private screen: "list" | "detail" | "edit" | "import" = "list";
+  private screen: "list" | "detail" | "edit" = "list";
   private selected?: string;
   private urls: string[] = [];
   private generation = 0;
@@ -30,19 +29,18 @@ export class ItemsPage extends Component {
   }
   home(): void {
     this.screen = "list"; this.selected = undefined;
-    const body = this.reset();
+    const body = this.reset(); body.addClass("doudou-items-home");
     body.createEl("h2", { text: "小物库" });
-    body.createEl("p", { text: "把身边的物品，好好收在这里。", cls: "doudou-items-muted" });
-    const search = body.createEl("input", { attr: { type: "search", placeholder: "找一件物品，或搜搜备注…", "aria-label": "搜索小物库" } }); search.value = this.query;
+    const toolbar = body.createDiv({ cls: "doudou-items-toolbar" });
+    const search = toolbar.createEl("input", { attr: { type: "search", placeholder: "搜索名称或备注", "aria-label": "搜索小物库" } }); search.value = this.query;
     search.addEventListener("input", () => { this.query = search.value; void this.refresh(); });
-    const actions = body.createDiv({ cls: "doudou-items-actions" });
-    this.button(actions, "+ 收进小物库", () => this.create());
-    this.button(actions, "导入已有物品", () => this.chooseImport());
+    const add = this.button(toolbar, "+ 新增", () => this.create());
+    add.addClass("doudou-items-add"); add.setAttribute("aria-label", "新增物品");
     this.listEl = body.createDiv({ cls: "doudou-items-list", attr: { "aria-live": "polite" } }); void this.refresh();
   }
   create(): void { if (this.screen === "edit") return; this.edit(blankItem()); }
   async refresh(): Promise<void> {
-    if (this.screen === "edit" || this.screen === "import") return;
+    if (this.screen === "edit") return;
     const generation = ++this.generation;
     try {
       const items = await this.service.list();
@@ -58,7 +56,9 @@ export class ItemsPage extends Component {
         const card = this.listEl.createDiv({ cls: "doudou-item-card" });
         const open = this.button(card, "", () => this.detail(item)); open.addClass("doudou-item-open");
         if (item.photos[0]) open.createEl("img", { attr: { src: this.service.resource(item.photos[0]), alt: "", loading: "lazy" } });
-        const text = open.createSpan(); text.createEl("strong", { text: item.name }); text.createEl("small", { text: this.summary(item) });
+        const text = open.createSpan({ cls: "doudou-item-copy" });
+        text.createEl("strong", { cls: "doudou-item-name", text: item.name, attr: { title: item.name } });
+        this.cardInfo(text, item);
         if (item.kind === "stock") this.stockControls(card, item);
       }
     } catch (error) {
@@ -67,15 +67,36 @@ export class ItemsPage extends Component {
       if (this.screen === "list") this.listEl?.setText(message); else new Notice(message);
     }
   }
+  private cardInfo(parent: HTMLElement, item: Item): void {
+    const info = parent.createSpan({ cls: "doudou-item-info" });
+    if (item.kind === "stock") {
+      info.createSpan({ text: "剩余", cls: "doudou-item-caption" });
+      info.createEl("b", { text: String(item.quantity), cls: "doudou-item-quantity" });
+      info.createSpan({ text: "件", cls: "doudou-item-caption" });
+      return;
+    }
+    const metrics = itemMetrics(item);
+    if (metrics.days !== undefined) {
+      const days = info.createSpan({ cls: "doudou-item-metric" });
+      days.appendText("拥有 "); days.createEl("b", { text: String(metrics.days) }); days.appendText(" 天");
+    }
+    if (metrics.daily !== undefined) {
+      const daily = info.createSpan({ cls: "doudou-item-metric" });
+      daily.createEl("b", { text: `¥${metrics.daily.toFixed(2)}` }); daily.appendText(" / 天");
+    }
+    if (item.status === "retired" || metrics.days === undefined) {
+      info.createSpan({ cls: "doudou-item-caption", text: item.status === "retired" ? "已退役" : "使用中" });
+    }
+  }
   private summary(item: Item): string {
     if (item.kind === "stock") return `库存 · ${item.quantity} 件`;
     const metrics = itemMetrics(item);
     return [item.status === "active" ? "使用中" : "已退役", metrics.days === undefined ? undefined : `拥有 ${metrics.days} 天`, metrics.daily === undefined ? undefined : `¥${metrics.daily.toFixed(2)}/天`].filter(Boolean).join(" · ");
   }
   private stockControls(parent: HTMLElement, item: Item): void {
-    const controls = parent.createDiv({ cls: "doudou-items-actions" });
-    const minus = this.button(controls, "−1", async () => { await this.service.adjust(item.id, -1); await this.refresh(); }); minus.disabled = item.quantity === 0; minus.setAttribute("aria-label", `${item.name} 减少 1 件`);
-    this.button(controls, "+1", async () => { await this.service.adjust(item.id, 1); await this.refresh(); }).setAttribute("aria-label", `${item.name} 增加 1 件`);
+    const controls = parent.createDiv({ cls: "doudou-item-stepper", attr: { role: "group", "aria-label": `${item.name} 数量调节` } });
+    const minus = this.button(controls, "−", async () => { await this.service.adjust(item.id, -1); await this.refresh(); }); minus.disabled = item.quantity === 0; minus.setAttribute("aria-label", `${item.name} 减少 1 件`);
+    this.button(controls, "+", async () => { await this.service.adjust(item.id, 1); await this.refresh(); }).setAttribute("aria-label", `${item.name} 增加 1 件`);
   }
   private detail(item: Item): void {
     this.screen = "detail"; this.selected = item.id; const body = this.reset();
@@ -145,28 +166,5 @@ export class ItemsPage extends Component {
       const next: Item = { ...draft, kind: kind.value as Item["kind"], name: name.value, notes: notes.value, purchased: purchased.value || undefined, price: price.value === "" ? undefined : Number(price.value), status: status.value as Item["status"], retired: status.value === "retired" ? retired.value || undefined : undefined, quantity: quantity.value === "" ? 0 : Number(quantity.value) };
       void this.service.save(next, pending).then(item => this.detail(item)).catch(error => new Notice(error instanceof Error ? error.message : "保存失败，草稿已保留")).finally(() => { this.busy = false; save.disabled = false; });
     });
-  }
-  private chooseImport(): void {
-    const generation = this.generation;
-    const picker = document.createElement("input"); picker.type = "file"; picker.accept = ".json,application/json";
-    picker.addEventListener("change", () => {
-      const file = picker.files?.[0]; if (!file) return;
-      void (async () => {
-        if (file.size > 5 * 1024 * 1024) throw new Error("导入文件不能超过 5 MB");
-        const items = parseItemImport(await file.text());
-        const existing = await this.service.repository.read();
-        if (generation !== this.generation || this.screen !== "list") return;
-        const fresh = items.filter(item => !existing.importedKeys.includes(item.importKey!));
-        this.screen = "import"; const body = this.reset(); body.createEl("h2", { text: "确认导入" });
-        body.createEl("p", { text: `新增 ${fresh.length} 件，跳过已导入 ${items.length - fresh.length} 件。不会覆盖现有物品，也不会修改原表格。` });
-        for (const item of fresh) {
-          const card = body.createDiv({ cls: "doudou-item-card doudou-import-card" }); card.createEl("strong", { text: item.name });
-          card.createEl("p", { text: item.kind === "stock" ? `库存物品 · ${item.quantity} 件` : `单件物品 · ${item.status === "retired" ? "已退役" : "使用中"} · 购买 ${item.purchased ?? "未填写"} · ¥${item.price ?? "未填写"} · 退役 ${item.retired ?? "未填写"}` });
-          card.createEl("p", { text: item.notes, cls: "doudou-item-notes" });
-        }
-        const actions = body.createDiv({ cls: "doudou-items-actions" }); this.button(actions, "取消", () => this.home());
-        const confirm = this.button(actions, `确认导入 ${fresh.length} 件`, async () => { const count = await this.service.import(fresh); new Notice(`已导入 ${count} 件物品`); this.home(); }); confirm.disabled = fresh.length === 0;
-      })().catch(error => new Notice(error instanceof Error ? error.message : "导入失败"));
-    }); picker.click();
   }
 }

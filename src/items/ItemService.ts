@@ -44,17 +44,6 @@ export class ItemService {
     });
     await this.recycle(photos);
   }
-  async import(items: Item[]): Promise<number> {
-    items.forEach(validateItem);
-    return this.repository.change(store => {
-      let count = 0;
-      for (const item of items) {
-        if (!item.importKey || store.importedKeys.includes(item.importKey)) continue;
-        store.items.push({ ...item, id: crypto.randomUUID(), revision: 1 }); store.importedKeys.push(item.importKey); count++;
-      }
-      return count;
-    });
-  }
   resource(path: string): string {
     const file = this.repository.vault.getAbstractFileByPath(path);
     return file instanceof TFile ? this.repository.vault.getResourcePath(file) : "";

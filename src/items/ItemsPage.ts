@@ -34,11 +34,12 @@ export class ItemsPage extends Component {
   home(): void {
     this.screen = "list"; this.selected = undefined;
     const body = this.reset(); body.addClass("doudou-items-home");
-    const heading = body.createDiv({ cls: "doudou-items-heading" });
+    const sticky = body.createDiv({ cls: "doudou-items-sticky" });
+    const heading = sticky.createDiv({ cls: "doudou-items-heading" });
     heading.createEl("h2", { text: "小物库" });
     this.countEl = heading.createSpan({ cls: "doudou-items-count", attr: { "aria-live": "polite" } });
     const searchButton = heading.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索小物库" } }); setIcon(searchButton, "search");
-    const toolbar = body.createDiv({ cls: "doudou-items-toolbar" }); toolbar.hidden = !this.query;
+    const toolbar = sticky.createDiv({ cls: "doudou-items-toolbar" }); toolbar.hidden = !this.query;
     const search = toolbar.createEl("input", { attr: { type: "search", placeholder: "搜索名称或备注", "aria-label": "搜索小物库" } }); search.value = this.query;
     searchButton.addEventListener("click", () => { toolbar.hidden = !toolbar.hidden; if (!toolbar.hidden) search.focus(); else { this.query = ""; search.value = ""; void this.refresh(); } });
     search.addEventListener("input", () => {
@@ -46,15 +47,16 @@ export class ItemsPage extends Component {
       if (this.searchTimer) clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => { this.searchTimer = undefined; void this.refresh(); }, 250);
     });
-    const filters = body.createDiv({ cls: "doudou-items-filters", attr: { role: "group", "aria-label": "物品筛选" } });
-    body.createDiv({ cls: "doudou-items-sticky" }).append(heading, toolbar, filters);
-    for (const [value, label] of [["all", "全部"], ["active", "单件"], ["stock", "库存"], ["restock", "待补货"], ["history", "历史"]] as const) {
+    const filterTool = heading.createEl("button", { cls: "doudou-round-tool doudou-item-filter-tool", attr: { type: "button", "aria-label": "筛选小物库" } }); setIcon(filterTool, "filter"); filterTool.createSpan({ cls: "doudou-item-filter-label", text: "全部" });
+    const filters = sticky.createDiv({ cls: "doudou-items-filters", attr: { role: "menu", "aria-label": "物品筛选" } }); filters.hidden = true;
+    filterTool.addEventListener("click", () => { filters.hidden = !filters.hidden; });
+    for (const [value, label] of [["all", "全部"], ["active", "使用中"], ["idle", "闲置"], ["stock", "库存"], ["restock", "待补货"], ["retired", "已退役"], ["nostock", "不再买"]] as const) {
       const button = this.button(filters, label, async () => {
         this.filter = value;
         for (const entry of Array.from(filters.querySelectorAll("button"))) {
           const selected = entry === button; entry.toggleClass("doudou-is-selected", selected); entry.setAttribute("aria-pressed", String(selected));
         }
-        await this.refresh();
+        filterTool.querySelector(".doudou-item-filter-label")?.setText(label); filters.hidden = true; await this.refresh();
       });
       button.addClass(`doudou-item-filter-${value}`);
       button.toggleClass("doudou-is-selected", this.filter === value); button.setAttribute("aria-pressed", String(this.filter === value));

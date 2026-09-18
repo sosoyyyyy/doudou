@@ -1926,10 +1926,14 @@ test("item toolbar shares library tool sizing and keeps cards inside their own s
   const filter = tools.querySelector('button.doudou-tag-filter-tool.doudou-round-tool') as HTMLButtonElement;
   const search = tools.querySelector('button[aria-label="搜索小物库"]') as HTMLButtonElement;
   const library = document.createElement("button"); library.className = "doudou-round-tool"; root.append(library);
-  for (const property of ["width", "height", "minHeight", "padding", "borderRadius", "color", "backgroundColor"]) {
+  for (const property of ["height", "minHeight", "borderRadius", "color", "backgroundColor"]) {
     assert.equal(window.getComputedStyle(filter)[property as keyof CSSStyleDeclaration], window.getComputedStyle(library)[property as keyof CSSStyleDeclaration], `filter ${property}`);
     assert.equal(window.getComputedStyle(search)[property as keyof CSSStyleDeclaration], window.getComputedStyle(library)[property as keyof CSSStyleDeclaration], `search ${property}`);
   }
+  for (const property of ["width", "padding"]) assert.equal(window.getComputedStyle(search)[property as keyof CSSStyleDeclaration], window.getComputedStyle(library)[property as keyof CSSStyleDeclaration], `search ${property}`);
+  assert.equal(window.getComputedStyle(filter).width, "auto");
+  assert.equal(filter.querySelector('.doudou-item-filter-label')?.textContent, "全部");
+  assert.equal(tools.querySelectorAll('button').length, 2);
   assert.match(cssDeclarations('.doudou-view .doudou-items-body.doudou-items-home'), /overflow:\s*hidden/);
   assert.match(cssDeclarations('.doudou-view .doudou-items-home > .doudou-items-list'), /overflow-y:\s*auto/);
   assert.equal(window.getComputedStyle(root.querySelector('.doudou-items-sticky') as HTMLElement).backgroundColor, window.getComputedStyle(root.querySelector('.doudou-items-home') as HTMLElement).backgroundColor);
@@ -1938,6 +1942,9 @@ test("item toolbar shares library tool sizing and keeps cards inside their own s
   idle.click(); await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal(root.querySelector('.doudou-item-filter-label')?.textContent, "闲置");
   assert.equal(root.querySelector('.doudou-item-filter-label')?.classList.contains('doudou-item-badge-idle'), true);
+  (filter.querySelector('.doudou-item-filter-label') as HTMLElement).click();
+  assert.equal((root.querySelector('.doudou-items-filters') as HTMLElement).hidden, false);
+  filter.click();
   assert.equal((root.querySelector('.doudou-items-filters') as HTMLElement).hidden, true);
   page.onunload(); root.remove();
 });

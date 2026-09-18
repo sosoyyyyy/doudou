@@ -251,7 +251,7 @@
 .doudou-view .doudou-items-sticky { position: relative; z-index: 5; flex: 0 0 auto; width: 100%; max-width: none; margin: 0; padding: 12px clamp(12px, 4vw, 28px) 8px; background: var(--doudou-bg); }
 .doudou-view .doudou-items-sticky > .doudou-items-heading, .doudou-view .doudou-items-sticky > .doudou-items-toolbar { width: 100%; max-width: 680px; margin-inline: auto; }
 .doudou-view .doudou-items-heading .doudou-library-heading-tools { margin-left: auto; }
-.doudou-view .doudou-item-filter-control { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+.doudou-view .doudou-items-heading button.doudou-round-tool.doudou-tag-filter-tool { width: auto; min-width: 36px; padding: 0 7px; gap: 4px; }
 .doudou-view .doudou-item-filter-label.doudou-item-badge { padding: 2px 5px; }
 .doudou-view .doudou-items-filters { position: absolute; top: calc(100% - 4px); right: max(clamp(12px, 4vw, 28px), calc((100% - 680px) / 2)); z-index: 8; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: 150px; margin: 0; padding: 5px; border: 1px solid var(--doudou-border); border-radius: 10px; background: var(--doudou-surface); box-shadow: 0 8px 24px rgb(0 0 0 / 12%); }
 .doudou-view .doudou-items-home > .doudou-items-list { display: grid; flex: 1 1 auto; align-content: start; width: 100%; max-width: none; min-height: 0; margin: 0; padding: 0 clamp(12px, 4vw, 28px) max(30px, var(--doudou-mobile-bottom-clearance, env(safe-area-inset-bottom))); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }

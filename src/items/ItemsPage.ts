@@ -42,9 +42,8 @@ export class ItemsPage extends Component {
     heading.createEl("h2", { text: "小物库" });
     this.countEl = heading.createSpan({ cls: "doudou-items-count", attr: { "aria-live": "polite" } });
     const tools = heading.createDiv({ cls: "doudou-library-heading-tools" });
-    const filterControl = tools.createDiv({ cls: "doudou-item-filter-control" });
-    const filterTool = filterControl.createEl("button", { cls: "doudou-round-tool doudou-tag-filter-tool", attr: { type: "button", "aria-label": "筛选小物库", "aria-expanded": "false" } }); setIcon(filterTool, "filter");
-    const filterLabel = filterControl.createSpan({ cls: `doudou-item-badge doudou-item-filter-label${this.filter === "all" ? " doudou-item-filter-all" : ""}`, text: itemFilterOptions.find(([value]) => value === this.filter)?.[1] ?? "全部" });
+    const filterTool = tools.createEl("button", { cls: "doudou-round-tool doudou-tag-filter-tool", attr: { type: "button", "aria-label": "筛选小物库", "aria-expanded": "false" } }); setIcon(filterTool, "filter");
+    const filterLabel = filterTool.createSpan({ cls: `doudou-item-badge doudou-item-filter-label${this.filter === "all" ? " doudou-item-filter-all" : ""}`, text: itemFilterOptions.find(([value]) => value === this.filter)?.[1] ?? "全部" });
     if (this.filter !== "all") filterLabel.addClass(`doudou-item-badge-${itemBadgeTone[this.filter]}`);
     const searchButton = tools.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索小物库" } }); setIcon(searchButton, "search");
     const toolbar = sticky.createDiv({ cls: "doudou-items-toolbar" }); toolbar.hidden = !this.query;
@@ -58,7 +57,6 @@ export class ItemsPage extends Component {
     const filters = sticky.createDiv({ cls: "doudou-items-filters", attr: { role: "menu", "aria-label": "物品筛选" } }); filters.hidden = true;
     const toggleFilters = (): void => { filters.hidden = !filters.hidden; filterTool.setAttribute("aria-expanded", String(!filters.hidden)); };
     filterTool.addEventListener("click", toggleFilters);
-    filterLabel.addEventListener("click", toggleFilters);
     for (const [value, label] of itemFilterOptions) {
       const button = this.button(filters, "", async () => {
         this.filter = value;

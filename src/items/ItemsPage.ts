@@ -90,7 +90,7 @@ export class ItemsPage extends Component {
         const text = open.createSpan({ cls: "doudou-item-copy" });
         text.createEl("strong", { cls: "doudou-item-name", text: item.name, attr: { title: item.name } });
         this.cardInfo(text, item);
-        if (item.kind === "single" && item.purchased) text.createSpan({ cls: "doudou-item-date", text: `购于 ${item.purchased}` });
+        if (item.kind === "single" && item.purchased) text.createSpan({ cls: "doudou-item-date", text: item.status === "retired" && item.retired ? `${item.purchased} → ${item.retired}` : `购于 ${item.purchased}` });
         const side = card.createDiv({ cls: "doudou-item-side" });
         const state = itemDisplayState(item);
         const label = state === "history" ? item.kind === "single" ? "已退役" : "不再买" : state === "restock" ? "待补货" : state === "active" ? item.status === "idle" ? "闲置" : "使用中" : "库存";

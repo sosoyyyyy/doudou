@@ -247,6 +247,7 @@
 .doudou-view .doudou-items-page select { appearance: auto; }
 
 /* Compact home hierarchy; controls look quiet while retaining touch-sized targets. */
+.doudou-view .doudou-items-sticky { position: sticky; top: 0; z-index: 5; margin: -14px auto 8px; padding: 10px 0 2px; background: var(--doudou-bg); }
 .doudou-view .doudou-items-body.doudou-items-home { padding-top: 14px; }
 .doudou-view .doudou-items-home h2 { margin-top: 0; margin-bottom: 0; font-size: 20px; line-height: 1.4; }
 .doudou-view .doudou-items-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; }
@@ -293,6 +294,7 @@
 .doudou-view .doudou-item-initial { display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #edf4fb; color: #5f7892; font-size: 17px; line-height: 1; }
 .doudou-view .doudou-item-badge { display: inline-block; padding: 2px 5px; border-radius: 5px; font-size: 10px; line-height: 1.5; white-space: nowrap; }
 .doudou-view .doudou-item-badge-active { color: #26714e; background: #e4f2e9; }
+.doudou-view .doudou-item-badge-idle { color: #60758a; background: #edf1f5; }
 .doudou-view .doudou-item-badge-history { color: #a13e43; background: #fbe9e9; }
 .doudou-view .doudou-item-badge-stock { color: #326baf; background: #e5effc; }
 .doudou-view .doudou-item-badge-restock { color: #94600a; background: #fff0cf; }

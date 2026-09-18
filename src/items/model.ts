@@ -3,7 +3,7 @@ export const ITEMS_PATH = `${ITEMS_ROOT}/items.json`;
 export const ITEM_ASSETS = `${ITEMS_ROOT}/assets`;
 export interface Item {
   id: string; kind: "single" | "stock"; name: string; notes: string; photos: string[];
-  purchased?: string; price?: number; status: "active" | "retired"; retired?: string;
+  purchased?: string; price?: number; status: "active" | "idle" | "retired"; retired?: string;
   quantity: number; noRestock?: boolean; cover?: string; revision: number; created: string; updated: string; importKey?: string;
 }
 export interface ItemStore { schemaVersion: 1; items: Item[]; importedKeys: string[] }
@@ -11,7 +11,7 @@ export function validDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 export function validateItem(item: Item): void {
-  if (!item || typeof item.id !== "string" || !item.id || typeof item.name !== "string" || !item.name.trim() || typeof item.notes !== "string" || !["single", "stock"].includes(item.kind) || !["active", "retired"].includes(item.status)) throw new Error("请填写物品名称并选择有效类型和状态");
+  if (!item || typeof item.id !== "string" || !item.id || typeof item.name !== "string" || !item.name.trim() || typeof item.notes !== "string" || !["single", "stock"].includes(item.kind) || !["active", "idle", "retired"].includes(item.status)) throw new Error("请填写物品名称并选择有效类型和状态");
   if (!Number.isSafeInteger(item.quantity) || item.quantity < 0 || !Number.isSafeInteger(item.revision) || item.revision < 0) throw new Error("数量必须是非负整数");
   if (item.noRestock !== undefined && typeof item.noRestock !== "boolean") throw new Error("补货状态无效");
   if (item.cover !== undefined && (typeof item.cover !== "string" || Array.from(item.cover).length > 1)) throw new Error("封面字只能是一个字符");

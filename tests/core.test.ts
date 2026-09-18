@@ -1967,7 +1967,7 @@ test("item editor segments show only relevant fields and preserve retirement edi
   ([...root.querySelectorAll("button")].find(b => b.textContent === "编辑") as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
   const statuses = root.querySelector('[aria-label="物品状态"]') as HTMLElement;
   assert.equal(statuses.hidden, false);
-  const date = root.querySelector('input[type="date"]') as HTMLInputElement;
+  const date = [...root.querySelectorAll('input[placeholder="例如 20260620"]')].at(-1) as HTMLInputElement;
   assert.equal(date.disabled, true);
   (statuses.querySelector('button:last-child') as HTMLButtonElement).click(); assert.equal(date.disabled, false); date.value = "2026-09-18";
   (root.querySelector('[aria-label="物品类型"] button:last-child') as HTMLButtonElement).click();

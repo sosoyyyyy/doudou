@@ -1,4 +1,4 @@
-import { Component, Notice } from "obsidian";
+import { Component, Notice, setIcon } from "obsidian";
 import { ItemService } from "./ItemService";
 import { blankItem, itemMetrics, matchesItem, type Item } from "./model";
 import { itemDisplayState, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, type ItemFilter } from "./itemPresentation";
@@ -37,15 +37,18 @@ export class ItemsPage extends Component {
     const heading = body.createDiv({ cls: "doudou-items-heading" });
     heading.createEl("h2", { text: "小物库" });
     this.countEl = heading.createSpan({ cls: "doudou-items-count", attr: { "aria-live": "polite" } });
-    const toolbar = body.createDiv({ cls: "doudou-items-toolbar" });
+    const searchButton = heading.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索小物库" } }); setIcon(searchButton, "search");
+    const toolbar = body.createDiv({ cls: "doudou-items-toolbar" }); toolbar.hidden = !this.query;
     const search = toolbar.createEl("input", { attr: { type: "search", placeholder: "搜索名称或备注", "aria-label": "搜索小物库" } }); search.value = this.query;
+    searchButton.addEventListener("click", () => { toolbar.hidden = !toolbar.hidden; if (!toolbar.hidden) search.focus(); else { this.query = ""; search.value = ""; void this.refresh(); } });
     search.addEventListener("input", () => {
       this.query = search.value;
       if (this.searchTimer) clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => { this.searchTimer = undefined; void this.refresh(); }, 250);
     });
     const filters = body.createDiv({ cls: "doudou-items-filters", attr: { role: "group", "aria-label": "物品筛选" } });
-    for (const [value, label] of [["all", "全部"], ["active", "使用中"], ["stock", "库存"], ["restock", "待补货"], ["history", "历史"]] as const) {
+    body.createDiv({ cls: "doudou-items-sticky" }).append(heading, toolbar, filters);
+    for (const [value, label] of [["all", "全部"], ["active", "单件"], ["stock", "库存"], ["restock", "待补货"], ["history", "历史"]] as const) {
       const button = this.button(filters, label, async () => {
         this.filter = value;
         for (const entry of Array.from(filters.querySelectorAll("button"))) {
@@ -75,7 +78,7 @@ export class ItemsPage extends Component {
       if (!matches.length) this.listEl.createEl("p", { cls: "doudou-items-empty", text: this.query || this.filter !== "all" ? "没有找到符合条件的物品。" : "还空着呢。点顶部 +，收进第一件物品吧。" });
       for (const item of matches) {
         const card = this.listEl.createDiv({ cls: "doudou-item-card" });
-        const open = this.button(card, "", () => this.detail(item)); open.addClass("doudou-item-open");
+      const open = this.button(card, "", () => this.detail(item)); open.addClass("doudou-item-open");
         const visual = open.createSpan({ cls: "doudou-item-visual" });
         const placeholder = visual.createSpan({ cls: "doudou-item-initial", text: item.cover || Array.from(item.name.trim())[0] || "·", attr: { "aria-hidden": "true" } });
         const source = item.photos[0] ? this.service.resource(item.photos[0]) : "";
@@ -90,7 +93,7 @@ export class ItemsPage extends Component {
         if (item.kind === "single" && item.purchased) text.createSpan({ cls: "doudou-item-date", text: `购于 ${item.purchased}` });
         const side = card.createDiv({ cls: "doudou-item-side" });
         const state = itemDisplayState(item);
-        const label = state === "history" ? item.kind === "single" ? "已退役" : "不再买" : state === "restock" ? "待补货" : state === "active" ? "使用中" : "库存";
+        const label = state === "history" ? item.kind === "single" ? "已退役" : "不再买" : state === "restock" ? "待补货" : state === "active" ? item.status === "idle" ? "闲置" : "使用中" : "库存";
         side.createSpan({ cls: `doudou-item-badge doudou-item-badge-${state}`, text: label });
         if (item.kind === "stock") this.stockControls(side, item, false);
       }
@@ -115,7 +118,7 @@ export class ItemsPage extends Component {
   private summary(item: Item): string {
     if (item.kind === "stock") return `${item.noRestock ? "不再买" : item.quantity === 0 ? "待补货" : "库存"} · ${item.quantity} 件`;
     const metrics = itemMetrics(item);
-    return [item.status === "active" ? "使用中" : "已退役", metrics.days === undefined ? undefined : `已经陪你 ${metrics.days} 天`, metrics.daily === undefined ? undefined : `¥${metrics.daily.toFixed(2)}/天`].filter(Boolean).join(" · ");
+    return [item.status === "active" ? "使用中" : item.status === "idle" ? "闲置" : "已退役", metrics.days === undefined ? undefined : `已经陪你 ${metrics.days} 天`, metrics.daily === undefined ? undefined : `¥${metrics.daily.toFixed(2)}/天`].filter(Boolean).join(" · ");
   }
   private stockControls(parent: HTMLElement, item: Item, showValue = true): void {
     const controls = parent.createDiv({ cls: "doudou-item-stepper", attr: { role: "group", "aria-label": `${item.name} 数量调节` } });
@@ -193,10 +196,10 @@ export class ItemsPage extends Component {
     price.inputMode = "decimal";
     const purchaseRow = form.createDiv({ cls: "doudou-item-purchase-row" });
     purchaseRow.append(purchased.parentElement!, price.parentElement!);
-    const statusGroup = segment("物品状态", [["active", "使用中"], ["retired", "已退役"]] as const, status.value, value => { status.value = value; updateVisibility(); });
+    const statusGroup = segment("物品状态", [["active", "使用中"], ["idle", "闲置"], ["retired", "已退役"]] as const, status.value, value => { status.value = value; if (value === "retired" && !retired.value) retired.value = new Date().toISOString().slice(0, 10); updateVisibility(); });
     const restock = { value: draft.noRestock === true ? "stop" : "continue" };
     const restockGroup = segment("补货计划", [["continue", "继续补货"], ["stop", "不再买"]] as const, restock.value, value => { restock.value = value; });
-    const retired = field("退役日期", "date", draft.retired ?? "");
+    const retired = field("退役日期", "text", draft.retired ?? ""); retired.inputMode = "numeric"; retired.placeholder = "例如 20260620"; retired.maxLength = 10; retired.addEventListener("blur", () => { retired.value = normalizeItemDateInput(retired.value); });
     const quantity = field("数量", "number", String(draft.quantity)); quantity.min = "0"; quantity.step = "1";
     const updateVisibility = (): void => {
       purchaseRow.hidden = kind.value !== "single";

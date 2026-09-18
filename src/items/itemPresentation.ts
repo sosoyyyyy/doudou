@@ -8,7 +8,7 @@ export function itemDisplayState(item: Item): ItemDisplayState {
   return item.quantity === 0 ? "restock" : "stock";
 }
 export function matchesItemFilter(item: Item, filter: ItemFilter): boolean {
-  return filter === "all" || itemDisplayState(item) === filter;
+  return filter === "all" || (filter === "active" ? item.kind === "single" && item.status !== "retired" : itemDisplayState(item) === filter);
 }
 /** UI-only formatting; persisted dates retain the existing ISO date format. */
 export function normalizeItemDateInput(value: string): string {

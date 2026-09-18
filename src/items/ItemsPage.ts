@@ -3,6 +3,9 @@ import { ItemService } from "./ItemService";
 import { blankItem, itemMetrics, matchesItem, type Item } from "./model";
 import { itemDisplayState, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, type ItemFilter } from "./itemPresentation";
 
+const itemFilterOptions: readonly (readonly [ItemFilter, string])[] = [["all", "全部"], ["active", "使用中"], ["idle", "闲置"], ["stock", "库存"], ["restock", "待补货"], ["retired", "已退役"], ["nostock", "不再买"]];
+const itemBadgeTone: Record<ItemFilter, string> = { all: "", active: "active", idle: "idle", stock: "stock", restock: "restock", retired: "retired", nostock: "nostock" };
+
 export class ItemsPage extends Component {
   private body!: HTMLElement;
   private listEl!: HTMLElement;
@@ -38,7 +41,12 @@ export class ItemsPage extends Component {
     const heading = sticky.createDiv({ cls: "doudou-items-heading" });
     heading.createEl("h2", { text: "小物库" });
     this.countEl = heading.createSpan({ cls: "doudou-items-count", attr: { "aria-live": "polite" } });
-    const searchButton = heading.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索小物库" } }); setIcon(searchButton, "search");
+    const tools = heading.createDiv({ cls: "doudou-library-heading-tools" });
+    const filterControl = tools.createDiv({ cls: "doudou-item-filter-control" });
+    const filterTool = filterControl.createEl("button", { cls: "doudou-round-tool doudou-tag-filter-tool", attr: { type: "button", "aria-label": "筛选小物库", "aria-expanded": "false" } }); setIcon(filterTool, "filter");
+    const filterLabel = filterControl.createSpan({ cls: `doudou-item-badge doudou-item-filter-label${this.filter === "all" ? " doudou-item-filter-all" : ""}`, text: itemFilterOptions.find(([value]) => value === this.filter)?.[1] ?? "全部" });
+    if (this.filter !== "all") filterLabel.addClass(`doudou-item-badge-${itemBadgeTone[this.filter]}`);
+    const searchButton = tools.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索小物库" } }); setIcon(searchButton, "search");
     const toolbar = sticky.createDiv({ cls: "doudou-items-toolbar" }); toolbar.hidden = !this.query;
     const search = toolbar.createEl("input", { attr: { type: "search", placeholder: "搜索名称或备注", "aria-label": "搜索小物库" } }); search.value = this.query;
     searchButton.addEventListener("click", () => { toolbar.hidden = !toolbar.hidden; if (!toolbar.hidden) search.focus(); else { this.query = ""; search.value = ""; void this.refresh(); } });
@@ -47,18 +55,23 @@ export class ItemsPage extends Component {
       if (this.searchTimer) clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => { this.searchTimer = undefined; void this.refresh(); }, 250);
     });
-    const filterTool = heading.createEl("button", { cls: "doudou-round-tool doudou-item-filter-tool", attr: { type: "button", "aria-label": "筛选小物库" } }); setIcon(filterTool, "filter"); filterTool.createSpan({ cls: "doudou-item-filter-label", text: "全部" });
     const filters = sticky.createDiv({ cls: "doudou-items-filters", attr: { role: "menu", "aria-label": "物品筛选" } }); filters.hidden = true;
-    filterTool.addEventListener("click", () => { filters.hidden = !filters.hidden; });
-    for (const [value, label] of [["all", "全部"], ["active", "使用中"], ["idle", "闲置"], ["stock", "库存"], ["restock", "待补货"], ["retired", "已退役"], ["nostock", "不再买"]] as const) {
-      const button = this.button(filters, label, async () => {
+    const toggleFilters = (): void => { filters.hidden = !filters.hidden; filterTool.setAttribute("aria-expanded", String(!filters.hidden)); };
+    filterTool.addEventListener("click", toggleFilters);
+    filterLabel.addEventListener("click", toggleFilters);
+    for (const [value, label] of itemFilterOptions) {
+      const button = this.button(filters, "", async () => {
         this.filter = value;
         for (const entry of Array.from(filters.querySelectorAll("button"))) {
           const selected = entry === button; entry.toggleClass("doudou-is-selected", selected); entry.setAttribute("aria-pressed", String(selected));
         }
-        filterTool.querySelector(".doudou-item-filter-label")?.setText(label); filters.hidden = true; await this.refresh();
+        filterLabel.setText(label);
+        filterLabel.toggleClass("doudou-item-filter-all", value === "all");
+        for (const tone of Object.values(itemBadgeTone)) if (tone) filterLabel.removeClass(`doudou-item-badge-${tone}`);
+        if (value !== "all") filterLabel.addClass(`doudou-item-badge-${itemBadgeTone[value]}`);
+        filters.hidden = true; filterTool.setAttribute("aria-expanded", "false"); await this.refresh();
       });
-      button.addClass(`doudou-item-filter-${value}`);
+      button.createSpan({ cls: `doudou-item-badge${value === "all" ? " doudou-item-filter-all" : ` doudou-item-badge-${itemBadgeTone[value]}`}`, text: label });
       button.toggleClass("doudou-is-selected", this.filter === value); button.setAttribute("aria-pressed", String(this.filter === value));
     }
     this.listEl = body.createDiv({ cls: "doudou-items-list", attr: { "aria-live": "polite" } }); void this.refresh();
@@ -75,8 +88,8 @@ export class ItemsPage extends Component {
         if (item) this.detail(item); else this.home(); return;
       }
       this.listEl.empty();
-      this.countEl.setText(`${items.length} 件`);
       const matches = items.filter(item => matchesItem(item, this.query) && matchesItemFilter(item, this.filter));
+      this.countEl.setText(`${matches.length} 件`);
       if (!matches.length) this.listEl.createEl("p", { cls: "doudou-items-empty", text: this.query || this.filter !== "all" ? "没有找到符合条件的物品。" : "还空着呢。点顶部 +，收进第一件物品吧。" });
       for (const item of matches) {
         const card = this.listEl.createDiv({ cls: "doudou-item-card" });
@@ -96,7 +109,8 @@ export class ItemsPage extends Component {
         const side = card.createDiv({ cls: "doudou-item-side" });
         const state = itemDisplayState(item);
         const label = state === "history" ? item.kind === "single" ? "已退役" : "不再买" : state === "restock" ? "待补货" : state === "active" ? item.status === "idle" ? "闲置" : "使用中" : "库存";
-        side.createSpan({ cls: `doudou-item-badge doudou-item-badge-${state}`, text: label });
+        const tone = item.kind === "single" ? item.status : item.noRestock ? "nostock" : state;
+        side.createSpan({ cls: `doudou-item-badge doudou-item-badge-${tone}`, text: label });
         if (item.kind === "stock") this.stockControls(side, item, false);
       }
     } catch (error) {

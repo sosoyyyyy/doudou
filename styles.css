@@ -221,7 +221,7 @@
 .doudou-view .doudou-items-body h2 { margin-top: 4px; margin-bottom: 6px; font-size: 24px; overflow-wrap: anywhere; }
 .doudou-view .doudou-items-muted { color: var(--doudou-muted); font-size: 13px; }
 .doudou-view .doudou-items-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 12px; }
-.doudou-view .doudou-items-page button { display: inline-flex; align-items: center; justify-content: center; appearance: none; width: auto; min-width: 44px; max-width: 100%; height: auto; min-height: 44px; max-height: none; margin: 0; padding: 8px 12px; overflow: hidden; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; border: 1px solid var(--doudou-border); border-radius: 12px; box-shadow: none; color: var(--text-normal); background: var(--doudou-surface); touch-action: manipulation; }
+.doudou-view .doudou-items-page button:where(:not(.doudou-round-tool)) { display: inline-flex; align-items: center; justify-content: center; appearance: none; width: auto; min-width: 44px; max-width: 100%; height: auto; min-height: 44px; max-height: none; margin: 0; padding: 8px 12px; overflow: hidden; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; border: 1px solid var(--doudou-border); border-radius: 12px; box-shadow: none; color: var(--text-normal); background: var(--doudou-surface); touch-action: manipulation; }
 .doudou-view .doudou-items-page button:disabled { opacity: .45; }
 .doudou-view .doudou-items-page input, .doudou-view .doudou-items-page select, .doudou-view .doudou-items-page textarea { display: block; appearance: none; width: 100%; min-width: 0; max-width: 100%; height: auto; min-height: 44px; max-height: none; margin: 6px 0 0; padding: 10px 12px; overflow: auto; line-height: 1.5; white-space: normal; border: 1px solid var(--doudou-border); border-radius: 12px; color: var(--text-normal); background: var(--doudou-surface); font: inherit; box-shadow: none; }
 .doudou-view .doudou-items-page textarea { resize: vertical; }
@@ -247,11 +247,15 @@
 .doudou-view .doudou-items-page select { appearance: auto; }
 
 /* Compact home hierarchy; controls look quiet while retaining touch-sized targets. */
-.doudou-view .doudou-items-sticky { position: sticky; top: 0; z-index: 5; margin: -14px auto 8px; padding: 10px 0 2px; background: var(--doudou-bg); }
-.doudou-view .doudou-items-sticky .doudou-items-heading { justify-content: space-between; }
-.doudou-view .doudou-items-sticky .doudou-items-heading .doudou-round-tool { margin-left: auto; }
-.doudou-view .doudou-items-filters { position: absolute; top: 48px; right: 0; z-index: 8; display: grid; grid-template-columns: 1fr; width: 150px; padding: 5px; border: 1px solid var(--doudou-border); border-radius: 10px; background: var(--doudou-surface); box-shadow: 0 8px 24px rgb(0 0 0 / 12%); }
-.doudou-view .doudou-items-body.doudou-items-home { padding-top: 14px; }
+.doudou-view .doudou-items-body.doudou-items-home { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.doudou-view .doudou-items-sticky { position: relative; z-index: 5; flex: 0 0 auto; width: 100%; max-width: none; margin: 0; padding: 12px clamp(12px, 4vw, 28px) 8px; background: var(--doudou-bg); }
+.doudou-view .doudou-items-sticky > .doudou-items-heading, .doudou-view .doudou-items-sticky > .doudou-items-toolbar { width: 100%; max-width: 680px; margin-inline: auto; }
+.doudou-view .doudou-items-heading .doudou-library-heading-tools { margin-left: auto; }
+.doudou-view .doudou-item-filter-control { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+.doudou-view .doudou-item-filter-label.doudou-item-badge { padding: 2px 5px; }
+.doudou-view .doudou-items-filters { position: absolute; top: calc(100% - 4px); right: max(clamp(12px, 4vw, 28px), calc((100% - 680px) / 2)); z-index: 8; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: 150px; margin: 0; padding: 5px; border: 1px solid var(--doudou-border); border-radius: 10px; background: var(--doudou-surface); box-shadow: 0 8px 24px rgb(0 0 0 / 12%); }
+.doudou-view .doudou-items-home > .doudou-items-list { display: grid; flex: 1 1 auto; align-content: start; width: 100%; max-width: none; min-height: 0; margin: 0; padding: 0 clamp(12px, 4vw, 28px) max(30px, var(--doudou-mobile-bottom-clearance, env(safe-area-inset-bottom))); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.doudou-view .doudou-items-home > .doudou-items-list > * { width: 100%; max-width: 680px; margin-inline: auto; }
 .doudou-view .doudou-items-home h2 { margin-top: 0; margin-bottom: 0; font-size: 20px; line-height: 1.4; }
 .doudou-view .doudou-items-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; }
 .doudou-view .doudou-items-toolbar input { flex: 1; width: 0; min-width: 0; margin: 0; padding: 9px 12px; font-size: 14px; }
@@ -266,7 +270,7 @@
 .doudou-view .doudou-item-stepper button:disabled { opacity: .3; }
 .doudou-view .doudou-items-page button:focus-visible { outline: 2px solid var(--doudou-blue); outline-offset: -2px; }
 
-.doudou-view .doudou-items-heading { display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px; }
+.doudou-view .doudou-items-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 0; }
 .doudou-view .doudou-items-count { color: var(--doudou-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
 .doudou-view .doudou-item-info { margin-top: 2px; }
 /* Keep the editor toolbar outside the scrolling form, inside the existing viewport shell. */
@@ -280,36 +284,25 @@
 .doudou-view .doudou-items-editor-form > * { max-width: 780px; margin-inline: auto; }
 .is-mobile .doudou-view .doudou-items-editor-form:focus-within { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
 
-.doudou-view .doudou-items-home > * { max-width: 680px; }
-.doudou-view .doudou-items-filters { display: flex; gap: 2px; margin-top: -6px; margin-bottom: 8px; min-width: 0; }
-.doudou-view .doudou-items-filters button { flex: 1; min-width: 0; min-height: 44px; padding: 6px 2px; font-size: 12px; border: 0; border-radius: 9px; white-space: nowrap; background: transparent; color: var(--doudou-muted); }
-.doudou-view .doudou-items-filters button.doudou-is-selected { color: var(--doudou-blue-strong); background: var(--doudou-blue-soft); font-weight: 600; }
-.doudou-view .doudou-items-filters button.doudou-item-filter-active.doudou-is-selected { color: #26714e; background: #e4f2e9; }
-.doudou-view .doudou-items-filters button.doudou-item-filter-stock.doudou-is-selected { color: #326baf; background: #e5effc; }
-.doudou-view .doudou-items-filters button.doudou-item-filter-restock.doudou-is-selected { color: #94600a; background: #fff0cf; }
-.doudou-view .doudou-items-filters button.doudou-item-filter-history.doudou-is-selected { color: #a13e43; background: #fbe9e9; }
-.theme-dark .doudou-view .doudou-items-filters button.doudou-item-filter-active.doudou-is-selected { color: #a2dbba; background: #224838; }
-.theme-dark .doudou-view .doudou-items-filters button.doudou-item-filter-stock.doudou-is-selected { color: #a6c9f6; background: #253e5e; }
-.theme-dark .doudou-view .doudou-items-filters button.doudou-item-filter-restock.doudou-is-selected { color: #f4d088; background: #594421; }
-.theme-dark .doudou-view .doudou-items-filters button.doudou-item-filter-history.doudou-is-selected { color: #f0abb0; background: #512d34; }
-.doudou-view .doudou-items-sticky .doudou-items-filters { display: grid; gap: 2px; margin: 0; }
-.doudou-view .doudou-items-sticky .doudou-items-filters button { width: 100%; min-height: 36px; justify-content: flex-start; padding: 6px 10px; text-align: left; }
-.doudou-view .doudou-items-heading .doudou-item-filter-tool { order: 3; margin-left: auto; width: auto; padding: 0 10px; gap: 6px; }
-.doudou-view .doudou-items-heading > .doudou-round-tool:not(.doudou-item-filter-tool) { order: 4; margin-left: 0; }
-.doudou-view .doudou-items-sticky { background: var(--doudou-bg); box-shadow: 0 2px 0 var(--doudou-bg); }
+.doudou-view .doudou-items-filters button:not(.doudou-round-tool) { display: flex; justify-content: flex-start; width: 100%; min-height: 36px; margin: 0; padding: 6px 10px; border: 0; border-radius: 9px; background: transparent; text-align: left; white-space: nowrap; }
+.doudou-view .doudou-items-filters button.doudou-is-selected { background: var(--doudou-blue-soft); }
+.doudou-view .doudou-item-filter-all { color: var(--doudou-blue-strong); background: transparent; }
 .doudou-view .doudou-item-visual { position: relative; display: block; width: 36px; height: 36px; flex: 0 0 36px; }
 .doudou-view .doudou-item-open img, .doudou-view .doudou-item-initial { width: 36px; height: 36px; }
 .doudou-view .doudou-item-initial { display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #edf4fb; color: #5f7892; font-size: 17px; line-height: 1; }
 .doudou-view .doudou-item-badge { display: inline-block; padding: 2px 5px; border-radius: 5px; font-size: 10px; line-height: 1.5; white-space: nowrap; }
 .doudou-view .doudou-item-badge-active { color: #26714e; background: #e4f2e9; }
-.doudou-view .doudou-item-badge-idle { color: #60758a; background: #edf1f5; }
-.doudou-view .doudou-item-badge-history { color: #a13e43; background: #fbe9e9; }
+.doudou-view .doudou-item-badge-idle { color: #8a6722; background: #fbf3da; }
+.doudou-view .doudou-item-badge-history, .doudou-view .doudou-item-badge-retired { color: #a13e43; background: #fbe9e9; }
 .doudou-view .doudou-item-badge-stock { color: #326baf; background: #e5effc; }
-.doudou-view .doudou-item-badge-restock { color: #94600a; background: #fff0cf; }
+.doudou-view .doudou-item-badge-restock { color: #a65b1b; background: #fff0df; }
+.doudou-view .doudou-item-badge-nostock { color: #596673; background: #edf0f2; }
 .theme-dark .doudou-view .doudou-item-badge-active { color: #a2dbba; background: #224838; }
-.theme-dark .doudou-view .doudou-item-badge-history { color: #f0abb0; background: #512d34; }
+.theme-dark .doudou-view .doudou-item-badge-idle { color: #e8cd89; background: #4a3e25; }
+.theme-dark .doudou-view .doudou-item-badge-history, .theme-dark .doudou-view .doudou-item-badge-retired { color: #f0abb0; background: #512d34; }
 .theme-dark .doudou-view .doudou-item-badge-stock { color: #a6c9f6; background: #253e5e; }
-.theme-dark .doudou-view .doudou-item-badge-restock { color: #f4d088; background: #594421; }
+.theme-dark .doudou-view .doudou-item-badge-restock { color: #f0bb8a; background: #563823; }
+.theme-dark .doudou-view .doudou-item-badge-nostock { color: #bfc8d0; background: #34404b; }
 .doudou-view .doudou-item-date { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--doudou-muted); font-size: 11px; line-height: 1.4; }
 .doudou-view .doudou-item-side { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; justify-content: space-between; align-self: stretch; min-width: 54px; }
 .doudou-view .doudou-item-side .doudou-item-stepper { margin-right: 0; overflow: visible; }

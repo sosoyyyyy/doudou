@@ -1877,7 +1877,7 @@ test("items editor saves a stock item, searches notes and cancels without writin
   }
   assert.equal((await service.list())[0].quantity, 0);
   assert.equal((root.querySelector('button[aria-label="测试电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
-  assert.equal(root.querySelector('.doudou-item-badge')?.textContent, "待补货");
+  assert.equal(root.querySelector('.doudou-item-card .doudou-item-badge')?.textContent, "待补货");
   page.create(); const cancel = [...root.querySelectorAll("button")].find(b => b.textContent === "取消")!; cancel.click();
   await new Promise(resolve => setTimeout(resolve, 20)); assert.equal((await service.list()).length, 1);
   page.onunload(); root.remove();
@@ -1911,10 +1911,34 @@ test("stock no-restock choice survives saving and quantity changes", async () =>
   assert.equal((await service.list())[0].noRestock, true);
   await service.adjust(saved.id, -1);
   page.home(); await page.refresh();
-  assert.equal(root.querySelector('.doudou-item-badge')?.textContent, "不再买");
+  assert.equal(root.querySelector('.doudou-item-card .doudou-item-badge')?.textContent, "不再买");
   assert.equal((root.querySelector('button[aria-label="旧电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
   assert.equal(root.querySelector('.doudou-item-name')?.textContent, "旧电池");
   assert.equal((await service.list())[0].notes, "备用");
+  page.onunload(); root.remove();
+});
+
+test("item toolbar shares library tool sizing and keeps cards inside their own scroll area", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const root = document.createElement("div"); root.className = "doudou-view"; document.body.append(root);
+  const page = new ItemsPage(root, service); page.onload(); await page.refresh();
+  const tools = root.querySelector('.doudou-items-heading .doudou-library-heading-tools') as HTMLElement;
+  const filter = tools.querySelector('button.doudou-tag-filter-tool.doudou-round-tool') as HTMLButtonElement;
+  const search = tools.querySelector('button[aria-label="搜索小物库"]') as HTMLButtonElement;
+  const library = document.createElement("button"); library.className = "doudou-round-tool"; root.append(library);
+  for (const property of ["width", "height", "minHeight", "padding", "borderRadius", "color", "backgroundColor"]) {
+    assert.equal(window.getComputedStyle(filter)[property as keyof CSSStyleDeclaration], window.getComputedStyle(library)[property as keyof CSSStyleDeclaration], `filter ${property}`);
+    assert.equal(window.getComputedStyle(search)[property as keyof CSSStyleDeclaration], window.getComputedStyle(library)[property as keyof CSSStyleDeclaration], `search ${property}`);
+  }
+  assert.match(cssDeclarations('.doudou-view .doudou-items-body.doudou-items-home'), /overflow:\s*hidden/);
+  assert.match(cssDeclarations('.doudou-view .doudou-items-home > .doudou-items-list'), /overflow-y:\s*auto/);
+  assert.equal(window.getComputedStyle(root.querySelector('.doudou-items-sticky') as HTMLElement).backgroundColor, window.getComputedStyle(root.querySelector('.doudou-items-home') as HTMLElement).backgroundColor);
+  filter.click();
+  const idle = [...root.querySelectorAll('.doudou-items-filters button')].find(button => button.textContent === "闲置") as HTMLButtonElement;
+  idle.click(); await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(root.querySelector('.doudou-item-filter-label')?.textContent, "闲置");
+  assert.equal(root.querySelector('.doudou-item-filter-label')?.classList.contains('doudou-item-badge-idle'), true);
+  assert.equal((root.querySelector('.doudou-items-filters') as HTMLElement).hidden, true);
   page.onunload(); root.remove();
 });
 
@@ -1951,7 +1975,7 @@ test("item filter buttons compose with search and survive opening and returning"
   assert.equal(root.querySelectorAll('.doudou-item-card').length, 1); assert.equal(root.querySelector('.doudou-item-name')?.textContent, "电池");
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10)); page.home(); await page.refresh();
   assert.equal(root.querySelector('.doudou-items-filters [aria-pressed="true"]')?.textContent, "库存");
-  assert.equal(root.querySelector('.doudou-items-count')?.textContent, "3 件");
+  assert.equal(root.querySelector('.doudou-items-count')?.textContent, "1 件");
   page.onunload(); root.remove();
 });
 

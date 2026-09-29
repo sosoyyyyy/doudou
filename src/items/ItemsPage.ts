@@ -1,8 +1,9 @@
+import { renderItemDetail } from "./ItemDetail";
 import { renderItemCard } from "./ItemCard";
 import { Component, Notice, setIcon } from "obsidian";
 import { ItemService } from "./ItemService";
-import { blankItem, cycleMetrics, itemMetrics, localDate, usageHistory, matchesItem, type Item } from "./model";
-import { remainingLabel, reminderItems, statusLabel, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, type ItemFilter } from "./itemPresentation";
+import { blankItem, localDate, matchesItem, type Item } from "./model";
+import { reminderItems, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, type ItemFilter } from "./itemPresentation";
 
 const itemFilterOptions: readonly (readonly [ItemFilter, string])[] = [["all", "全部"], ["active", "使用中"], ["idle", "闲置"], ["stock", "有库存"], ["restock", "待补货"], ["retired", "已退役"], ["nostock", "不再买"]];
 const itemBadgeTone: Record<ItemFilter, string> = { all: "", active: "active", idle: "idle", stock: "stock", restock: "restock", retired: "retired", nostock: "nostock" };
@@ -120,10 +121,6 @@ export class ItemsPage extends Component {
       if (this.screen === "list") this.listEl?.setText(message); else new Notice(message);
     }
   }
-  private summary(item: Item): string {
-    const metrics = itemMetrics(item);
-    return [statusLabel(item), item.inventory?.enabled ? "库存 " + item.inventory.quantity + " 件" : undefined, item.inventory?.enabled && item.inventory.noRestock ? "不再买" : undefined, metrics.days === undefined ? undefined : "拥有 " + metrics.days + " 天", metrics.daily === undefined ? undefined : "¥" + metrics.daily.toFixed(2) + "/天"].filter(Boolean).join(" · ");
-  }
   private stockControls(parent: HTMLElement, item: Item, showValue = true): void {
     const controls = parent.createDiv({ cls: "doudou-item-stepper", attr: { role: "group", "aria-label": `${item.name} 数量调节` } });
     const minus = this.button(controls, "−", async () => { this.rememberScroll(); await this.service.adjust(item.id, -1); await this.refresh(); }); minus.disabled = item.inventory!.quantity === 0; minus.setAttribute("aria-label", `${item.name} 减少 1 件`);
@@ -131,54 +128,17 @@ export class ItemsPage extends Component {
     this.button(controls, "+", async () => { this.rememberScroll(); await this.service.adjust(item.id, 1); await this.refresh(); }).setAttribute("aria-label", `${item.name} 增加 1 件`);
   }
   private detail(item: Item): void {
-    this.screen = "detail"; this.selected = item.id; const body = this.reset();
-    this.button(body, this.mode === "reminders" ? "‹ 返回提醒" : "‹ 返回小物库", () => this.home());
-    body.createEl("h2", { text: item.name }); body.createEl("p", { text: this.summary(item), cls: "doudou-items-muted" });
-    if (item.inventory?.enabled) this.stockControls(body, item);
-    if (item.inventory && !item.inventory.enabled) body.createEl("p", { text: "库存管理已停用，保留 " + item.inventory.quantity + " 件" + (item.inventory.noRestock ? " · 不再买" : "") });
-    body.createEl("p", { text: `购买日期：${item.purchased ?? "未填写"}　购买价格：${item.price === undefined ? "未填写" : `¥${item.price.toFixed(2)}`}` });
-    if (item.status === "retired") body.createEl("p", { text: `退役日期：${item.retired ?? "未填写（暂不计算拥有天数和日均价）"}` });
-    const cycle = cycleMetrics(item);
-    if (cycle) body.createEl("p", { cls: "doudou-item-cycle-summary", text: "周期 " + item.cycle!.intervalDays + " 天 · 最近使用 " + cycle.latest + " · 本轮已用 " + cycle.elapsed + " 天 · 下次 " + cycle.next + " · " + remainingLabel(cycle.remaining) });
-    else if (item.cycle) body.createEl("p", { text: "周期已关闭，使用记录仍保留" });
-    this.usageSection(body, item);
-    body.createEl("p", { text: item.notes, cls: "doudou-item-notes" });
-    const photos = body.createDiv({ cls: "doudou-items-photos" });
-    item.photos.forEach(path => this.photo(photos, this.service.resource(path), item.name));
-    const actions = body.createDiv({ cls: "doudou-items-actions" });
-    this.button(actions, "编辑", () => this.edit(item));
-    this.button(actions, "删除", () => {
-      actions.empty(); actions.createEl("p", { text: "确认删除这件物品？关联照片将移入回收站。" });
-      this.button(actions, "取消", () => this.detail(item));
-      this.button(actions, "确认删除", async () => { await this.service.delete(item); this.home(); });
+    this.screen = "detail"; this.selected = item.id;
+    const body = this.reset();
+    renderItemDetail(body, item, {
+      button: this.button.bind(this), service: this.service,
+      backLabel: this.mode === "reminders" ? "‹ 返回提醒" : "‹ 返回小物库",
+      back: () => this.home(), edit: () => this.edit(item), removed: () => this.home(),
+      show: saved => this.detail(saved), stock: parent => this.stockControls(parent, item),
+      photo: (parent, path) => this.photo(parent, this.service.resource(path), item.name),
+      beginUsageEdit: () => { this.editingUsage = true; this.generation++; },
+      cancelUsageEdit: () => { this.editingUsage = false; void this.refresh(); }
     });
-    if (item.cycle?.enabled) this.button(actions, "重新计时", async () => this.detail(await this.service.recordUsage(item)));
-  }
-
-  private usageSection(parent: HTMLElement, item: Item): void {
-    const section = parent.createDiv({ cls: "doudou-item-usage" });
-    section.createEl("h3", { text: "使用记录" });
-    const editorHost = section.createDiv({ cls: "doudou-item-usage-editor" });
-    const openEditor = (record?: { id: string; date: string }): void => {
-      this.editingUsage = true; this.generation++; editorHost.empty();
-      const label = editorHost.createEl("label", { text: record ? "修改使用日期" : "新增使用日期" });
-      const date = label.createEl("input", { attr: { type: "text", inputmode: "numeric", placeholder: "例如 20260620", "aria-label": "使用日期" } }); date.value = record?.date ?? localDate();
-      this.button(editorHost, "保存日期", async () => { const saved = await this.service.recordUsage(item, normalizeItemDateInput(date.value), record?.id); this.detail(saved); });
-      this.button(editorHost, "取消", () => { this.editingUsage = false; void this.refresh(); }); date.focus();
-    };
-    this.button(section, "新增记录", () => openEditor());
-    if (!item.usageRecords.length) section.createEl("p", { text: "暂无使用记录" });
-    for (const record of usageHistory(item)) {
-      const row = section.createDiv({ cls: "doudou-item-usage-row" });
-      row.createSpan({ text: record.date + "　" + (record.interval === undefined ? "首次记录" : "距上次 " + record.interval + " 天") });
-      this.button(row, "修改日期", () => openEditor(record));
-      this.button(row, "删除记录", () => {
-        this.editingUsage = true; this.generation++; editorHost.empty();
-        editorHost.createEl("p", { text: item.usageRecords.length === 1 && item.cycle?.enabled ? "删除最后一条使用记录将同时关闭周期，是否继续？" : "确认删除这条使用记录？" });
-        this.button(editorHost, "取消", () => { this.editingUsage = false; void this.refresh(); });
-        this.button(editorHost, "确认删除记录", async () => this.detail(await this.service.deleteUsage(item, record.id)));
-      });
-    }
   }
   private photo(parent: HTMLElement, source: string, name: string): void {
     const open = this.button(parent, "", () => {

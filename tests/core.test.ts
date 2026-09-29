@@ -2025,7 +2025,8 @@ function v1Item(fields: Record<string, unknown> = {}) {
 function v1Text(items = [v1Item()]): string { return JSON.stringify({ schemaVersion: 1, items, importedKeys: ["old-key"] }, null, 2); }
 const itemTick = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 15));
 async function clickItemText(root: HTMLElement, text: string): Promise<void> {
-  const button = [...root.querySelectorAll("button")].find(b => b.textContent === text);
+  const scope = text === "编辑" && root.querySelector(".doudou-items-actions") ? root.querySelector(".doudou-items-actions")! : root;
+  const button = [...scope.querySelectorAll("button")].find(b => b.textContent === text);
   assert.ok(button, `Missing button: ${text}`); button.click(); await itemTick();
 }
 function itemInput(root: HTMLElement, label: string): HTMLInputElement {
@@ -2219,7 +2220,7 @@ test("normal and reminder lists share exact card markup and restore search filte
   (root.querySelector('[aria-label="滤芯 增加 1 件"]') as HTMLButtonElement).click(); await itemTick();
   assert.equal((await service.list()).find(i => i.id === item.id)?.inventory?.quantity, 3);
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
-  assert.match(root.textContent!, /购买价格：¥300.00/); assert.match(root.textContent!, /日|天/);
+  assert.match(root.querySelector(".doudou-item-detail-purchase")!.textContent!, /购买价格¥300.00/); assert.match(root.textContent!, /日|天/);
   await clickItemText(root, "‹ 返回提醒");
   (root.querySelector('[aria-label="返回普通小物库"]') as HTMLButtonElement).click(); await itemTick();
   assert.equal((root.querySelector('input[type="search"]') as HTMLInputElement).value, "厨房");
@@ -2232,11 +2233,13 @@ test("usage UI supports add edit delete and explicitly confirms closing the last
   await service.save({ ...blankItem(), name: "滤芯", cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "old", date: "2024-01-01" }] });
   const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
-  await clickItemText(root, "新增记录"); (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240201"; await clickItemText(root, "保存日期");
+  await clickItemText(root, "补录"); (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240201"; await clickItemText(root.querySelector(".doudou-item-usage-editor") as HTMLElement, "保存");
   assert.match(root.textContent!, /距上次 31 天/);
-  await clickItemText(root, "修改日期"); (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240202"; await clickItemText(root, "保存日期");
+  await clickItemText(root.querySelector(".doudou-item-usage-row") as HTMLElement, "编辑"); (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240202"; await clickItemText(root.querySelector(".doudou-item-usage-editor") as HTMLElement, "保存");
   assert.match(root.textContent!, /距上次 32 天/);
+  await clickItemText(root.querySelector(".doudou-item-usage-row") as HTMLElement, "编辑");
   await clickItemText(root, "删除记录"); await clickItemText(root, "确认删除记录");
+  await clickItemText(root.querySelector(".doudou-item-usage-row") as HTMLElement, "编辑");
   await clickItemText(root, "删除记录"); assert.match(root.textContent!, /同时关闭周期/);
   await clickItemText(root, "取消"); assert.equal((await service.list())[0].usageRecords.length, 1);
   await clickItemText(root, "删除记录"); await clickItemText(root, "确认删除记录");
@@ -2289,9 +2292,88 @@ test("usage editor survives an earlier in-flight refresh and keeps unsaved date"
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
   const list = service.list.bind(service); let finish!: () => void;
   service.list = async () => { await new Promise<void>(resolve => { finish = resolve; }); return list(); };
-  const refreshing = page.refresh(); await clickItemText(root, "修改日期");
+  const refreshing = page.refresh(); await clickItemText(root.querySelector(".doudou-item-usage-row") as HTMLElement, "编辑");
   (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240102";
   finish(); await refreshing;
   assert.equal((root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value, "20240102");
   service.list = list;
+});
+
+test("item detail reads overview stock cycle purchase history and page actions without changing data", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "肉肉驱虫药", notes: "随餐使用", inventory: { enabled: true, quantity: 2, noRestock: true }, cycle: { enabled: true, intervalDays: 180 }, usageRecords: [{ id: "a", date: "2026-07-04" }], purchased: "2026-01-01", price: 120 });
+  const file = vault.getAbstractFileByPath(ITEMS_PATH) as TFile; const before = await vault.read(file);
+  const root = document.createElement("div"); root.className = "doudou-view"; document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-section h3')].map(el => el.textContent), ["库存", "使用周期", "购买信息", "补充资料", "使用记录"]);
+  assert.equal(root.querySelector('.doudou-item-detail-status')?.textContent, "使用中 · 库存 2 件");
+  assert.doesNotMatch(root.querySelector('.doudou-item-detail-overview')!.textContent!, /周期|价格|拥有|不再买/);
+  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-cycle dt')].map(el => el.textContent).slice(0, 4), ["周期", "最近使用", "已使用", "下次提醒"]);
+  assert.equal(root.querySelector('.doudou-item-detail-cycle dd')?.textContent, "180 天");
+  assert.match(root.querySelector('.doudou-item-detail-purchase')!.textContent!, /购买日期2026-01-01购买价格¥120.00拥有天数.*日均价/);
+  assert.equal(root.querySelector('.doudou-item-detail')!.lastElementChild?.getAttribute('aria-label'), "物品操作");
+  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-actions button')].map(el => el.textContent), ["编辑", "删除", "重新计时"]);
+  assert.deepEqual([...root.querySelectorAll('.doudou-item-usage-row button')].map(el => el.textContent), ["编辑"]);
+  assert.equal(root.querySelector('.doudou-item-usage-editor')!.children.length, 0);
+  assert.equal(await vault.read(file), before);
+});
+
+test("item detail hides disabled stock and cycle but keeps purchase fields and a compact empty history", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "杯子", inventory: { enabled: false, quantity: 3, noRestock: true }, cycle: { enabled: false, intervalDays: 30 } });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelector('.doudou-item-detail-stock'), null); assert.equal(root.querySelector('.doudou-item-detail-cycle'), null);
+  assert.equal(root.querySelector('.doudou-item-detail-status')?.textContent, "使用中");
+  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-purchase dd')].map(el => el.textContent), ["未填写", "未填写"]);
+  assert.match(root.querySelector('.doudou-item-usage')!.textContent!, /暂无使用记录/);
+  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-actions button')].map(el => el.textContent), ["编辑", "删除"]);
+  assert.deepEqual((await service.list())[0].inventory, { enabled: false, quantity: 3, noRestock: true });
+});
+
+test("detail cycle rows express today and overdue individually while retired items keep purchase metrics", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  let item = await service.save({ ...blankItem(), name: "滤芯", status: "retired", retired: "2024-01-11", purchased: "2024-01-01", price: 100, cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "a", date: addDays(localDate(), -30) }] });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelector('.doudou-item-detail-cycle dd:last-child')?.textContent, "今天到期");
+  assert.match(root.querySelector('.doudou-item-detail-purchase')!.textContent!, /拥有天数10 天日均价¥10.00\/天退役日期2024-01-11/);
+  item = await service.recordUsage(item, addDays(localDate(), -33), "a"); await page.refresh();
+  assert.equal(root.querySelector('.doudou-item-detail-cycle dt:last-of-type')?.textContent, "已超期");
+  assert.equal(root.querySelector('.doudou-item-detail-cycle dd:last-child')?.textContent, "3 天");
+  assert.equal(item.status, "retired"); assert.equal(item.cycle?.enabled, true);
+});
+
+test("record edit retains invalid and duplicate date drafts without changing history; cancel remains safe", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "滤芯", cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "a", date: "2024-02-01" }, { id: "b", date: "2024-01-01" }] });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  const file = vault.getAbstractFileByPath(ITEMS_PATH) as TFile; const before = await vault.read(file);
+  await clickItemText(root.querySelector('.doudou-item-usage-row') as HTMLElement, "编辑");
+  const input = root.querySelector('[aria-label="使用日期"]') as HTMLInputElement;
+  assert.equal(input.value, "2024-02-01"); assert.ok([...root.querySelectorAll('.doudou-item-usage-editor button')].some(el => el.textContent === "删除记录"));
+  for (const date of [addDays(localDate(), 1), "2024-01-01", "2024-02-30"]) {
+    input.value = date; await clickItemText(root.querySelector('.doudou-item-usage-editor') as HTMLElement, "保存");
+    assert.equal((root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value, date);
+    assert.equal(await vault.read(file), before);
+  }
+  await clickItemText(root.querySelector('.doudou-item-usage-editor') as HTMLElement, "取消");
+  assert.equal(root.querySelector('.doudou-item-usage-editor')!.children.length, 0); assert.equal(await vault.read(file), before);
+});
+
+test("detail inventory restart and photo interactions keep their original service behavior", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "滤芯", inventory: { enabled: true, quantity: 2, noRestock: true }, cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "old", date: "2024-01-01" }] }, [new File(["photo"], "photo.jpg")]);
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  (root.querySelector('.doudou-item-detail-stock button[aria-label="滤芯 减少 1 件"]') as HTMLButtonElement).click(); await itemTick();
+  assert.equal((await service.list())[0].inventory?.quantity, 1);
+  await clickItemText(root.querySelector('.doudou-item-detail-actions') as HTMLElement, "重新计时");
+  const item = (await service.list())[0]; assert.equal(item.status, "active"); assert.equal(item.inventory?.quantity, 1); assert.equal(item.inventory?.noRestock, true); assert.equal(item.usageRecords[0].date, localDate());
+  (root.querySelector('.doudou-items-photos button') as HTMLButtonElement).click(); await itemTick();
+  assert.ok(root.querySelector('.doudou-item-lightbox img')); await clickItemText(root, "关闭原图"); assert.equal(root.querySelector('.doudou-item-lightbox'), null);
+  await clickItemText(root.querySelector('.doudou-item-detail-actions') as HTMLElement, "删除");
+  assert.match(root.textContent!, /确认删除这件物品/); await clickItemText(root.querySelector('.doudou-item-detail-actions') as HTMLElement, "取消");
+  assert.equal((await service.list()).length, 1); assert.equal(vault.binaries.size, 1);
 });

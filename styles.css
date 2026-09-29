@@ -322,13 +322,37 @@
 
 /* Independent item capabilities and editable usage history. Cards keep the existing geometry. */
 .doudou-view .doudou-item-usage { min-width: 0; margin-top: 16px; overflow-wrap: anywhere; }
-.doudou-view .doudou-item-usage-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; margin: 6px 0; }
-.doudou-view .doudou-item-usage-row > span { flex: 1 1 190px; min-width: 0; font-variant-numeric: tabular-nums; }
 .doudou-view .doudou-item-usage-editor { display: block; min-width: 0; }
 .doudou-view .doudou-item-usage-editor:empty { display: none; }
-.doudou-view .doudou-item-usage-editor button { margin: 6px 6px 6px 0; }
-.doudou-view .doudou-item-cycle-summary { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .doudou-view .doudou-items-heading { min-width: 0; flex-wrap: wrap; }
 .doudou-view .doudou-items-heading .doudou-library-heading-tools { flex-shrink: 0; }
 .doudou-view .doudou-item-segments { flex-wrap: wrap; }
 .doudou-view .doudou-item-segment-title { display: block; flex: 0 0 100%; padding: 3px 6px; color: var(--doudou-muted); font-size: 13px; line-height: 1.4; }
+
+/* Item detail: reading order and quiet, touch-sized record actions. */
+.doudou-view .doudou-item-detail .doudou-item-detail-overview { display: block; min-width: 0; margin-top: 10px; margin-bottom: 0; padding: 0; }
+.doudou-view .doudou-item-detail-overview h2 { margin: 0 0 6px; padding: 0; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
+.doudou-view .doudou-item-detail-status { margin: 0; padding: 0; color: var(--doudou-muted); font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.doudou-view .doudou-item-detail .doudou-item-detail-section { display: block; min-width: 0; margin-top: 26px; margin-bottom: 0; padding: 0; border: 0; background: transparent; }
+.doudou-view .doudou-item-detail-section h3 { margin: 0 0 10px; padding: 0; color: var(--text-normal); font-size: 16px; font-weight: 600; line-height: 1.5; }
+.doudou-view .doudou-item-detail-fields { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); align-items: baseline; gap: 8px 14px; width: 100%; min-width: 0; margin: 0; padding: 0; font-size: 16px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.doudou-view .doudou-item-detail-fields dt, .doudou-view .doudou-item-detail-fields dd { display: block; min-width: 0; margin: 0; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+.doudou-view .doudou-item-detail-fields dt { color: var(--doudou-muted); font-weight: 400; }
+.doudou-view .doudou-item-detail-purchase h3, .doudou-view .doudou-item-detail-purchase dd { color: var(--doudou-muted); }
+.doudou-view .doudou-item-detail-caption { display: block; margin: 6px 0 0; padding: 0; color: var(--doudou-muted); font-size: 14px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+.doudou-view .doudou-item-detail-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; margin-bottom: 8px; }
+.doudou-view .doudou-item-detail-section-heading h3 { margin-bottom: 0; }
+.doudou-view .doudou-item-detail .doudou-item-usage-row { display: flex; align-items: flex-end; flex-wrap: nowrap; gap: 12px; min-width: 0; margin: 14px 0 0; padding: 0; }
+.doudou-view .doudou-item-usage-copy { display: block; flex: 1 1 auto; min-width: 0; }
+.doudou-view .doudou-item-usage-copy time { display: block; margin: 0; font-size: 16px; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.doudou-view .doudou-item-usage-copy .doudou-item-detail-caption { margin-top: 2px; }
+.doudou-view .doudou-item-detail button.doudou-item-detail-light-action { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; appearance: none; width: auto; min-width: 44px; max-width: 100%; height: auto; min-height: 44px; max-height: none; margin: 0; padding: 8px 10px; overflow: hidden; line-height: 1.4; white-space: nowrap; border: 0; border-radius: 6px; box-shadow: none; color: var(--doudou-blue-strong); background: transparent; font-size: 14px; touch-action: manipulation; }
+.doudou-view .doudou-item-detail button.doudou-item-detail-light-action:active { background: var(--doudou-blue-soft); }
+.doudou-view .doudou-item-detail button.doudou-item-detail-back { justify-content: flex-start; padding-left: 0; color: var(--doudou-muted); }
+.doudou-view .doudou-item-detail .doudou-item-usage-editor { margin: 0; padding: 0; }
+.doudou-view .doudou-item-detail .doudou-item-usage-editor:not(:empty) { margin: 8px 0 18px; padding: 8px 0; }
+.doudou-view .doudou-item-usage-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin-top: 10px; }
+.doudou-view .doudou-item-detail .doudou-item-usage-editor label { margin: 0; }
+.doudou-view .doudou-item-detail .doudou-item-usage-editor input { font-size: 16px; }
+.doudou-view .doudou-item-detail .doudou-item-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px; margin-bottom: 12px; }
+.doudou-view .doudou-item-detail-actions > p { flex-basis: 100%; margin: 0; }

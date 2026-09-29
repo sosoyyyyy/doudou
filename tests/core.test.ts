@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { ItemRepository } from "../src/items/ItemRepository";
 import { ItemService } from "../src/items/ItemService";
-import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore } from "../src/items/model";
+import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore, cycleMetrics, usageHistory, localDate, addDays, validateItem, type Item } from "../src/items/model";
 import { ItemsPage } from "../src/items/ItemsPage";
-import { matchesItemFilter, normalizeItemDateInput, isValidItemDateInput } from "../src/items/itemPresentation";
+import { matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, reminderItems, remainingLabel } from "../src/items/itemPresentation";
 import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -1808,9 +1808,9 @@ test("item dates compute without writes, respect retirement, zero and missing va
 
 test("item service serializes inventory writes and rejects stale edits, deletion and malformed stores", async () => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
-  const saved = await service.save({ ...blankItem(), name: "电池", kind: "stock", quantity: 0 });
+  const saved = await service.save({ ...blankItem(), name: "电池", inventory: { enabled: true, quantity: 0 } });
   await Promise.all(Array.from({ length: 20 }, () => service.adjust(saved.id, 1)));
-  assert.equal((await service.list())[0].quantity, 20);
+  assert.equal((await service.list())[0].inventory!.quantity, 20);
   await assert.rejects(service.save({ ...saved, name: "旧编辑" }), /更新/);
   await assert.rejects(service.delete(saved), /变化/);
   const current = (await service.list())[0]; await service.delete(current);
@@ -1836,30 +1836,32 @@ test("item photos only commit in isolated assets and old photos survive failed s
 
 test("beta.1 item data remains readable and retains compatibility fields on edit", async () => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
-  const item = { ...blankItem(), name: "旧物品", revision: 1, importKey: "old-key" };
+  const { usageRecords, ...base } = blankItem();
+  const item = { ...base, kind: "single", quantity: 1, name: "旧物品", revision: 1, importKey: "old-key" };
   await vault.create(ITEMS_PATH, JSON.stringify({ schemaVersion: 1, items: [item], importedKeys: ["old-key"] }));
-  const loaded = (await service.list())[0]; assert.deepEqual(loaded, item);
+  const loaded = (await service.list())[0]; assert.equal(loaded.id, item.id); assert.equal(loaded.status, item.status); assert.equal(loaded.inventory, undefined);
   await service.save({ ...loaded, notes: "更新备注" });
   const stored = decodeStore(await vault.read(vault.getAbstractFileByPath(ITEMS_PATH) as TFile));
   assert.deepEqual(stored.importedKeys, ["old-key"]); assert.equal(stored.items[0].importKey, "old-key");
-  assert.throws(() => decodeStore(JSON.stringify({ schemaVersion: 2, items: [], importedKeys: [] })));
+  assert.throws(() => decodeStore(JSON.stringify({ schemaVersion: 99, items: [], importedKeys: [] })));
 });
 
-test("items editor saves a stock item, searches notes and cancels without writing", async () => {
+test("items editor saves a stock item, searches notes and cancels without writing", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
   const root = document.createElement("div"); document.body.append(root);
-  const page = new ItemsPage(root, service); page.onload(); page.create();
+  const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); page.create();
   const form = root.querySelector("form")!;
   const save = root.querySelector(".doudou-items-editor-header .doudou-primary-button") as HTMLButtonElement;
   assert.ok(save); assert.equal(form.contains(save), false);
   save.click(); await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal((await service.list()).length, 0, "top save must retain native required-field validation");
-  (form.querySelector('[aria-label="物品类型"] button:last-child') as HTMLButtonElement).click();
+  (form.querySelector('[aria-label="库存管理"] button:last-child') as HTMLButtonElement).click();
   (form.querySelector('input[type="text"]') as HTMLInputElement).value = "测试电池";
   (form.querySelector("textarea") as HTMLTextAreaElement).value = "抽屉里的备用";
+  (form.querySelector('input[type="number"][step="1"]') as HTMLInputElement).value = "1";
   save.click();
   await new Promise(resolve => setTimeout(resolve, 20));
-  assert.equal((await service.list())[0].kind, "stock"); assert.match(root.textContent!, /库存 · 1 件/);
+  assert.equal((await service.list())[0].inventory?.enabled, true); assert.match(root.textContent!, /库存 1 件/);
   page.home(); await page.refresh();
   assert.equal(root.querySelector(".doudou-items-count")?.textContent, "1 件");
   assert.equal(root.querySelector(".doudou-items-toolbar button"), null);
@@ -1868,60 +1870,57 @@ test("items editor saves a stock item, searches notes and cancels without writin
   assert.equal(root.textContent!.includes("导入"), false);
   const plus = root.querySelector('button[aria-label="测试电池 增加 1 件"]') as HTMLButtonElement;
   plus.click(); await new Promise(resolve => setTimeout(resolve, 20));
-  assert.equal((await service.list())[0].quantity, 2);
+  assert.equal((await service.list())[0].inventory!.quantity, 2);
   assert.equal(root.querySelector(".doudou-item-quantity")?.textContent, "2");
   assert.ok(root.querySelector('input[type="search"]'), "quantity controls must not open the item");
   for (let index = 0; index < 2; index++) {
     (root.querySelector('button[aria-label="测试电池 减少 1 件"]') as HTMLButtonElement).click();
     await new Promise(resolve => setTimeout(resolve, 20));
   }
-  assert.equal((await service.list())[0].quantity, 0);
+  assert.equal((await service.list())[0].inventory!.quantity, 0);
   assert.equal((root.querySelector('button[aria-label="测试电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
-  assert.equal(root.querySelector('.doudou-item-card .doudou-item-badge')?.textContent, "待补货");
+  assert.match(root.querySelector('.doudou-item-info')?.textContent ?? "", /待补货/);
   page.create(); const cancel = [...root.querySelectorAll("button")].find(b => b.textContent === "取消")!; cancel.click();
   await new Promise(resolve => setTimeout(resolve, 20)); assert.equal((await service.list()).length, 1);
   page.onunload(); root.remove();
 });
 
-test("item filters derive restock and history while preserving old stock data", () => {
-  const item = { ...blankItem(), name: "测试" };
-  const retired = { ...item, status: "retired" as const };
-  const stock = { ...retired, kind: "stock" as const };
-  assert.equal(matchesItemFilter(item, "active"), true);
-  assert.equal(matchesItemFilter(retired, "history"), true);
-  assert.equal(matchesItemFilter(stock, "history"), false);
-  assert.equal(matchesItemFilter(stock, "active"), false);
-  assert.equal(matchesItemFilter(stock, "stock"), true);
-  assert.equal(matchesItemFilter({ ...stock, quantity: 0 }, "restock"), true);
-  assert.equal(matchesItemFilter({ ...stock, quantity: 0, noRestock: true }, "history"), true);
-  assert.equal(matchesItemFilter({ ...stock, quantity: 2, noRestock: true }, "stock"), false);
-  assert.equal(matchesItemFilter(retired, "all"), true);
+test("independent state, stock and restock filters overlap without cycle rules", () => {
+  const item: Item = { ...blankItem(), name: "滤芯", inventory: { enabled: true, quantity: 2, noRestock: true } };
+  for (const filter of ["active", "stock", "nostock", "all"] as const) assert.equal(matchesItemFilter(item, filter), true);
+  assert.equal(matchesItemFilter(item, "restock"), false);
+  const zero = { ...item, status: "retired" as const, inventory: { enabled: true, quantity: 0 } };
+  assert.equal(matchesItemFilter(zero, "restock"), true);
+  assert.equal(matchesItemFilter(zero, "retired"), true);
+  assert.equal(matchesItemFilter({ ...zero, inventory: { ...zero.inventory, enabled: false } }, "restock"), false);
+  assert.equal(matchesItemFilter({ ...zero, inventory: { ...zero.inventory, noRestock: true } }, "restock"), false);
+  assert.equal(matchesItemFilter({ ...item, inventory: undefined }, "stock"), false);
 });
 
-test("stock no-restock choice survives saving and quantity changes", async () => {
+test("stock no-restock choice survives saving and quantity changes", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
-  const saved = await service.save({ ...blankItem(), name: "旧电池", kind: "stock", quantity: 1, notes: "备用" });
-  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); await page.refresh();
+  const saved = await service.save({ ...blankItem(), name: "旧电池", inventory: { enabled: true, quantity: 1 }, notes: "备用" });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
   ([...root.querySelectorAll("button")].find(b => b.textContent === "编辑") as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
   const restock = root.querySelector('[aria-label="补货计划"]') as HTMLElement;
   assert.equal(restock.hidden, false);
   (restock.querySelector('button:last-child') as HTMLButtonElement).click();
   (root.querySelector('.doudou-primary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 20));
-  assert.equal((await service.list())[0].noRestock, true);
+  assert.equal((await service.list())[0].inventory!.noRestock, true);
   await service.adjust(saved.id, -1);
   page.home(); await page.refresh();
-  assert.equal(root.querySelector('.doudou-item-card .doudou-item-badge')?.textContent, "不再买");
+  assert.match(root.querySelector('.doudou-item-info')?.textContent ?? "", /不再买/);
   assert.equal((root.querySelector('button[aria-label="旧电池 减少 1 件"]') as HTMLButtonElement).disabled, true);
   assert.equal(root.querySelector('.doudou-item-name')?.textContent, "旧电池");
   assert.equal((await service.list())[0].notes, "备用");
   page.onunload(); root.remove();
 });
 
-test("item toolbar shares library tool sizing and keeps cards inside their own scroll area", async () => {
+test("item toolbar shares library tool sizing and keeps cards inside their own scroll area", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
   const root = document.createElement("div"); root.className = "doudou-view"; document.body.append(root);
-  const page = new ItemsPage(root, service); page.onload(); await page.refresh();
+  const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
   const tools = root.querySelector('.doudou-items-heading .doudou-library-heading-tools') as HTMLElement;
   const filter = tools.querySelector('button.doudou-tag-filter-tool.doudou-round-tool') as HTMLButtonElement;
   const search = tools.querySelector('button[aria-label="搜索小物库"]') as HTMLButtonElement;
@@ -1933,7 +1932,7 @@ test("item toolbar shares library tool sizing and keeps cards inside their own s
   for (const property of ["width", "padding"]) assert.equal(window.getComputedStyle(search)[property as keyof CSSStyleDeclaration], window.getComputedStyle(library)[property as keyof CSSStyleDeclaration], `search ${property}`);
   assert.equal(window.getComputedStyle(filter).width, "auto");
   assert.equal(filter.querySelector('.doudou-item-filter-label')?.textContent, "全部");
-  assert.equal(tools.querySelectorAll('button').length, 2);
+  assert.equal(tools.querySelectorAll('button').length, 3);
   assert.match(cssDeclarations('.doudou-view .doudou-items-body.doudou-items-home'), /overflow:\s*hidden/);
   assert.match(cssDeclarations('.doudou-view .doudou-items-home > .doudou-items-list'), /overflow-y:\s*auto/);
   assert.equal(window.getComputedStyle(root.querySelector('.doudou-items-sticky') as HTMLElement).backgroundColor, window.getComputedStyle(root.querySelector('.doudou-items-home') as HTMLElement).backgroundColor);
@@ -1956,10 +1955,10 @@ test("numeric purchase dates normalize but never silently repair invalid calenda
   for (const date of ["20260229", "20260431", "20261301", "20260020", "202606", "2026/06/20", "abc"]) assert.equal(isValidItemDateInput(date), false);
 });
 
-test("purchase date blur and top save keep ISO storage and reject invalid input", async () => {
+test("purchase date blur and top save keep ISO storage and reject invalid input", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
   const root = document.createElement("div"); document.body.append(root);
-  const page = new ItemsPage(root, service); page.onload(); page.create();
+  const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); page.create();
   (root.querySelector('input[type="text"]') as HTMLInputElement).value = "杯子";
   const date = root.querySelector('input[inputmode="numeric"]') as HTMLInputElement;
   const save = root.querySelector('.doudou-primary-button') as HTMLButtonElement;
@@ -1972,48 +1971,41 @@ test("purchase date blur and top save keep ISO storage and reject invalid input"
   page.onunload(); root.remove();
 });
 
-test("item filter buttons compose with search and survive opening and returning", async () => {
+test("item filter buttons compose with search and survive opening and returning", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
-  for (const fields of [{ name: "相机", notes: "旅行" }, { name: "旧相机", notes: "旅行", status: "retired" as const }, { name: "电池", notes: "旅行", kind: "stock" as const }]) await service.save({ ...blankItem(), ...fields });
-  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); await page.refresh();
+  for (const fields of [{ name: "相机", notes: "旅行" }, { name: "旧相机", notes: "旅行", status: "retired" as const }, { name: "电池", notes: "旅行", inventory: { enabled: true, quantity: 1 } }]) await service.save({ ...blankItem(), ...fields });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
   const search = root.querySelector('input[type="search"]') as HTMLInputElement; search.value = "旅行"; search.dispatchEvent(new Event("input")); await page.refresh();
-  const stock = [...root.querySelectorAll('.doudou-items-filters button')].find(b => b.textContent === "库存") as HTMLButtonElement; stock.click();
+  const stock = [...root.querySelectorAll('.doudou-items-filters button')].find(b => b.textContent === "有库存") as HTMLButtonElement; stock.click();
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(root.querySelectorAll('.doudou-item-card').length, 1); assert.equal(root.querySelector('.doudou-item-name')?.textContent, "电池");
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10)); page.home(); await page.refresh();
-  assert.equal(root.querySelector('.doudou-items-filters [aria-pressed="true"]')?.textContent, "库存");
+  assert.equal(root.querySelector('.doudou-items-filters [aria-pressed="true"]')?.textContent, "有库存");
   assert.equal(root.querySelector('.doudou-items-count')?.textContent, "1 件");
   page.onunload(); root.remove();
 });
 
-test("item editor segments show only relevant fields and preserve retirement editing", async () => {
+test("item editor keeps state, purchase, stock and cycle controls independent", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
-  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); page.create();
-  assert.equal(root.querySelector("select"), null);
-  assert.equal(root.querySelector('[aria-label="物品类型"] [aria-pressed="true"]')?.textContent, "单件");
-  assert.equal((root.querySelector('[aria-label="物品状态"]') as HTMLElement).hidden, true);
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); page.create();
+  assert.equal(root.querySelector('[aria-label="物品类型"]'), null);
+  assert.equal(root.querySelector('[aria-label="物品状态"] [aria-pressed="true"]')?.textContent, "使用中");
   (root.querySelector('input[type="text"]') as HTMLInputElement).value = "测试物品";
+  (root.querySelector('[aria-label="物品状态"] button:last-child') as HTMLButtonElement).click();
+  (root.querySelector('[aria-label="库存管理"] button:last-child') as HTMLButtonElement).click();
+  assert.equal((root.querySelector('.doudou-item-purchase-row') as HTMLElement).hidden, false);
+  assert.equal((root.querySelector('[aria-label="物品状态"]') as HTMLElement).hidden, false);
+  (root.querySelector('[aria-label="使用周期"] button:last-child') as HTMLButtonElement).click();
   (root.querySelector('.doudou-primary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 20));
-  assert.equal((await service.list())[0].status, "active");
-  ([...root.querySelectorAll("button")].find(b => b.textContent === "编辑") as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
-  const statuses = root.querySelector('[aria-label="物品状态"]') as HTMLElement;
-  assert.equal(statuses.hidden, false);
-  const date = [...root.querySelectorAll('input[placeholder="例如 20260620"]')].at(-1) as HTMLInputElement;
-  assert.equal(date.disabled, true);
-  (statuses.querySelector('button:last-child') as HTMLButtonElement).click(); assert.equal(date.disabled, false); date.value = "2026-09-18";
-  (root.querySelector('[aria-label="物品类型"] button:last-child') as HTMLButtonElement).click();
-  assert.equal(statuses.hidden, true); assert.equal(date.disabled, true);
-  assert.equal((root.querySelector('.doudou-item-purchase-row') as HTMLElement).hidden, true);
-  (root.querySelector('[aria-label="物品类型"] button:first-child') as HTMLButtonElement).click();
-  assert.equal(statuses.hidden, false); assert.equal(date.value, "2026-09-18");
-  (root.querySelector('.doudou-primary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 20));
-  assert.equal((await service.list())[0].status, "retired"); assert.equal((await service.list())[0].retired, "2026-09-18");
-  page.onunload(); root.remove();
+  const saved = (await service.list())[0];
+  assert.equal(saved.status, "retired"); assert.equal(saved.inventory?.enabled, true); assert.equal(saved.cycle?.enabled, true);
+  assert.equal(saved.usageRecords[0].date, localDate());
+  assert.ok([...root.querySelectorAll('.doudou-items-actions button')].some(button => button.textContent === "重新计时"));
 });
 
-test("custom item photo button opens native picker synchronously and cancellation keeps pending files out of Vault", async () => {
+test("custom item photo button opens native picker synchronously and cancellation keeps pending files out of Vault", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
-  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); page.create();
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); page.create();
   const picker = root.querySelector('input[type="file"]') as HTMLInputElement;
   assert.equal(picker.hidden, true);
   let clicks = 0; picker.addEventListener("click", event => { event.preventDefault(); clicks++; });
@@ -2022,4 +2014,284 @@ test("custom item photo button opens native picker synchronously and cancellatio
   assert.equal(root.querySelectorAll('.doudou-items-photos img').length, 1); assert.equal(vault.files.size, 0);
   (root.querySelector('.doudou-secondary-button') as HTMLButtonElement).click(); await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal(vault.files.size, 0); page.onunload(); root.remove();
+});
+
+// Explicit 1.0.0 fixtures: do not derive legacy data from the new blank-item factory.
+function v1Item(fields: Record<string, unknown> = {}) {
+  return { id: "legacy-a", kind: "single", name: "旧物品", notes: "保留备注", photos: [`${ITEM_ASSETS}/old.jpg`],
+    purchased: "2024-01-01", price: 125, status: "active", quantity: 1, revision: 7,
+    created: "2024-01-01T00:00:00.000Z", updated: "2024-03-01T00:00:00.000Z", importKey: "old-key", ...fields };
+}
+function v1Text(items = [v1Item()]): string { return JSON.stringify({ schemaVersion: 1, items, importedKeys: ["old-key"] }, null, 2); }
+const itemTick = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 15));
+async function clickItemText(root: HTMLElement, text: string): Promise<void> {
+  const button = [...root.querySelectorAll("button")].find(b => b.textContent === text);
+  assert.ok(button, `Missing button: ${text}`); button.click(); await itemTick();
+}
+function itemInput(root: HTMLElement, label: string): HTMLInputElement {
+  const el = [...root.querySelectorAll("label")].find(el => el.firstChild?.textContent === label)?.querySelector("input");
+  assert.ok(el, `Missing field: ${label}`); return el;
+}
+
+test("v2 migration preserves explicit v1 business data and never mistakes single quantity for stock", () => {
+  for (const status of ["active", "idle", "retired"]) {
+    const original = v1Item({ status, quantity: 12, retired: "2024-02-01" });
+    const migrated = decodeStore(v1Text([original])).items[0];
+    assert.equal(migrated.status, status); assert.equal(migrated.inventory, undefined);
+    for (const field of ["id", "notes", "photos", "purchased", "price", "retired", "revision", "created", "updated", "importKey"] as const) assert.deepEqual(migrated[field], original[field]);
+    assert.equal("legacyV1" in migrated, false); assert.equal("kind" in migrated, false); assert.equal("quantity" in migrated, false);
+  }
+  for (const noRestock of [undefined, false, true]) for (const quantity of [0, 3]) {
+    const original = v1Item({ kind: "stock", status: "retired", retired: "2024-02-01", quantity, noRestock });
+    const migrated = decodeStore(v1Text([original])).items[0];
+    assert.equal(migrated.status, null); assert.equal(migrated.retired, original.retired);
+    assert.equal(migrated.inventory?.quantity, quantity); assert.equal(migrated.inventory?.enabled, true); assert.equal(migrated.inventory?.noRestock, noRestock);
+    assert.equal(matchesItemFilter(migrated, "stock"), quantity > 0);
+    assert.equal(matchesItemFilter(migrated, "restock"), quantity === 0 && noRestock !== true);
+    assert.equal(matchesItemFilter(migrated, "nostock"), noRestock === true);
+    assert.equal(matchesItemFilter(migrated, "retired"), false);
+  }
+});
+
+test("v2 migration only writes on mutation and verifies an exact original backup before committing", async () => {
+  const vault = new FakeVault(); const text = v1Text([v1Item(), v1Item({ id: "untouched", kind: "stock", quantity: 3 })]);
+  const file = await vault.create(ITEMS_PATH, text); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const loaded = await service.list(); await service.list();
+  assert.equal(vault.files.size, 1); assert.equal(await vault.read(file), text); assert.equal(vault.writeCounts.get(ITEMS_PATH), 1);
+  const saved = await service.save({ ...loaded.find(i => i.id === "legacy-a")!, name: "修改名称" });
+  const backups = [...vault.files].filter(([path]) => path.includes("/backups/"));
+  assert.equal(backups.length, 1); assert.equal(backups[0][1].content, text);
+  const actual = JSON.parse(await vault.read(file)); assert.equal(actual.schemaVersion, 2);
+  assert.deepEqual(actual.importedKeys, ["old-key"]);
+  assert.equal(actual.items.find((i: Item) => i.id === "untouched").updated, "2024-03-01T00:00:00.000Z");
+  assert.equal(actual.items.find((i: Item) => i.id === "untouched").revision, 7);
+  await service.save({ ...saved, notes: "第二次保存" });
+  assert.equal([...vault.files.keys()].filter(path => path.includes("/backups/")).length, 1);
+});
+
+test("v2 migration backup failure or corrupt backup never changes the original", async () => {
+  for (const corrupt of [false, true]) {
+    const vault = new FakeVault(); const text = v1Text(); const file = await vault.create(ITEMS_PATH, text);
+    const create = vault.create.bind(vault);
+    vault.create = async (path, content) => {
+      if (path.includes("/backups/")) { if (!corrupt) throw new Error("backup failed"); content = "corrupt"; }
+      return create(path, content);
+    };
+    const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+    await assert.rejects(service.save({ ...(await service.list())[0], name: "不能覆盖" }));
+    assert.equal(await vault.read(file), text);
+  }
+});
+
+test("v2 migration write failure preserves v1 and retry safely succeeds", async () => {
+  const vault = new FakeVault(); const text = v1Text(); const file = await vault.create(ITEMS_PATH, text);
+  const service = new ItemService(new ItemRepository(vault as unknown as Vault)); const original = (await service.list())[0];
+  vault.failNextModify = true;
+  await assert.rejects(service.save({ ...original, name: "尝试" })); assert.equal(await vault.read(file), text);
+  await service.save({ ...original, name: "重试" }); assert.equal(JSON.parse(await vault.read(file)).schemaVersion, 2);
+  assert.ok([...vault.files.values()].some(entry => entry.content === text));
+});
+
+test("v2 migration aborts if sync changes the source after backup", async () => {
+  const vault = new FakeVault(); const text = v1Text(); const changed = v1Text([v1Item({ name: "同步更新" })]);
+  const file = await vault.create(ITEMS_PATH, text); const create = vault.create.bind(vault);
+  vault.create = async (path, content) => { const result = await create(path, content); if (path.includes("/backups/")) await vault.modify(file, changed); return result; };
+  const service = new ItemService(new ItemRepository(vault as unknown as Vault)); const original = (await service.list())[0];
+  await assert.rejects(service.save({ ...original, name: "旧草稿" }), /变化/);
+  assert.equal(await vault.read(file), changed); assert.ok([...vault.files.values()].some(entry => entry.content === text));
+});
+
+test("invalid legacy data and unknown schemas are never partially migrated", async () => {
+  const bad = ["bad-json", v1Text([v1Item(), v1Item()]), v1Text([v1Item({ quantity: -1 })]), v1Text([v1Item({ status: "unknown" })]), v1Text([v1Item({ photos: ["outside/photo.jpg"] })]), v1Text([v1Item({ retired: "2020-01-01" })]), JSON.stringify({ schemaVersion: 99, items: [], importedKeys: [] })];
+  for (const text of bad) {
+    const vault = new FakeVault(); const file = await vault.create(ITEMS_PATH, text);
+    const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+    await assert.rejects(service.save({ ...blankItem(), name: "不可覆盖" }));
+    assert.equal(await vault.read(file), text); assert.equal(vault.files.size, 1);
+  }
+});
+
+test("repository blocks v1 rollback or disappearance after seeing v2", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "新版" }); const file = vault.getAbstractFileByPath(ITEMS_PATH) as TFile;
+  await vault.modify(file, v1Text()); await assert.rejects(service.list(), /旧版/);
+  await assert.rejects(service.save({ ...blankItem(), name: "不能重迁移" }), /旧版/);
+  assert.equal(await vault.read(file), v1Text()); vault.files.delete(ITEMS_PATH);
+  await assert.rejects(service.save({ ...blankItem(), name: "不能重建空库" }), /消失/);
+});
+
+test("v2 inventory can be disabled and reenabled without losing quantity or no-restock", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  let item = await service.save({ ...blankItem(), name: "滤芯", inventory: { enabled: true, quantity: 3, noRestock: true } });
+  item = await service.save({ ...item, inventory: { ...item.inventory!, enabled: false } });
+  assert.equal(item.inventory?.quantity, 3); assert.equal(item.inventory?.noRestock, true);
+  for (const filter of ["stock", "restock", "nostock"] as const) assert.equal(matchesItemFilter(item, filter), false);
+  await assert.rejects(service.adjust(item.id, -1));
+  item = await service.save({ ...item, inventory: { ...item.inventory!, enabled: true } });
+  assert.deepEqual(item.inventory, { enabled: true, quantity: 3, noRestock: true });
+  await service.adjust(item.id, -1); assert.equal((await service.list())[0].inventory?.quantity, 2);
+});
+
+test("calendar cycle calculations handle leap days, today, due dates and overdue without writes", () => {
+  const item: Item = { ...blankItem(), name: "滤芯", cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "a", date: "2024-02-28" }] };
+  assert.deepEqual(cycleMetrics(item, "2024-02-28"), { latest: "2024-02-28", elapsed: 0, next: "2024-03-29", remaining: 30 });
+  assert.equal(cycleMetrics(item, "2024-03-29")?.remaining, 0); assert.equal(cycleMetrics(item, "2024-04-01")?.remaining, -3);
+  assert.equal(remainingLabel(-3), "已超 3 天"); assert.equal(remainingLabel(0), "今天到期"); assert.equal(remainingLabel(1), "还有 1 天");
+  assert.equal(addDays("2025-12-31", 1), "2026-01-01");
+  assert.equal(cycleMetrics({ ...item, status: "retired", inventory: { enabled: true, quantity: 0, noRestock: true } }, "2024-03-29")?.remaining, 0);
+  assert.equal(cycleMetrics({ ...item, cycle: { ...item.cycle!, enabled: false } }), undefined);
+});
+
+test("usage record edits resort dates, recalculate both neighbors and latest cycle; duplicate and future dates reject", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  let item = await service.save({ ...blankItem(), name: "驱虫药", cycle: { enabled: true, intervalDays: 90 }, usageRecords: [
+    { id: "a", date: "2025-12-29" }, { id: "b", date: "2026-03-29" }, { id: "c", date: "2026-06-29" }
+  ] });
+  assert.deepEqual(usageHistory(item).map(r => r.interval), [92, 90, undefined]);
+  item = await service.recordUsage(item, "2026-04-01", "b");
+  assert.deepEqual(usageHistory(item).map(r => r.interval), [89, 93, undefined]);
+  item = await service.recordUsage(item, "2026-01-01", "c");
+  assert.deepEqual(usageHistory(item).map(r => r.id), ["b", "c", "a"]);
+  assert.deepEqual(cycleMetrics(item, "2026-06-30"), { latest: "2026-04-01", elapsed: 90, next: "2026-06-30", remaining: 0 });
+  const before = await vault.read(vault.getAbstractFileByPath(ITEMS_PATH) as TFile);
+  await assert.rejects(service.recordUsage(item, "2026-04-01"), /同一天/);
+  await assert.rejects(service.recordUsage(item, "2026-04-01", "a"), /同一天/);
+  await assert.rejects(service.recordUsage(item, addDays(localDate(), 1)), /晚于今天/);
+  await assert.rejects(service.recordUsage(item, "2026-02-30"), /有效日期/);
+  assert.equal(await vault.read(vault.getAbstractFileByPath(ITEMS_PATH) as TFile), before);
+});
+
+test("restart adds today once without consuming stock or changing status; delete last record disables cycle", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  let item = await service.save({ ...blankItem(), name: "滤芯", status: "retired", inventory: { enabled: true, quantity: 2, noRestock: true }, cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "old", date: "2024-01-01" }] });
+  item = await service.recordUsage(item); assert.equal(item.usageRecords[0].date, localDate());
+  assert.equal(item.status, "retired"); assert.deepEqual(item.inventory, { enabled: true, quantity: 2, noRestock: true });
+  await assert.rejects(service.recordUsage(item), /同一天/);
+  item = await service.deleteUsage(item, item.usageRecords[0].id); assert.equal(cycleMetrics(item)?.latest, "2024-01-01");
+  item = await service.deleteUsage(item, "old"); assert.equal(item.cycle?.enabled, false); assert.equal(item.cycle?.intervalDays, 30); assert.deepEqual(item.usageRecords, []);
+});
+
+test("usage writes reject stale versions and failed writes retain all history", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const item = await service.save({ ...blankItem(), name: "滤芯", inventory: { enabled: true, quantity: 2 } });
+  await service.adjust(item.id, 1); await assert.rejects(service.recordUsage(item), /变化/);
+  const current = (await service.list())[0]; vault.failNextModify = true;
+  await assert.rejects(service.recordUsage(current)); assert.deepEqual((await service.list())[0].usageRecords, []);
+  const next = await service.recordUsage(current, "2024-01-01");
+  await assert.rejects(service.deleteUsage(current, next.usageRecords[0].id), /变化/);
+  await assert.rejects(service.recordUsage(next, "2024-01-02", "missing"), /不存在/);
+});
+
+test("v2 validates cycle, inventory and usage invariants", () => {
+  const base: Item = { ...blankItem(), name: "物品" };
+  for (const quantity of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => validateItem({ ...base, inventory: { enabled: true, quantity } }));
+  for (const intervalDays of [0, -1, 1.5, Number.MAX_SAFE_INTEGER]) assert.throws(() => validateItem({ ...base, cycle: { enabled: true, intervalDays }, usageRecords: [{ id: "a", date: "2024-01-01" }] }));
+  assert.throws(() => validateItem({ ...base, cycle: { enabled: true, intervalDays: 30 } }));
+  assert.throws(() => validateItem({ ...base, usageRecords: [{ id: "a", date: "2024-01-01" }, { id: "a", date: "2024-01-02" }] }));
+  assert.throws(() => validateItem({ ...base, usageRecords: [{ id: "a", date: "2024-01-01" }, { id: "b", date: "2024-01-01" }] }));
+});
+
+test("reminders sort overdue, today and future stably regardless of stock edits and item state", () => {
+  const make = (id: string, date: string): Item => ({ ...blankItem(), id, name: id, status: "retired", inventory: { enabled: true, quantity: 2, noRestock: true }, cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "usage", date }] });
+  const items = [make("future", "2024-03-03"), make("today", "2024-03-01"), make("overdue", "2024-02-01"), make("tomorrow", "2024-03-02")];
+  const order = ["overdue", "today", "tomorrow", "future"];
+  assert.deepEqual(reminderItems(items, "2024-03-31").map(i => i.id), order);
+  items[0].updated = new Date().toISOString(); items[0].inventory!.quantity++;
+  assert.deepEqual(reminderItems(items, "2024-03-31").map(i => i.id), order);
+  assert.equal(reminderItems([{ ...items[0], cycle: { enabled: false, intervalDays: 30 } }]).length, 0);
+  assert.deepEqual(reminderItems([make("b", "2024-03-01"), make("a", "2024-03-01")]).map(i => i.id), ["a", "b"]);
+});
+
+test("normal and reminder lists share exact card markup and restore search filter and scroll", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const item = await service.save({ ...blankItem(), name: "滤芯", notes: "厨房", inventory: { enabled: true, quantity: 2, noRestock: true }, cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "a", date: "2024-01-01" }], purchased: "2023-01-01", price: 300 });
+  await service.save({ ...blankItem(), name: "无周期物品" });
+  const root = document.createElement("div"); root.className = "doudou-view"; document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  await clickItemText(root, "有库存");
+  const search = root.querySelector('input[type="search"]') as HTMLInputElement; search.value = "厨房"; search.dispatchEvent(new Event("input")); await page.refresh();
+  const normal = root.querySelector('.doudou-item-card')!.outerHTML;
+  assert.equal(root.querySelector('.doudou-item-copy')!.children.length, 3);
+  assert.match(root.querySelector('.doudou-item-info')!.textContent!, /已用.*库存 2.*不再买/);
+  const list = root.querySelector('.doudou-items-list') as HTMLElement; list.scrollTop = 130; list.dispatchEvent(new Event("scroll"));
+  (root.querySelector('[aria-label="查看周期提醒"]') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelector('.doudou-item-card')!.outerHTML, normal);
+  assert.equal(root.querySelectorAll('.doudou-item-card').length, 1);
+  (root.querySelector('[aria-label="滤芯 增加 1 件"]') as HTMLButtonElement).click(); await itemTick();
+  assert.equal((await service.list()).find(i => i.id === item.id)?.inventory?.quantity, 3);
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  assert.match(root.textContent!, /购买价格：¥300.00/); assert.match(root.textContent!, /日|天/);
+  await clickItemText(root, "‹ 返回提醒");
+  (root.querySelector('[aria-label="返回普通小物库"]') as HTMLButtonElement).click(); await itemTick();
+  assert.equal((root.querySelector('input[type="search"]') as HTMLInputElement).value, "厨房");
+  assert.equal(root.querySelector('.doudou-item-filter-label')?.textContent, "有库存");
+  assert.equal((root.querySelector('.doudou-items-list') as HTMLElement).scrollTop, 130);
+});
+
+test("usage UI supports add edit delete and explicitly confirms closing the last cycle", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "滤芯", cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "old", date: "2024-01-01" }] });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  await clickItemText(root, "新增记录"); (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240201"; await clickItemText(root, "保存日期");
+  assert.match(root.textContent!, /距上次 31 天/);
+  await clickItemText(root, "修改日期"); (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240202"; await clickItemText(root, "保存日期");
+  assert.match(root.textContent!, /距上次 32 天/);
+  await clickItemText(root, "删除记录"); await clickItemText(root, "确认删除记录");
+  await clickItemText(root, "删除记录"); assert.match(root.textContent!, /同时关闭周期/);
+  await clickItemText(root, "取消"); assert.equal((await service.list())[0].usageRecords.length, 1);
+  await clickItemText(root, "删除记录"); await clickItemText(root, "确认删除记录");
+  assert.equal((await service.list())[0].cycle?.enabled, false); assert.equal((await service.list())[0].usageRecords.length, 0);
+  assert.equal([...root.querySelectorAll('.doudou-items-actions button')].some(b => b.textContent === "重新计时"), false);
+});
+
+test("editor disable and reenable inventory preserves data, cancel never writes nested changes", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "滤芯", inventory: { enabled: true, quantity: 3, noRestock: true }, cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "old", date: "2024-01-01" }] });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick(); await clickItemText(root, "编辑");
+  (root.querySelector('[aria-label="库存管理"] button:first-of-type') as HTMLButtonElement).click(); await clickItemText(root, "保存");
+  assert.deepEqual((await service.list())[0].inventory, { enabled: false, quantity: 3, noRestock: true });
+  await clickItemText(root, "编辑"); (root.querySelector('[aria-label="库存管理"] button:last-child') as HTMLButtonElement).click();
+  assert.equal(itemInput(root, "数量").value, "3");
+  itemInput(root, "数量").value = "9"; await clickItemText(root, "取消"); assert.equal((await service.list())[0].inventory?.quantity, 3);
+  await clickItemText(root, "编辑"); (root.querySelector('[aria-label="库存管理"] button:last-child') as HTMLButtonElement).click(); await clickItemText(root, "保存");
+  assert.deepEqual((await service.list())[0].inventory, { enabled: true, quantity: 3, noRestock: true });
+});
+
+test("cycle editor rejects a future first date and permits a past first date without changing stock", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); page.create();
+  itemInput(root, "名称（必填）").value = "牙刷头";
+  (root.querySelector('[aria-label="使用周期"] button:last-child') as HTMLButtonElement).click();
+  assert.equal(itemInput(root, "首次使用日期").value, localDate());
+  itemInput(root, "首次使用日期").value = addDays(localDate(), 1);
+  await clickItemText(root, "保存"); assert.equal((await service.list()).length, 0); assert.ok(root.querySelector('form'));
+  itemInput(root, "首次使用日期").value = "20240229";
+  await clickItemText(root, "保存"); const saved = (await service.list())[0];
+  assert.equal(saved.usageRecords[0].date, "2024-02-29"); assert.equal(saved.inventory, undefined);
+});
+
+test("post-commit readback failure cannot roll back or recycle newly committed photos", async () => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const process = vault.process.bind(vault); const read = vault.read.bind(vault); let committed = false;
+  vault.process = async (file, callback) => { const result = await process(file, callback); committed = true; return result; };
+  vault.read = async file => { if (committed && file.path === ITEMS_PATH) throw new Error("readback unavailable"); return read(file); };
+  const saved = await service.save({ ...blankItem(), name: "相机" }, [new File(["photo"], "photo.jpg")]);
+  assert.equal(vault.binaries.size, 1); assert.ok(vault.getAbstractFileByPath(saved.photos[0]));
+  const stored = decodeStore(vault.files.get(ITEMS_PATH)!.content);
+  assert.equal(stored.items[0].photos[0], saved.photos[0]);
+});
+
+test("usage editor survives an earlier in-flight refresh and keeps unsaved date", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "滤芯", usageRecords: [{ id: "a", date: "2024-01-01" }] });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  const list = service.list.bind(service); let finish!: () => void;
+  service.list = async () => { await new Promise<void>(resolve => { finish = resolve; }); return list(); };
+  const refreshing = page.refresh(); await clickItemText(root, "修改日期");
+  (root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value = "20240102";
+  finish(); await refreshing;
+  assert.equal((root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value, "20240102");
+  service.list = list;
 });

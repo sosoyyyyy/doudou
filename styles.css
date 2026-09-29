@@ -319,3 +319,16 @@
 .doudou-view .doudou-item-segments button[aria-pressed="true"] { background: var(--doudou-surface); color: var(--doudou-blue-strong); font-weight: 600; }
 .doudou-view .doudou-items-editor-form button.doudou-item-add-photo { display: inline-flex; width: auto; min-height: 44px; margin: 8px 0; padding: 7px 12px; border: 1px dashed var(--doudou-border); border-radius: 10px; color: var(--doudou-blue-strong); font-size: 14px; background: var(--doudou-surface); }
 .doudou-view .doudou-items-editor-form .doudou-items-photos:empty { display: none; }
+
+/* Independent item capabilities and editable usage history. Cards keep the existing geometry. */
+.doudou-view .doudou-item-usage { min-width: 0; margin-top: 16px; overflow-wrap: anywhere; }
+.doudou-view .doudou-item-usage-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; margin: 6px 0; }
+.doudou-view .doudou-item-usage-row > span { flex: 1 1 190px; min-width: 0; font-variant-numeric: tabular-nums; }
+.doudou-view .doudou-item-usage-editor { display: block; min-width: 0; }
+.doudou-view .doudou-item-usage-editor:empty { display: none; }
+.doudou-view .doudou-item-usage-editor button { margin: 6px 6px 6px 0; }
+.doudou-view .doudou-item-cycle-summary { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.doudou-view .doudou-items-heading { min-width: 0; flex-wrap: wrap; }
+.doudou-view .doudou-items-heading .doudou-library-heading-tools { flex-shrink: 0; }
+.doudou-view .doudou-item-segments { flex-wrap: wrap; }
+.doudou-view .doudou-item-segment-title { display: block; flex: 0 0 100%; padding: 3px 6px; color: var(--doudou-muted); font-size: 13px; line-height: 1.4; }

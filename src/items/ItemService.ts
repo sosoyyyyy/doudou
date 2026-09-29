@@ -1,12 +1,13 @@
 import { Notice, TFile } from "obsidian";
 import { ItemRepository } from "./ItemRepository";
-import { ITEM_ASSETS, validateItem, type Item } from "./model";
+import { ITEM_ASSETS, localDate, validateUsageDate, validateItem, type Item } from "./model";
 
 export class ItemService {
   constructor(readonly repository: ItemRepository) {}
   async list(): Promise<Item[]> { return (await this.repository.read()).items.sort((a,b) => b.updated.localeCompare(a.updated)); }
   async save(draft: Item, pending: File[] = []): Promise<Item> {
     validateItem(draft);
+    draft.usageRecords.forEach(record => validateUsageDate(record.date));
     const added: string[] = [];
     let removed: string[] = [];
     try {
@@ -31,9 +32,34 @@ export class ItemService {
   async adjust(id: string, delta: 1 | -1): Promise<void> {
     await this.repository.change(store => {
       const item = store.items.find(i => i.id === id);
-      if (!item || item.kind !== "stock") throw new Error("库存物品已不存在");
-      if (!Number.isSafeInteger(item.quantity + delta) || item.quantity + delta < 0) throw new Error("数量不能小于 0 或超出范围");
-      item.quantity += delta; item.revision++; item.updated = new Date().toISOString();
+      if (!item || !item.inventory?.enabled) throw new Error("库存物品已不存在");
+      if (!Number.isSafeInteger(item.inventory!.quantity + delta) || item.inventory!.quantity + delta < 0) throw new Error("数量不能小于 0 或超出范围");
+      item.inventory!.quantity += delta; item.revision++; item.updated = new Date().toISOString();
+    });
+  }
+  async recordUsage(item: Item, date = localDate(), recordId?: string): Promise<Item> {
+    validateUsageDate(date);
+    return this.repository.change(store => {
+      const current = store.items.find(entry => entry.id === item.id);
+      if (!current || current.revision !== item.revision) throw new Error("物品已变化，请重新打开后修改使用记录");
+      if (recordId && !current.usageRecords.some(r => r.id === recordId)) throw new Error("使用记录已不存在");
+      if (current.usageRecords.some(r => r.date === date && r.id !== recordId)) throw new Error("同一天已有使用记录，请编辑原记录");
+      const record = { id: recordId ?? crypto.randomUUID(), date };
+      current.usageRecords = [...current.usageRecords.filter(r => r.id !== record.id), record].sort((a, b) => b.date.localeCompare(a.date));
+      current.revision++; current.updated = new Date().toISOString();
+      return current;
+    });
+  }
+  async deleteUsage(item: Item, recordId: string): Promise<Item> {
+    return this.repository.change(store => {
+      const current = store.items.find(entry => entry.id === item.id);
+      if (!current || current.revision !== item.revision) throw new Error("物品已变化，请重新打开后删除使用记录");
+      if (!current.usageRecords.some(r => r.id === recordId)) throw new Error("使用记录已不存在");
+      current.usageRecords = current.usageRecords.filter(r => r.id !== recordId);
+      // The UI explicitly confirms this consequence before removing the last record.
+      if (!current.usageRecords.length && current.cycle) current.cycle.enabled = false;
+      current.revision++; current.updated = new Date().toISOString();
+      return current;
     });
   }
   async delete(item: Item): Promise<void> {

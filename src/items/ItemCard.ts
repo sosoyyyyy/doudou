@@ -1,5 +1,5 @@
 import { ItemService } from "./ItemService";
-import { cycleMetrics, itemMetrics, type Item } from "./model";
+import { cycleMetrics, expiryMetrics, itemMetrics, type Item } from "./model";
 import { matchesItemFilter, remainingLabel, statusLabel } from "./itemPresentation";
 
 type ButtonFactory = (parent: HTMLElement, text: string, action: () => void | Promise<void>) => HTMLButtonElement;
@@ -31,8 +31,10 @@ export function renderItemCard(parent: HTMLElement, item: Item, service: ItemSer
     info.setText([item.price === undefined ? undefined : `¥${item.price.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`, metrics.days === undefined ? undefined : `${metrics.days} 天`, metrics.daily === undefined ? undefined : `¥${metrics.daily.toFixed(2)}/天`].filter(Boolean).join(" · "));
   }
   info.setAttribute("title", info.textContent ?? "");
+  const expiry = expiryMetrics(item);
   const date = cycle ? remainingLabel(cycle.remaining) : item.purchased ? item.status === "retired" && item.retired ? `${item.purchased} → ${item.retired}` : `购于 ${item.purchased}` : "";
-  text.createSpan({ cls: "doudou-item-date", text: date, attr: { title: date } });
+  const summary = [cycle ? date : expiry ? undefined : date, expiry ? `有效期至 ${expiry.date}` : undefined].filter(Boolean).join(" · ");
+  text.createSpan({ cls: "doudou-item-date", text: summary, attr: { title: summary } });
   const side = card.createDiv({ cls: "doudou-item-side" });
   side.createSpan({ cls: `doudou-item-badge doudou-item-badge-${item.status ?? "nostock"}`, text: statusLabel(item) });
   if (inventory) stockControls(side);

@@ -60,7 +60,7 @@ export class ItemsPage extends Component {
       this.mode = this.mode === "normal" ? "reminders" : "normal";
       this.home();
     });
-    reminder.addClass("doudou-round-tool"); reminder.setAttribute("aria-label", this.mode === "normal" ? "查看周期提醒" : "返回普通小物库");
+    reminder.addClass("doudou-round-tool"); reminder.setAttribute("aria-label", this.mode === "normal" ? "查看时间提醒" : "返回普通小物库");
     reminder.setAttribute("aria-pressed", String(this.mode === "reminders")); setIcon(reminder, this.mode === "normal" ? "bell" : "arrow-left");
     const filterLabel = filterTool.createSpan({ cls: `doudou-item-badge doudou-item-filter-label${this.filter === "all" ? " doudou-item-filter-all" : ""}`, text: itemFilterOptions.find(([value]) => value === this.filter)?.[1] ?? "全部" });
     if (this.filter !== "all") filterLabel.addClass(`doudou-item-badge-${itemBadgeTone[this.filter]}`);
@@ -112,7 +112,7 @@ export class ItemsPage extends Component {
       const source = this.mode === "reminders" ? reminderItems(items) : items.filter(item => matchesItemFilter(item, this.filter));
       const matches = source.filter(item => matchesItem(item, this.query));
       this.countEl.setText(`${matches.length} 件`);
-      if (!matches.length) this.listEl.createEl("p", { cls: "doudou-items-empty", text: this.mode === "reminders" ? "没有符合条件的周期提醒。" : this.query || this.filter !== "all" ? "没有找到符合条件的物品。" : "还空着呢。点顶部 +，收进第一件物品吧。" });
+      if (!matches.length) this.listEl.createEl("p", { cls: "doudou-items-empty", text: this.mode === "reminders" ? "没有符合条件的时间提醒。" : this.query || this.filter !== "all" ? "没有找到符合条件的物品。" : "还空着呢。点顶部 +，收进第一件物品吧。" });
       for (const item of matches) renderItemCard(this.listEl, item, this.service, this.button.bind(this), () => { this.rememberScroll(); this.detail(item); }, side => this.stockControls(side, item, false));
       this.listEl.scrollTop = this.listState[this.mode].scroll;
     } catch (error) {
@@ -202,6 +202,10 @@ export class ItemsPage extends Component {
     segment("使用周期", [["off", "关闭"], ["on", "开启"]], cycleEnabled.value, value => { cycleEnabled.value = value; updateVisibility(); });
     const interval = field("使用周期（天）", "number", String(draft.cycle?.intervalDays ?? 30)); interval.min = "1"; interval.step = "1";
     const firstUsage = field("首次使用日期", "text", localDate()); firstUsage.inputMode = "numeric"; firstUsage.placeholder = "例如 20260620";
+    const expiresOn = field("有效期至（可选）", "text", draft.expiresOn ?? "");
+    expiresOn.inputMode = "numeric"; expiresOn.maxLength = 10; expiresOn.placeholder = "留空不启用，例如 20270318";
+    expiresOn.addEventListener("blur", () => { expiresOn.value = normalizeItemDateInput(expiresOn.value); });
+    expiresOn.addEventListener("input", () => expiresOn.setCustomValidity(""));
     const updateVisibility = (): void => {
       retired.parentElement!.hidden = status.value !== "retired"; retired.disabled = retired.parentElement!.hidden;
       restockGroup.hidden = inventoryEnabled.value !== "on";
@@ -229,8 +233,13 @@ export class ItemsPage extends Component {
       if (!isValidItemDateInput(purchased.value)) {
         purchased.setCustomValidity("请输入有效日期，例如 20260620 或 2026-06-20"); purchased.reportValidity(); return;
       }
+      expiresOn.value = normalizeItemDateInput(expiresOn.value);
+      if (!isValidItemDateInput(expiresOn.value)) {
+        expiresOn.setCustomValidity("请输入有效日期，例如 20270318 或 2027-03-18"); expiresOn.reportValidity(); return;
+      }
       this.busy = true; save.disabled = true; cancel.disabled = true;
       const next: Item = { ...draft, name: name.value, cover: cover.value || undefined, notes: notes.value,
+        expiresOn: expiresOn.value || undefined,
         purchased: purchased.value || undefined, price: price.value === "" ? undefined : Number(price.value), status: status.value as Item["status"],
         retired: status.value === "retired" ? normalizeItemDateInput(retired.value) || undefined : draft.retired,
         inventory: inventoryEnabled.value === "on" ? { enabled: true, quantity: quantity.value === "" ? 0 : Number(quantity.value), noRestock: restock.value === "stop" } : draft.inventory ? { ...draft.inventory, enabled: false } : undefined,

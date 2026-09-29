@@ -1,5 +1,5 @@
 import type { ItemService } from "./ItemService";
-import { cycleMetrics, itemMetrics, localDate, usageHistory, type Item, type UsageRecord } from "./model";
+import { cycleMetrics, expiryMetrics, itemMetrics, localDate, usageHistory, type Item, type UsageRecord } from "./model";
 import { normalizeItemDateInput, statusLabel } from "./itemPresentation";
 
 type ButtonFactory = (parent: HTMLElement, text: string, action: () => void | Promise<void>) => HTMLButtonElement;
@@ -61,6 +61,13 @@ export function renderItemDetail(body: HTMLElement, item: Item, actions: DetailA
       [cycle.remaining < 0 ? "已超期" : cycle.remaining === 0 ? "提醒" : "还有", cycle.remaining === 0 ? "今天到期" : `${Math.abs(cycle.remaining)} 天`]
     ]);
   }
+  const expiry = expiryMetrics(item);
+  if (expiry) {
+    fields(section(body, "有效期", "doudou-item-detail-expiry"), [
+      ["有效期至", expiry.date],
+      [expiry.remaining < 0 ? "已过期" : expiry.remaining === 0 ? "提醒" : "还有", expiry.remaining === 0 ? "今天到期" : `${Math.abs(expiry.remaining)} 天`]
+    ]);
+  }
   const metrics = itemMetrics(item);
   const purchaseFields: [string, string][] = [];
   if (item.purchased) purchaseFields.push(["购买日期", item.purchased]);
@@ -73,6 +80,7 @@ export function renderItemDetail(body: HTMLElement, item: Item, actions: DetailA
     fields(section(body, "购买信息", "doudou-item-detail-purchase"), purchaseFields);
   }
 
+  renderUsage(body, item, actions);
   if (item.notes.trim() || item.photos.length || (retired && !purchaseFields.length)) {
     const extra = section(body, "补充资料", "doudou-item-detail-extra");
     if (retired && !purchaseFields.length) fields(extra, [["退役日期", retired]]);
@@ -82,7 +90,6 @@ export function renderItemDetail(body: HTMLElement, item: Item, actions: DetailA
       item.photos.forEach(path => actions.photo(photos, path));
     }
   }
-  renderUsage(body, item, actions);
   const footer = body.createDiv({ cls: "doudou-items-actions doudou-item-detail-actions", attr: { "aria-label": "物品操作" } });
   actions.button(footer, "编辑", actions.edit);
   actions.button(footer, "删除", () => {

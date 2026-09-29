@@ -338,7 +338,7 @@
 .doudou-view .doudou-item-detail-fields { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); align-items: baseline; gap: 8px 14px; width: 100%; min-width: 0; margin: 0; padding: 0; font-size: 16px; line-height: 1.5; font-variant-numeric: tabular-nums; }
 .doudou-view .doudou-item-detail-fields dt, .doudou-view .doudou-item-detail-fields dd { display: block; min-width: 0; margin: 0; padding: 0; white-space: normal; overflow-wrap: anywhere; }
 .doudou-view .doudou-item-detail-fields dt { color: var(--doudou-muted); font-weight: 400; }
-.doudou-view .doudou-item-detail-purchase h3, .doudou-view .doudou-item-detail-purchase dd { color: var(--doudou-muted); }
+.doudou-view .doudou-item-detail-fields dd, .doudou-view .doudou-item-usage-copy time { color: var(--text-normal); }
 .doudou-view .doudou-item-detail-caption { display: block; margin: 6px 0 0; padding: 0; color: var(--doudou-muted); font-size: 14px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
 .doudou-view .doudou-item-detail-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; margin-bottom: 8px; }
 .doudou-view .doudou-item-detail-section-heading h3 { margin-bottom: 0; }

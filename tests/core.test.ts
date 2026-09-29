@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { ItemRepository } from "../src/items/ItemRepository";
 import { ItemService } from "../src/items/ItemService";
-import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore, cycleMetrics, usageHistory, localDate, addDays, validateItem, type Item } from "../src/items/model";
+import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore, cycleMetrics, expiryMetrics, usageHistory, localDate, addDays, validateItem, type Item } from "../src/items/model";
 import { ItemsPage } from "../src/items/ItemsPage";
 import { matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, reminderItems, remainingLabel } from "../src/items/itemPresentation";
 import { File as NodeFile } from "node:buffer";
@@ -2137,7 +2137,7 @@ test("calendar cycle calculations handle leap days, today, due dates and overdue
   const item: Item = { ...blankItem(), name: "滤芯", cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "a", date: "2024-02-28" }] };
   assert.deepEqual(cycleMetrics(item, "2024-02-28"), { latest: "2024-02-28", elapsed: 0, next: "2024-03-29", remaining: 30 });
   assert.equal(cycleMetrics(item, "2024-03-29")?.remaining, 0); assert.equal(cycleMetrics(item, "2024-04-01")?.remaining, -3);
-  assert.equal(remainingLabel(-3), "已超 3 天"); assert.equal(remainingLabel(0), "今天到期"); assert.equal(remainingLabel(1), "还有 1 天");
+  assert.equal(remainingLabel(-3), "已超 3 天"); assert.equal(remainingLabel(0), "今天到期"); assert.equal(remainingLabel(1), "距下次 1 天");
   assert.equal(addDays("2025-12-31", 1), "2026-01-01");
   assert.equal(cycleMetrics({ ...item, status: "retired", inventory: { enabled: true, quantity: 0, noRestock: true } }, "2024-03-29")?.remaining, 0);
   assert.equal(cycleMetrics({ ...item, cycle: { ...item.cycle!, enabled: false } }), undefined);
@@ -2214,7 +2214,7 @@ test("normal and reminder lists share exact card markup and restore search filte
   assert.equal(root.querySelector('.doudou-item-copy')!.children.length, 3);
   assert.match(root.querySelector('.doudou-item-info')!.textContent!, /已用.*库存 2.*不再买/);
   const list = root.querySelector('.doudou-items-list') as HTMLElement; list.scrollTop = 130; list.dispatchEvent(new Event("scroll"));
-  (root.querySelector('[aria-label="查看周期提醒"]') as HTMLButtonElement).click(); await itemTick();
+  (root.querySelector('[aria-label="查看时间提醒"]') as HTMLButtonElement).click(); await itemTick();
   assert.equal(root.querySelector('.doudou-item-card')!.outerHTML, normal);
   assert.equal(root.querySelectorAll('.doudou-item-card').length, 1);
   (root.querySelector('[aria-label="滤芯 增加 1 件"]') as HTMLButtonElement).click(); await itemTick();
@@ -2305,7 +2305,7 @@ test("item detail reads overview stock cycle purchase history and page actions w
   const file = vault.getAbstractFileByPath(ITEMS_PATH) as TFile; const before = await vault.read(file);
   const root = document.createElement("div"); root.className = "doudou-view"; document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
-  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-section h3')].map(el => el.textContent), ["库存", "使用周期", "购买信息", "补充资料", "使用记录"]);
+  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-section h3')].map(el => el.textContent), ["库存", "使用周期", "购买信息", "使用记录", "补充资料"]);
   assert.equal(root.querySelector('.doudou-item-detail-status')?.textContent, "使用中 · 库存 2 件");
   assert.doesNotMatch(root.querySelector('.doudou-item-detail-overview')!.textContent!, /周期|价格|拥有|不再买/);
   assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-cycle dt')].map(el => el.textContent).slice(0, 4), ["周期", "最近使用", "已使用", "下次提醒"]);
@@ -2419,4 +2419,91 @@ test("detail preserves a real retirement date without creating an empty purchase
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
   assert.equal(root.querySelector('.doudou-item-detail-purchase'), null);
   assert.match(root.querySelector('.doudou-item-detail-extra')!.textContent!, /退役日期2024-01-01/);
+});
+
+test("expiry is optional schema 2 data, validates dates and counts calendar expiry independently", () => {
+  const base = { ...blankItem(), name: "药品" };
+  const old = JSON.stringify({ schemaVersion: 2, items: [base], importedKeys: [] });
+  assert.equal(decodeStore(old).items[0].expiresOn, undefined);
+  assert.equal(expiryMetrics(base), undefined);
+  for (const [date, remaining] of [["2024-02-28", -2], ["2024-03-01", 0], ["2024-03-02", 1]] as const) {
+    const item = { ...base, expiresOn: date }; validateItem(item);
+    assert.deepEqual(expiryMetrics(item, "2024-03-01"), { date, remaining });
+    assert.equal(decodeStore(JSON.stringify({ schemaVersion: 2, items: [item], importedKeys: [] })).items[0].expiresOn, date);
+  }
+  for (const expiresOn of ["", "2024-02-30", "20240301", 123]) assert.throws(() => validateItem({ ...base, expiresOn } as Item));
+  assert.equal(JSON.stringify(decodeStore(old)), old);
+});
+
+test("mixed reminders use the earlier cycle or expiry date once per item with stable ties", () => {
+  const make = (id: string, expiresOn?: string, next?: string): Item => ({ ...blankItem(), id, name: id, expiresOn,
+    cycle: next ? { enabled: true, intervalDays: 1 } : undefined, usageRecords: next ? [{ id: "a", date: addDays(next, -1) }] : [] });
+  const items = [make("later", "2024-04-05"), make("cycle", undefined, "2024-04-02"), make("both-expiry", "2024-03-29", "2024-04-10"), make("both-cycle", "2024-04-09", "2024-03-30"), make("today", "2024-04-01"), make("none"), make("tie-b", "2024-04-03"), make("tie-a", "2024-04-03")];
+  assert.deepEqual(reminderItems(items, "2024-04-01").map(i => i.id), ["both-expiry", "both-cycle", "today", "cycle", "tie-a", "tie-b", "later"]);
+  const disabled = { ...items[2], status: "retired" as const, inventory: { enabled: false, quantity: 0, noRestock: true }, cycle: { enabled: false, intervalDays: 1 } };
+  assert.deepEqual(reminderItems([disabled], "2024-04-01"), [disabled]);
+});
+
+test("expiry editor saves optional compact dates, preserves drafts on errors and clears without touching other capabilities", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload();
+  t.after(() => { page.onunload(); root.remove(); }); await page.refresh(); page.create();
+  itemInput(root, "名称（必填）").value = "药品";
+  const date = itemInput(root, "有效期至（可选）"); date.value = "20270230";
+  await clickItemText(root, "保存"); assert.equal((await service.list()).length, 0); assert.equal(date.value, "2027-02-30");
+  date.value = "20270318"; date.dispatchEvent(new window.Event("input")); await clickItemText(root, "保存");
+  const original = (await service.list())[0]; assert.equal(original.expiresOn, "2027-03-18"); assert.equal(original.inventory, undefined); assert.equal(original.cycle, undefined);
+  assert.match(root.querySelector('.doudou-item-detail-expiry')!.textContent!, /有效期至2027-03-18/);
+  await clickItemText(root, "编辑"); itemInput(root, "有效期至（可选）").value = "20280101"; await clickItemText(root, "取消");
+  assert.equal((await service.list())[0].expiresOn, original.expiresOn);
+  await clickItemText(root, "编辑"); itemInput(root, "有效期至（可选）").value = ""; await clickItemText(root, "保存");
+  assert.equal((await service.list())[0].expiresOn, undefined); assert.equal(root.querySelector('.doudou-item-detail-expiry'), null);
+  assert.deepEqual((await service.list())[0].usageRecords, []);
+});
+
+test("expiry detail handles past today future and keeps zero price and zero inventory", async (t) => {
+  for (const offset of [-9, 0, 170]) {
+    const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+    await service.save({ ...blankItem(), name: "药品", price: 0, inventory: { enabled: true, quantity: 0 }, expiresOn: addDays(localDate(), offset) });
+    const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+    (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+    assert.match(root.querySelector('.doudou-item-detail-expiry')!.textContent!, offset < 0 ? /已过期9 天/ : offset === 0 ? /今天到期/ : /还有170 天/);
+    assert.match(root.querySelector('.doudou-item-detail-purchase')!.textContent!, /¥0.00/); assert.match(root.querySelector('.doudou-item-detail-status')!.textContent!, /库存 0 件/);
+    assert.equal(root.querySelector('.doudou-item-detail-cycle'), null); assert.equal(root.querySelector('.doudou-item-usage'), null);
+  }
+});
+
+test("expiry and cycle share one three-line card and reminder renderer with stock controls intact", async (t) => {
+  for (const withCycle of [false, true]) for (const withExpiry of [false, true]) {
+    const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+    await service.save({ ...blankItem(), name: "药品", expiresOn: withExpiry ? "2027-03-18" : undefined, inventory: { enabled: true, quantity: 2 },
+      cycle: withCycle ? { enabled: true, intervalDays: 30 } : undefined, usageRecords: withCycle ? [{ id: "a", date: localDate() }] : [] });
+    const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+    const card = root.querySelector('.doudou-item-card')!; const summary = card.querySelector('.doudou-item-date')!;
+    assert.equal(card.querySelector('.doudou-item-copy')!.children.length, 3);
+    assert.equal(summary.textContent, [withCycle ? "距下次 30 天" : undefined, withExpiry ? "有效期至 2027-03-18" : undefined].filter(Boolean).join(" · "));
+    const markup = card.outerHTML;
+    (root.querySelector('[aria-label="查看时间提醒"]') as HTMLButtonElement).click(); await itemTick();
+    if (withCycle || withExpiry) assert.equal(root.querySelector('.doudou-item-card')!.outerHTML, markup);
+    else assert.equal(root.querySelector('.doudou-item-card'), null);
+  }
+});
+
+test("expiry survives inventory restart history deletion and failed writes without schema migration", async () => {
+  const vault = new FakeVault(); const repository = new ItemRepository(vault as unknown as Vault); const service = new ItemService(repository);
+  let item = await service.save({ ...blankItem(), name: "药品", expiresOn: "2027-03-18", inventory: { enabled: true, quantity: 2, noRestock: true }, cycle: { enabled: true, intervalDays: 180 }, usageRecords: [{ id: "a", date: addDays(localDate(), -20) }] });
+  await service.adjust(item.id, -1); item = (await service.list())[0]; item = await service.recordUsage(item);
+  for (const record of [...item.usageRecords]) item = await service.deleteUsage(item, record.id);
+  assert.equal(item.expiresOn, "2027-03-18"); assert.equal(item.cycle?.enabled, false); assert.equal(item.inventory?.quantity, 1);
+  const file = vault.getAbstractFileByPath(ITEMS_PATH) as TFile; const before = await vault.read(file);
+  vault.failNextModify = true; await assert.rejects(service.save({ ...item, expiresOn: "2028-01-01" }));
+  assert.equal(await vault.read(file), before); assert.equal(JSON.parse(before).schemaVersion, 2);
+});
+
+test("detail sections use shared title label and value colors without purchase overrides", () => {
+  const css = readFileSync("styles.css", "utf8");
+  assert.match(css, /\.doudou-view \.doudou-item-detail-section h3 \{[^}]*color: var\(--text-normal\)/);
+  assert.match(css, /\.doudou-view \.doudou-item-detail-fields dt \{[^}]*color: var\(--doudou-muted\)/);
+  assert.match(css, /\.doudou-view \.doudou-item-detail-fields dd, \.doudou-view \.doudou-item-usage-copy time \{ color: var\(--text-normal\)/);
+  assert.doesNotMatch(css, /\.doudou-item-detail-purchase (h3|dd)/);
 });

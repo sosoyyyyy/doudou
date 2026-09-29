@@ -7,6 +7,7 @@ export interface Item {
   purchased?: string; price?: number; status: "active" | "idle" | "retired" | null; retired?: string;
   inventory?: { enabled: boolean; quantity: number; noRestock?: boolean };
   cycle?: { enabled: boolean; intervalDays: number };
+  expiresOn?: string;
   usageRecords: UsageRecord[];
   cover?: string; revision: number; created: string; updated: string; importKey?: string;
 }
@@ -33,7 +34,7 @@ export function validateItem(item: Item): void {
   if (typeof item.created !== "string" || typeof item.updated !== "string" || !Number.isFinite(Date.parse(item.created)) || !Number.isFinite(Date.parse(item.updated))) throw new Error("物品时间戳无效");
   if (item.importKey !== undefined && typeof item.importKey !== "string") throw new Error("物品导入标识无效");
   if (item.price !== undefined && (!Number.isFinite(item.price) || item.price < 0)) throw new Error("购买价格必须是非负数字");
-  for (const date of [item.purchased, item.retired]) if (date !== undefined && !validDate(date)) throw new Error("日期格式不正确");
+  for (const date of [item.purchased, item.retired, item.expiresOn]) if (date !== undefined && !validDate(date)) throw new Error("日期格式不正确");
   if (item.purchased && item.retired && item.retired < item.purchased) throw new Error("退役日期不能早于购买日期");
   if (!Array.isArray(item.photos) || item.photos.some(p => typeof p !== "string" || !p.startsWith(`${ITEM_ASSETS}/`) || p.includes("..") || p.includes("\\"))) throw new Error("照片路径不属于小物库");
   const stock = item.inventory;
@@ -79,5 +80,8 @@ export function cycleMetrics(item: Item, today = localDate()): { latest: string;
   const latest = item.usageRecords.reduce((last, r) => r.date > last ? r.date : last, "");
   const next = addDays(latest, item.cycle.intervalDays);
   return { latest, elapsed: dateDays(latest, today), next, remaining: dateDays(today, next) };
+}
+export function expiryMetrics(item: Item, today = localDate()): { date: string; remaining: number } | undefined {
+  return item.expiresOn ? { date: item.expiresOn, remaining: dateDays(today, item.expiresOn) } : undefined;
 }
 export function matchesItem(item: Item, query: string): boolean { return `${item.name}\n${item.notes}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()); }

@@ -2318,15 +2318,15 @@ test("item detail reads overview stock cycle purchase history and page actions w
   assert.equal(await vault.read(file), before);
 });
 
-test("item detail hides disabled stock and cycle but keeps purchase fields and a compact empty history", async (t) => {
+test("item detail hides disabled stock, cycle and empty purchase and history sections", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
   await service.save({ ...blankItem(), name: "杯子", inventory: { enabled: false, quantity: 3, noRestock: true }, cycle: { enabled: false, intervalDays: 30 } });
   const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
   assert.equal(root.querySelector('.doudou-item-detail-stock'), null); assert.equal(root.querySelector('.doudou-item-detail-cycle'), null);
   assert.equal(root.querySelector('.doudou-item-detail-status')?.textContent, "使用中");
-  assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-purchase dd')].map(el => el.textContent), ["未填写", "未填写"]);
-  assert.match(root.querySelector('.doudou-item-usage')!.textContent!, /暂无使用记录/);
+  assert.equal(root.querySelector('.doudou-item-detail-purchase'), null);
+  assert.equal(root.querySelector('.doudou-item-usage'), null);
   assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-actions button')].map(el => el.textContent), ["编辑", "删除"]);
   assert.deepEqual((await service.list())[0].inventory, { enabled: false, quantity: 3, noRestock: true });
 });
@@ -2376,4 +2376,47 @@ test("detail inventory restart and photo interactions keep their original servic
   await clickItemText(root.querySelector('.doudou-item-detail-actions') as HTMLElement, "删除");
   assert.match(root.textContent!, /确认删除这件物品/); await clickItemText(root.querySelector('.doudou-item-detail-actions') as HTMLElement, "取消");
   assert.equal((await service.list()).length, 1); assert.equal(vault.binaries.size, 1);
+});
+
+test("detail shows only present purchase values including zero price without writing data", async (t) => {
+  for (const values of [{}, { purchased: "2024-01-01" }, { price: 0 }, { purchased: "2024-01-01", price: 25 }]) {
+    const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+    await service.save({ ...blankItem(), name: "物品", ...values });
+    const file = vault.getAbstractFileByPath(ITEMS_PATH) as TFile; const before = await vault.read(file);
+    const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload();
+    t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+    (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+    const labels = [...root.querySelectorAll('.doudou-item-detail-purchase dt')].map(el => el.textContent);
+    assert.equal(labels.includes("购买日期"), "purchased" in values);
+    assert.equal(labels.includes("购买价格"), "price" in values);
+    assert.equal(!!root.querySelector('.doudou-item-detail-purchase'), Object.keys(values).length > 0);
+    assert.doesNotMatch(root.querySelector('.doudou-item-detail')!.textContent!, /未填写|暂无|未设置/);
+    if ("price" in values && values.price === 0) assert.match(root.querySelector('.doudou-item-detail-purchase')!.textContent!, /¥0.00/);
+    assert.equal(await vault.read(file), before);
+  }
+});
+
+test("detail keeps zero stock and existing disabled-cycle history but hides backfill and whitespace notes", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "旧库存", status: null, notes: " \n ", inventory: { enabled: true, quantity: 0 }, cycle: { enabled: false, intervalDays: 30 }, usageRecords: [{ id: "a", date: "2024-01-01" }] });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload();
+  t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelector('.doudou-item-detail-status')?.textContent, "库存 0 件");
+  assert.ok(root.querySelector('.doudou-item-detail-stock')); assert.ok(root.querySelector('.doudou-item-usage-row'));
+  assert.equal(root.querySelector('.doudou-item-detail-cycle'), null); assert.equal(root.querySelector('.doudou-item-detail-extra'), null);
+  assert.equal([...root.querySelectorAll('button')].some(el => el.textContent === "补录" || el.textContent === "重新计时"), false);
+  await clickItemText(root.querySelector('.doudou-item-usage-row') as HTMLElement, "编辑");
+  assert.equal((root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value, "2024-01-01");
+  assert.equal((await service.list())[0].inventory?.quantity, 0);
+});
+
+test("detail preserves a real retirement date without creating an empty purchase section", async (t) => {
+  const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
+  await service.save({ ...blankItem(), name: "旧物", status: "retired", retired: "2024-01-01" });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload();
+  t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelector('.doudou-item-detail-purchase'), null);
+  assert.match(root.querySelector('.doudou-item-detail-extra')!.textContent!, /退役日期2024-01-01/);
 });

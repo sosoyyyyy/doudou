@@ -42,7 +42,8 @@ export function renderItemDetail(body: HTMLElement, item: Item, actions: DetailA
   lightButton(actions, navigation, actions.backLabel, actions.back).addClass("doudou-item-detail-back");
   const overview = body.createEl("header", { cls: "doudou-item-detail-overview" });
   overview.createEl("h2", { text: item.name });
-  overview.createEl("p", { cls: "doudou-item-detail-status", text: [statusLabel(item), item.inventory?.enabled ? `库存 ${item.inventory.quantity} 件` : undefined].filter(Boolean).join(" · ") });
+  const summary = [item.status ? statusLabel(item) : undefined, item.inventory?.enabled ? `库存 ${item.inventory.quantity} 件` : undefined].filter(Boolean).join(" · ");
+  if (summary) overview.createEl("p", { cls: "doudou-item-detail-status", text: summary });
 
   if (item.inventory?.enabled) {
     const stock = section(body, "库存", "doudou-item-detail-stock");
@@ -60,20 +61,22 @@ export function renderItemDetail(body: HTMLElement, item: Item, actions: DetailA
       [cycle.remaining < 0 ? "已超期" : cycle.remaining === 0 ? "提醒" : "还有", cycle.remaining === 0 ? "今天到期" : `${Math.abs(cycle.remaining)} 天`]
     ]);
   }
-  const purchase = section(body, "购买信息", "doudou-item-detail-purchase");
   const metrics = itemMetrics(item);
-  const purchaseFields: [string, string][] = [
-    ["购买日期", item.purchased ?? "未填写"],
-    ["购买价格", item.price === undefined ? "未填写" : `¥${item.price.toFixed(2)}`]
-  ];
+  const purchaseFields: [string, string][] = [];
+  if (item.purchased) purchaseFields.push(["购买日期", item.purchased]);
+  if (item.price !== undefined) purchaseFields.push(["购买价格", `¥${item.price.toFixed(2)}`]);
   if (metrics.days !== undefined) purchaseFields.push(["拥有天数", `${metrics.days} 天`]);
   if (metrics.daily !== undefined) purchaseFields.push(["日均价", `¥${metrics.daily.toFixed(2)}/天`]);
-  if (item.status === "retired") purchaseFields.push(["退役日期", item.retired ?? "未填写（暂不计算拥有天数和日均价）"]);
-  fields(purchase, purchaseFields);
+  const retired = item.status === "retired" ? item.retired : undefined;
+  if (purchaseFields.length) {
+    if (retired) purchaseFields.push(["退役日期", retired]);
+    fields(section(body, "购买信息", "doudou-item-detail-purchase"), purchaseFields);
+  }
 
-  if (item.notes || item.photos.length) {
+  if (item.notes.trim() || item.photos.length || (retired && !purchaseFields.length)) {
     const extra = section(body, "补充资料", "doudou-item-detail-extra");
-    if (item.notes) extra.createEl("p", { text: item.notes, cls: "doudou-item-notes" });
+    if (retired && !purchaseFields.length) fields(extra, [["退役日期", retired]]);
+    if (item.notes.trim()) extra.createEl("p", { text: item.notes, cls: "doudou-item-notes" });
     if (item.photos.length) {
       const photos = extra.createDiv({ cls: "doudou-items-photos" });
       item.photos.forEach(path => actions.photo(photos, path));
@@ -91,6 +94,7 @@ export function renderItemDetail(body: HTMLElement, item: Item, actions: DetailA
 }
 
 function renderUsage(parent: HTMLElement, item: Item, actions: DetailActions): void {
+  if (!item.usageRecords.length) return;
   const block = parent.createEl("section", { cls: "doudou-item-detail-section doudou-item-usage", attr: { "aria-label": "使用记录" } });
   const heading = block.createDiv({ cls: "doudou-item-detail-section-heading" });
   heading.createEl("h3", { text: "使用记录" });
@@ -112,8 +116,7 @@ function renderUsage(parent: HTMLElement, item: Item, actions: DetailActions): v
     lightButton(actions, controls, "取消", actions.cancelUsageEdit);
     date.focus();
   };
-  lightButton(actions, heading, "补录", () => openEditor());
-  if (!item.usageRecords.length) block.createEl("p", { cls: "doudou-item-detail-caption", text: "暂无使用记录" });
+  if (item.cycle?.enabled) lightButton(actions, heading, "补录", () => openEditor());
   for (const record of usageHistory(item)) {
     const row = block.createDiv({ cls: "doudou-item-usage-row" });
     const copy = row.createDiv({ cls: "doudou-item-usage-copy" });

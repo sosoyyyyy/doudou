@@ -9,7 +9,19 @@ export function matchesItemFilter(item: Item, filter: ItemFilter): boolean {
   if (filter === "stock") return stock.quantity > 0;
   return filter === "restock" && stock.quantity === 0 && stock.noRestock !== true;
 }
-export function statusLabel(item: Item): string { return item.status === null ? "未设状态" : { active: "使用中", idle: "闲置", retired: "已退役" }[item.status]; }
+export function statusLabel(item: Pick<Item, "status">): string { return item.status === null ? "未设状态" : { active: "使用中", idle: "闲置", retired: "已退役" }[item.status]; }
+/** Card-only presentation; accepts discontinued without changing the persisted Item schema. */
+export function cardStatusLabel(item: {
+  status: Item["status"] | "discontinued";
+  inventory?: { enabled?: boolean; quantity: number; noRestock?: boolean };
+}): string {
+  if (item.status === "discontinued") return "不再买";
+  const inventory = item.inventory?.enabled !== false ? item.inventory : undefined;
+  if (inventory?.noRestock) return "不再买";
+  if (inventory && inventory.quantity > 0) return "有库存";
+  if (inventory && inventory.quantity === 0) return "待补货";
+  return statusLabel({ status: item.status });
+}
 export function remainingLabel(days: number): string { return days < 0 ? `已超 ${-days} 天` : days === 0 ? "今天到期" : `距下次 ${days} 天`; }
 export function reminderItems(items: Item[], today = localDate()): Item[] {
   return items.map(item => ({ item, next: [cycleMetrics(item, today)?.next, expiryMetrics(item, today)?.date].filter((date): date is string => !!date).sort()[0] })).filter(entry => entry.next)

@@ -4,7 +4,7 @@ import { ItemRepository } from "../src/items/ItemRepository";
 import { ItemService } from "../src/items/ItemService";
 import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore, cycleMetrics, expiryMetrics, usageHistory, localDate, addDays, validateItem, type Item } from "../src/items/model";
 import { ItemsPage } from "../src/items/ItemsPage";
-import { matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, reminderItems, remainingLabel } from "../src/items/itemPresentation";
+import { cardStatusLabel, statusLabel, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, reminderItems, remainingLabel } from "../src/items/itemPresentation";
 import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -2299,11 +2299,40 @@ test("usage editor survives an earlier in-flight refresh and keeps unsaved date"
   service.list = list;
 });
 
+test("card badge prioritizes discontinued then inventory then usage status without mutating data", () => {
+  const cases: [Parameters<typeof cardStatusLabel>[0], string][] = [
+    [{ status: "active" }, "使用中"],
+    [{ status: "active", inventory: { quantity: 5 } }, "有库存"],
+    [{ status: "active", inventory: { quantity: 0 } }, "待补货"],
+    [{ status: "idle", inventory: { quantity: 5 } }, "有库存"],
+    [{ status: "retired", inventory: { quantity: 5 } }, "有库存"],
+    [{ status: "discontinued", inventory: { quantity: 5 } }, "不再买"],
+    [{ status: "discontinued", inventory: { quantity: 0 } }, "不再买"],
+    [{ status: "discontinued" }, "不再买"],
+    [{ status: "idle" }, "闲置"],
+    [{ status: "retired" }, "已退役"],
+    [{ status: null }, "未设状态"],
+    [{ status: "active", inventory: { enabled: false, quantity: 5, noRestock: true } }, "使用中"],
+    [{ status: "active", inventory: { enabled: true, quantity: 5 } }, "有库存"],
+    [{ status: "active", inventory: { enabled: true, quantity: 0 } }, "待补货"],
+    [{ status: "active", inventory: { enabled: true, quantity: 5, noRestock: true } }, "不再买"],
+    [{ status: "active", inventory: { enabled: true, quantity: 0, noRestock: true } }, "不再买"]
+  ];
+  for (const [item, expected] of cases) {
+    const before = JSON.stringify(item);
+    assert.equal(cardStatusLabel(item), expected, before);
+    assert.equal(JSON.stringify(item), before);
+  }
+  assert.equal(statusLabel({ status: "active" }), "使用中");
+});
+
 test("item detail reads overview stock cycle purchase history and page actions without changing data", async (t) => {
   const vault = new FakeVault(); const service = new ItemService(new ItemRepository(vault as unknown as Vault));
   await service.save({ ...blankItem(), name: "肉肉驱虫药", notes: "随餐使用", inventory: { enabled: true, quantity: 2, noRestock: true }, cycle: { enabled: true, intervalDays: 180 }, usageRecords: [{ id: "a", date: "2026-07-04" }], purchased: "2026-01-01", price: 120 });
   const file = vault.getAbstractFileByPath(ITEMS_PATH) as TFile; const before = await vault.read(file);
   const root = document.createElement("div"); root.className = "doudou-view"; document.body.append(root); const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  assert.equal(root.querySelector('.doudou-item-card .doudou-item-badge')?.textContent, "不再买");
+  assert.match(root.querySelector('.doudou-item-info')?.textContent ?? "", /库存 2/);
   (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick();
   assert.deepEqual([...root.querySelectorAll('.doudou-item-detail-section h3')].map(el => el.textContent), ["库存", "使用周期", "购买信息", "使用记录", "补充资料"]);
   assert.equal(root.querySelector('.doudou-item-detail-status')?.textContent, "使用中 · 库存 2 件");

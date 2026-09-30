@@ -3,10 +3,9 @@ import { renderItemCard } from "./ItemCard";
 import { Component, Notice, setIcon } from "obsidian";
 import { ItemService } from "./ItemService";
 import { blankItem, localDate, matchesItem, type Item } from "./model";
-import { reminderItems, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, type ItemFilter } from "./itemPresentation";
+import { itemBadgeClass, reminderItems, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, type ItemFilter } from "./itemPresentation";
 
 const itemFilterOptions: readonly (readonly [ItemFilter, string])[] = [["all", "全部"], ["active", "使用中"], ["idle", "闲置"], ["stock", "有库存"], ["restock", "待补货"], ["retired", "已退役"], ["nostock", "不再买"]];
-const itemBadgeTone: Record<ItemFilter, string> = { all: "", active: "active", idle: "idle", stock: "stock", restock: "restock", retired: "retired", nostock: "nostock" };
 
 export class ItemsPage extends Component {
   private body!: HTMLElement;
@@ -62,8 +61,8 @@ export class ItemsPage extends Component {
     });
     reminder.addClass("doudou-round-tool"); reminder.setAttribute("aria-label", this.mode === "normal" ? "查看时间提醒" : "返回普通小物库");
     reminder.setAttribute("aria-pressed", String(this.mode === "reminders")); setIcon(reminder, this.mode === "normal" ? "bell" : "arrow-left");
-    const filterLabel = filterTool.createSpan({ cls: `doudou-item-badge doudou-item-filter-label${this.filter === "all" ? " doudou-item-filter-all" : ""}`, text: itemFilterOptions.find(([value]) => value === this.filter)?.[1] ?? "全部" });
-    if (this.filter !== "all") filterLabel.addClass(`doudou-item-badge-${itemBadgeTone[this.filter]}`);
+    const selectedLabel = itemFilterOptions.find(([value]) => value === this.filter)?.[1] ?? "全部";
+    const filterLabel = filterTool.createSpan({ cls: `doudou-item-badge doudou-item-filter-label ${itemBadgeClass(selectedLabel)}`, text: selectedLabel });
     const searchButton = tools.createEl("button", { cls: "doudou-round-tool", attr: { type: "button", "aria-label": "搜索小物库" } }); setIcon(searchButton, "search");
     const toolbar = sticky.createDiv({ cls: "doudou-items-toolbar" }); toolbar.hidden = !this.query;
     const search = toolbar.createEl("input", { attr: { type: "search", placeholder: "搜索名称或备注", "aria-label": "搜索小物库" } }); search.value = this.query;
@@ -82,13 +81,12 @@ export class ItemsPage extends Component {
         for (const entry of Array.from(filters.querySelectorAll("button"))) {
           const selected = entry === button; entry.toggleClass("doudou-is-selected", selected); entry.setAttribute("aria-pressed", String(selected));
         }
+        filterLabel.removeClass(itemBadgeClass(filterLabel.textContent ?? "全部"));
         filterLabel.setText(label);
-        filterLabel.toggleClass("doudou-item-filter-all", value === "all");
-        for (const tone of Object.values(itemBadgeTone)) if (tone) filterLabel.removeClass(`doudou-item-badge-${tone}`);
-        if (value !== "all") filterLabel.addClass(`doudou-item-badge-${itemBadgeTone[value]}`);
+        filterLabel.addClass(itemBadgeClass(label));
         filters.hidden = true; filterTool.setAttribute("aria-expanded", "false"); await this.refresh();
       });
-      button.createSpan({ cls: `doudou-item-badge${value === "all" ? " doudou-item-filter-all" : ` doudou-item-badge-${itemBadgeTone[value]}`}`, text: label });
+      button.createSpan({ cls: `doudou-item-badge ${itemBadgeClass(label)}`, text: label });
       button.toggleClass("doudou-is-selected", this.filter === value); button.setAttribute("aria-pressed", String(this.filter === value));
     }
     this.listEl = body.createDiv({ cls: "doudou-items-list", attr: { "aria-live": "polite" } });

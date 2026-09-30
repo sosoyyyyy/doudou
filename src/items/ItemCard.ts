@@ -1,6 +1,6 @@
 import { ItemService } from "./ItemService";
 import { cycleMetrics, expiryMetrics, itemMetrics, type Item } from "./model";
-import { cardStatusLabel, matchesItemFilter, remainingLabel } from "./itemPresentation";
+import { itemBadgeClass, cardStatusLabel, matchesItemFilter, remainingLabel } from "./itemPresentation";
 
 type ButtonFactory = (parent: HTMLElement, text: string, action: () => void | Promise<void>) => HTMLButtonElement;
 /** The only card renderer, shared unchanged by the ordinary and reminder lists. */
@@ -36,6 +36,7 @@ export function renderItemCard(parent: HTMLElement, item: Item, service: ItemSer
   const summary = [cycle ? date : expiry ? undefined : date, expiry ? `有效期至 ${expiry.date}` : undefined].filter(Boolean).join(" · ");
   text.createSpan({ cls: "doudou-item-date", text: summary, attr: { title: summary } });
   const side = card.createDiv({ cls: "doudou-item-side" });
-  side.createSpan({ cls: `doudou-item-badge doudou-item-badge-${item.status ?? "nostock"}`, text: cardStatusLabel(item) });
+  const label = cardStatusLabel(item);
+  side.createSpan({ cls: `doudou-item-badge ${itemBadgeClass(label)}`, text: label });
   if (inventory) stockControls(side);
 }

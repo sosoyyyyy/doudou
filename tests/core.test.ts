@@ -4,7 +4,7 @@ import { ItemRepository } from "../src/items/ItemRepository";
 import { ItemService } from "../src/items/ItemService";
 import { blankItem, itemMetrics, matchesItem, ITEMS_PATH, ITEM_ASSETS, decodeStore, cycleMetrics, expiryMetrics, usageHistory, localDate, addDays, validateItem, type Item } from "../src/items/model";
 import { ItemsPage } from "../src/items/ItemsPage";
-import { cardStatusLabel, statusLabel, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, reminderItems, remainingLabel } from "../src/items/itemPresentation";
+import { itemBadgeClass, cardStatusLabel, statusLabel, matchesItemFilter, normalizeItemDateInput, isValidItemDateInput, reminderItems, remainingLabel } from "../src/items/itemPresentation";
 import { File as NodeFile } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -2297,6 +2297,43 @@ test("usage editor survives an earlier in-flight refresh and keeps unsaved date"
   finish(); await refreshing;
   assert.equal((root.querySelector('[aria-label="使用日期"]') as HTMLInputElement).value, "20240102");
   service.list = list;
+});
+
+test("cards and filter badges share semantic colors and clear the previous selected tone", async (t) => {
+  const cases: [string, string, Partial<Item>, string, string][] = [
+    ["有库存", "stock", { inventory: { enabled: true, quantity: 5 } }, "#326baf", "#a6c9f6"],
+    ["待补货", "restock", { inventory: { enabled: true, quantity: 0 } }, "#a65b1b", "#f0bb8a"],
+    ["使用中", "active", {}, "#26714e", "#a2dbba"],
+    ["闲置", "idle", { status: "idle" }, "#8a6722", "#e8cd89"],
+    ["已退役", "retired", { status: "retired" }, "#a13e43", "#f0abb0"],
+    ["不再买", "nostock", { inventory: { enabled: true, quantity: 3, noRestock: true } }, "#596673", "#bfc8d0"]
+  ];
+  const service = new ItemService(new ItemRepository(new FakeVault() as unknown as Vault));
+  for (const [label, , data] of cases) await service.save({ ...blankItem(), name: label, ...data });
+  const root = document.createElement("div"); document.body.append(root);
+  const page = new ItemsPage(root, service); page.onload(); t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  for (const [label, tone, , light, dark] of cases) {
+    const cls = `doudou-item-badge-${tone}`;
+    assert.equal(itemBadgeClass(label), cls);
+    const card = [...root.querySelectorAll('.doudou-item-card')].find(el => el.querySelector('.doudou-item-name')?.textContent === label)!;
+    const badge = card.querySelector('.doudou-item-badge')!;
+    const menu = [...root.querySelectorAll('.doudou-items-filters .doudou-item-badge')].find(el => el.textContent === label)!;
+    assert.equal(badge.textContent, label);
+    assert.equal(badge.className, menu.className);
+    assert.equal(badge.classList.contains(cls), true);
+    if (label === "有库存") assert.equal(badge.classList.contains('doudou-item-badge-active'), false);
+    assert.ok(cssDeclarations(`.doudou-view .${cls}`).includes(`color: ${light}`));
+    assert.ok(cssDeclarations(`.theme-dark .doudou-view .${cls}`).includes(`color: ${dark}`));
+  }
+  for (const label of ["使用中", "有库存", "待补货", "闲置", "已退役", "不再买", "全部"]) {
+    const button = [...root.querySelectorAll('.doudou-items-filters button')].find(el => el.textContent === label) as HTMLButtonElement;
+    button.click(); await itemTick();
+    const selected = root.querySelector('.doudou-item-filter-label')!;
+    assert.equal(selected.textContent, label);
+    assert.equal(selected.classList.contains(itemBadgeClass(label)), true);
+    for (const [other] of cases) if (other !== label) assert.equal(selected.classList.contains(itemBadgeClass(other)), false);
+  }
+  assert.equal(itemBadgeClass("未设状态"), "doudou-item-badge-nostock");
 });
 
 test("card badge prioritizes discontinued then inventory then usage status without mutating data", () => {

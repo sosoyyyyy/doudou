@@ -9,6 +9,19 @@ export function matchesItemFilter(item: Item, filter: ItemFilter): boolean {
   if (filter === "stock") return stock.quantity > 0;
   return filter === "restock" && stock.quantity === 0 && stock.noRestock !== true;
 }
+const itemBadgeClasses: Readonly<Record<string, string>> = {
+  "全部": "doudou-item-filter-all",
+  "有库存": "doudou-item-badge-stock",
+  "待补货": "doudou-item-badge-restock",
+  "使用中": "doudou-item-badge-active",
+  "闲置": "doudou-item-badge-idle",
+  "已退役": "doudou-item-badge-retired",
+  "不再买": "doudou-item-badge-nostock"
+};
+/** Shared semantic badge styles for cards, filter options and the selected filter. */
+export function itemBadgeClass(label: string): string {
+  return Object.prototype.hasOwnProperty.call(itemBadgeClasses, label) ? itemBadgeClasses[label] : "doudou-item-badge-nostock";
+}
 export function statusLabel(item: Pick<Item, "status">): string { return item.status === null ? "未设状态" : { active: "使用中", idle: "闲置", retired: "已退役" }[item.status]; }
 /** Card-only presentation; accepts discontinued without changing the persisted Item schema. */
 export function cardStatusLabel(item: {

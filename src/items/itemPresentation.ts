@@ -37,8 +37,11 @@ export function cardStatusLabel(item: {
 }
 export function remainingLabel(days: number): string { return days < 0 ? `已超 ${-days} 天` : days === 0 ? "今天到期" : `距下次 ${days} 天`; }
 export function reminderItems(items: Item[], today = localDate()): Item[] {
-  return items.map(item => ({ item, next: [cycleMetrics(item, today)?.next, expiryMetrics(item, today)?.date].filter((date): date is string => !!date).sort()[0] })).filter(entry => entry.next)
-    .sort((a, b) => a.next!.localeCompare(b.next!) || a.item.name.localeCompare(b.item.name, "zh-CN") || a.item.id.localeCompare(b.item.id)).map(entry => entry.item);
+  return items.map(item => ({ item, restock: matchesItemFilter(item, "restock"), next: [cycleMetrics(item, today)?.next, expiryMetrics(item, today)?.date].filter((date): date is string => !!date).sort()[0] }))
+    .filter(entry => entry.restock || entry.next)
+    .sort((a, b) => Number(b.restock) - Number(a.restock)
+      || (a.restock ? 0 : a.next!.localeCompare(b.next!))
+      || a.item.name.localeCompare(b.item.name, "zh-CN") || a.item.id.localeCompare(b.item.id)).map(entry => entry.item);
 }
 export function normalizeItemDateInput(value: string): string {
   const text = value.trim();

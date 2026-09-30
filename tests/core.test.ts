@@ -2501,6 +2501,66 @@ test("expiry is optional schema 2 data, validates dates and counts calendar expi
   assert.equal(JSON.stringify(decodeStore(old)), old);
 });
 
+test("restock reminder eligibility reuses inventory filtering and keeps each item once", () => {
+  const base: Item = { ...blankItem(), name: "药品", inventory: { enabled: true, quantity: 0 } };
+  for (const noRestock of [undefined, false, true]) for (const withCycle of [false, true]) for (const withExpiry of [false, true]) {
+    const item: Item = { ...base, inventory: { enabled: true, quantity: 0, noRestock },
+      cycle: withCycle ? { enabled: true, intervalDays: 30 } : undefined,
+      usageRecords: withCycle ? [{ id: "a", date: "2024-01-01" }] : [], expiresOn: withExpiry ? "2024-04-04" : undefined };
+    const before = JSON.stringify(item);
+    assert.equal(matchesItemFilter(item, "restock"), noRestock !== true);
+    assert.deepEqual(reminderItems([item], "2024-04-01"), noRestock !== true || withCycle || withExpiry ? [item] : []);
+    assert.equal(JSON.stringify(item), before);
+  }
+  for (const inventory of [undefined, { enabled: true, quantity: 5 }, { enabled: false, quantity: 0 }]) {
+    assert.deepEqual(reminderItems([{ ...base, inventory }]), []);
+  }
+});
+
+test("restock reminders precede all dates and sort by name then ID regardless of date", () => {
+  const make = (id: string, name: string, restock: boolean, expiresOn?: string, next?: string): Item => ({ ...blankItem(), id, name,
+    inventory: { enabled: true, quantity: restock ? 0 : 5 }, expiresOn,
+    cycle: next ? { enabled: true, intervalDays: 1 } : undefined, usageRecords: next ? [{ id: "a", date: addDays(next, -1) }] : [] });
+  const items = [make("s-b", "A", true, "2020-01-01"), make("s-c", "B", true), make("s-a", "A", true, "2030-01-01", "2031-01-01"),
+    make("d-b", "A", false, "2024-04-01"), make("d-c", "B", false, "2024-04-01"), make("d-a", "A", false, undefined, "2024-04-01"),
+    make("expiry-first", "Z", false, "2020-01-01", "2030-01-01"), make("cycle-first", "Z", false, "2030-01-01", "2021-01-01")];
+  const expected = ["s-a", "s-b", "s-c", "expiry-first", "cycle-first", "d-a", "d-b", "d-c"];
+  const before = JSON.stringify(items);
+  assert.deepEqual(reminderItems(items).map(i => i.id), expected);
+  assert.deepEqual(reminderItems([...items].reverse()).map(i => i.id), expected);
+  assert.equal(JSON.stringify(items), before);
+});
+
+test("restock reminder cards count once, preserve navigation and disappear after replenishment", async (t) => {
+  const service = new ItemService(new ItemRepository(new FakeVault() as unknown as Vault));
+  await service.save({ ...blankItem(), name: "A待补货", inventory: { enabled: true, quantity: 0 } });
+  await service.save({ ...blankItem(), name: "B多种提醒", inventory: { enabled: true, quantity: 0 }, expiresOn: "2027-03-18",
+    cycle: { enabled: true, intervalDays: 30 }, usageRecords: [{ id: "a", date: "2024-01-01" }] });
+  await service.save({ ...blankItem(), name: "C不再买", inventory: { enabled: true, quantity: 0, noRestock: true } });
+  const root = document.createElement("div"); document.body.append(root); const page = new ItemsPage(root, service); page.onload();
+  t.after(() => { page.onunload(); root.remove(); }); await page.refresh();
+  const normal = root.querySelector('.doudou-item-card')!.outerHTML;
+  await clickItemText(root, "有库存");
+  assert.equal(root.querySelectorAll('.doudou-item-card').length, 0);
+  (root.querySelector('[aria-label="查看时间提醒"]') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelector('.doudou-item-card')!.outerHTML, normal);
+  assert.equal(root.querySelectorAll('.doudou-item-card').length, 2);
+  assert.equal(root.querySelector('.doudou-items-count')?.textContent, "2 件");
+  assert.equal(root.querySelector('.doudou-item-card .doudou-item-badge')?.textContent, "待补货");
+  assert.ok(root.querySelector('.doudou-item-card .doudou-item-badge-restock'));
+  assert.equal(root.querySelector('.doudou-item-copy')!.children.length, 3);
+  const list = root.querySelector('.doudou-items-list') as HTMLElement; list.scrollTop = 80; list.dispatchEvent(new Event("scroll"));
+  (root.querySelector('.doudou-item-open') as HTMLButtonElement).click(); await itemTick(); await clickItemText(root, "‹ 返回提醒");
+  assert.equal((root.querySelector('.doudou-items-list') as HTMLElement).scrollTop, 80);
+  assert.equal(root.querySelectorAll('.doudou-item-card').length, 2);
+  (root.querySelector('[aria-label="A待补货 增加 1 件"]') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelectorAll('.doudou-item-card').length, 1);
+  assert.equal(root.querySelector('.doudou-items-count')?.textContent, "1 件");
+  (root.querySelector('[aria-label="返回普通小物库"]') as HTMLButtonElement).click(); await itemTick();
+  assert.equal(root.querySelector('.doudou-item-filter-label')?.textContent, "有库存");
+  assert.equal(root.querySelector('.doudou-item-name')?.textContent, "A待补货");
+});
+
 test("mixed reminders use the earlier cycle or expiry date once per item with stable ties", () => {
   const make = (id: string, expiresOn?: string, next?: string): Item => ({ ...blankItem(), id, name: id, expiresOn,
     cycle: next ? { enabled: true, intervalDays: 1 } : undefined, usageRecords: next ? [{ id: "a", date: addDays(next, -1) }] : [] });
